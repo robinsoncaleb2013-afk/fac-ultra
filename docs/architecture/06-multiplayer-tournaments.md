@@ -160,6 +160,7 @@ At `ends_at` the client shows a results card (your rank, top 3, your best fish) 
 ## 7. As built in WP-7
 - Migration `migrations/0007_tournaments.sql` (numbered high to stay clear of parallel work): events, players, entries, catches, survival_runs, rate_hits, rooms, signals. Everything is `if not exists`.
 - Pure shared code in `src/game/`: `weather.ts` (seeded Markov chain), `scoring.ts`, `schedule.ts`, `replay.ts` (the server and client both call `replayCast`). Server code lives in `src/lib/tournaments/*.server.ts`; the routes `events`, `entry`, `catch`, `board`, `survival-board` and the rewritten `rtc` are thin wrappers.
+- WP-14: events carry `rules.rulesVersion` and envelopes carry `rv`; the server replays with the event's version (`10` section 1.6).
 - Events use fixed gear (rod 6, reel 4, line 4, boat 0); only the lure family is the player's choice. The client sends one envelope per cast (`castIndex`, spot, presentation, hook time, fight inputs, a `claim`); the server rolls the cast from `seedFrom(eventId, playerId, castIndex)`, replays it, and compares the claim. The server's number is the score either way.
 - Rate limits: one envelope per 2 s per player, 40 writes and 240 reads per minute per IP; three strikes is a one-hour ban. Wall-clock check: seconds fished can never exceed seconds since joining (plus slack). Body caps 8 KB (96 KB survival logs, 48 KB rtc).
 - Survival: WP-7 stores and replays the run log from the daily seed; day-count rules are a placeholder (1 + 3 per landed fish) until WP-5 supplies the real ones.

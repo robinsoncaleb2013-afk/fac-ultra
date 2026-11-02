@@ -45,6 +45,26 @@ import {
   type ReplayEvent,
 } from "@/game/replay";
 import { scoreEntry } from "@/game/scoring";
+import { checkGear, gatesOn } from "@/game/gear-rules";
+import {
+  allLineGear,
+  applyOpen,
+  canUse,
+  craft as craftLineGear,
+  difficulty,
+  freeLineGear,
+  givePack,
+  healthOf,
+  LINE_PACKS,
+  lossHooks,
+  packForLevel,
+  packFromCatch,
+  PACK_SOURCES,
+  readLineGear,
+  wearMulFor,
+  type LineGear,
+} from "@/game/lines";
+import { rulesVersionOf } from "@/game/line-wear";
 import {
   applyResults,
   isSkinId,
@@ -329,6 +349,8 @@ export type Save = {
   titles: string[];
   bobberSkin: SkinId;
   tourneyHistory: History[];
+  /* WP-14 (save v11): the line workshop. Lines are crafted from duplicates and found in packs; `line` is the tier in use. */
+  lineGear: LineGear;
   /* WP-15 (save v10): the long-play events. The streak clock, the event running, the events seen and the mutated fish landed. */
   events: EventsSave;
 };
@@ -357,7 +379,7 @@ export type LastCatch = {
 
 type Toast = { id: number; text: string };
 
-const SAVE_VERSION = 10;
+const SAVE_VERSION = 11;
 const MARKS = [10, 25, 50, 100, 150, 200, 250, 300, 375];
 
 let currentMode: Mode = "expedition";
@@ -369,6 +391,12 @@ export function modeKey(mode: Mode = currentMode) {
 /** The rules of the mode being played (05 §1). Every mode branch in the game reads this. */
 export function modeRules(mode: Mode = currentMode): ModeRules {
   return MODES[mode];
+}
+
+/** The gear progression rules (10 §2) for the mode being played. Recreational, Kid Mode and Tournament skip them. */
+function gateOf(s: Save, kind: Parameters<typeof checkGear>[0], index: number) {
+  if (!gatesOn(modeRules(), kidActive(s.kid, modeRules()))) return { ok: true, missing: [] as string[], text: "" };
+  return checkGear(kind, index, s);
 }
 
 /* v1 → v3 world remap: five biomes were inserted into the ladder and five
@@ -583,6 +611,7 @@ export function fresh(): Save {
     titles: [],
     bobberSkin: "plain",
     tourneyHistory: [],
+    lineGear: freeLineGear(),
     events: noEvents(),
   };
 }
@@ -599,6 +628,7 @@ export function unlockedSave(): Save {
     rod: RODS.length - 1,
     reel: REELS.length - 1,
     line: LINES.length - 1,
+    lineGear: allLineGear(),
     boat: BOATS.length - 1,
     ub: BIOMES.map((_, i) => i),
     box,
@@ -842,6 +872,8 @@ export function sanitize(raw: unknown): Save {
       };
     }
   }
+  const oldLine = int(o.line, 0, 0, LINES.length - 1);
+  const lineGear = readLineGear(o.lineGear, oldLine);
   return {
     ...base,
     version: SAVE_VERSION,
@@ -850,7 +882,7 @@ export function sanitize(raw: unknown): Save {
     lv: int(o.lv, 1, 1, 9999),
     rod: int(o.rod, 0, 0, RODS.length - 1),
     reel: int(o.reel, 0, 0, REELS.length - 1),
-    line: int(o.line, 0, 0, LINES.length - 1),
+    line: canUse(lineGear, oldLine) ? oldLine : 0,
     boat: int(o.boat, 0, 0, BOATS.length - 1),
     biome: ub.includes(biome) ? biome : ub[0],
     ub,
@@ -915,6 +947,8 @@ export function sanitize(raw: unknown): Save {
     titles: readTitles(o.titles),
     bobberSkin: isSkinId(o.bobberSkin) ? o.bobberSkin : "plain",
     tourneyHistory: readHistory(o.tourneyHistory),
+    /* v10 → v11 (WP-14): lines became an inventory. An old save owned every line up to `line`: it gets one copy of each. */
+    lineGear,
     /* v9 → v10 (WP-15): one new field, nothing existing changed meaning. Old saves start with no streak and no events seen. */
     events: readEvents(o.events),
   };
@@ -988,6 +1022,7 @@ export function snapshot(s: Save): Save {
     titles: s.titles,
     bobberSkin: s.bobberSkin,
     tourneyHistory: s.tourneyHistory,
+    lineGear: s.lineGear,
     events: s.events,
   };
 }
@@ -1378,12 +1413,24 @@ function withCatch(
     gainedLv += 1;
   }
   let mastered = s.mastered;
-  if (fish.boss && !o.auto && !mastered.includes(fish.b)) mastered = [...mastered, fish.b];
+  const firstBoss = fish.boss && !o.auto && !mastered.includes(fish.b);
+  if (firstBoss) mastered = [...mastered, fish.b];
+  /* WP-14: line packs. Levels, first-time bosses and lucky catches give them; only modes with an economy do. */
+  let lineGear = s.lineGear;
+  const found: number[] = [];
+  if (modeRules().economy && !o.auto) {
+    for (let L = s.lv + 1; L <= lv; L++) found.push(packForLevel(L));
+    if (firstBoss) found.push(PACK_SOURCES.boss);
+    const drop = packFromCatch(fish.t, loose);
+    if (drop !== null) found.push(drop);
+    for (const k of found) lineGear = givePack(lineGear, k);
+  }
   let derby = s.derby;
   if (derby && !o.auto && Date.now() < derby.endsAt) derby = { ...derby, score: derby.score + v };
   const toasts = [...s.toasts];
   if (discovered) pushToast(toasts, `New species. ${BIOMES[fish.b].fish[fish.i]}.`);
   if (gainedLv) pushToast(toasts, `Level ${lv}. ${rankName(lv)}.`);
+  if (found.length) pushToast(toasts, `You found ${found.length === 1 ? `a ${LINE_PACKS[found[0]].name}` : `${found.length} line packs`}. Open ${found.length === 1 ? "it" : "them"} in Tackle.`);
   const count = dexCount(dex);
   if (discovered && MARKS.includes(count)) pushToast(toasts, `Dex ${count} of ${TOTAL_SPECIES}.`);
   if (fish.boss && !o.auto) pushToast(toasts, `${BIOMES[fish.b].name} mastered. The boss is yours.`);
@@ -1429,6 +1476,7 @@ function withCatch(
     bosses: s.bosses + (fish.boss && !o.auto ? 1 : 0),
     perfects: s.perfects + (o.perfect && !o.auto ? 1 : 0),
     mastered,
+    lineGear,
     derby,
     stickers,
     shiny: shinyList,
@@ -1796,7 +1844,13 @@ const replayEvent = (run: TourneyRun): ReplayEvent => ({
   seed: run.seed,
   water: run.water,
   startsAt: run.event.startsAt,
+  rulesVersion: tourneyRules(run),
 });
+
+/** The fight/line rules version an event was made under (an event from before WP-14 has none: version 1). */
+function tourneyRules(run: TourneyRun | null): number {
+  return rulesVersionOf(run?.event.rulesVersion);
+}
 
 function startTourneyCast() {
   const s = useGame.getState();
@@ -1850,6 +1904,7 @@ function tourneyEnd(outcome: "landed" | "lost" | "missed", fish: Rolled | null) 
     inputs: missed ? [] : [...sim.trace],
     drag: sim.dragAtHook,
     released: false,
+    ...(tourneyRules(run) > 1 ? { rv: tourneyRules(run) } : {}),
     claim:
       outcome === "landed" && fish
         ? { out: "landed", i: fish.i, w: fish.w, v: fish.v }
@@ -1930,6 +1985,7 @@ export function runFrom(j: JoinInfo, id: string, offset: number, queued: number)
       fishingSeconds: j.event.fishingSeconds,
       startsAt: j.startsAt,
       endsAt: j.endsAt,
+      rulesVersion: j.event.rulesVersion,
     },
     seed: j.seed,
     water: j.water,
@@ -2040,7 +2096,7 @@ function succeed() {
 }
 
 /** Why a fight was lost: the pill always names the cause (pillar 3). */
-type Why = "bite" | "line" | "jump" | "snap" | "gear";
+type Why = "bite" | "line" | "jump" | "snap" | "gear" | "worn";
 
 function fail(kind: "slip" | "snap", why: Why = kind === "snap" ? "snap" : "bite", note?: { message: string; detail: string }) {
   /* An event cast that ends in a loss is still a cast: it goes to the server like any other. */
@@ -2071,7 +2127,9 @@ function fail(kind: "slip" | "snap", why: Why = kind === "snap" ? "snap" : "bite
         : why === "jump"
           ? "The boss threw the hook."
           : "The boss shook free."
-      : kind === "snap"
+      : why === "worn"
+        ? "The line wore out."
+        : kind === "snap"
         ? "The line snapped."
         : why === "jump"
           ? "It jumped and threw the hook."
@@ -2080,7 +2138,9 @@ function fail(kind: "slip" | "snap", why: Why = kind === "snap" ? "snap" : "bite
             : "It shook free.",
     detail: note
       ? note.detail
-      : why === "snap"
+      : why === "worn"
+        ? "Long fights wear a line down. Reel in the green to save it, or craft a stronger line."
+        : why === "snap"
         ? "Too long in the red. Let go when the needle turns red."
         : why === "jump"
           ? "Next time ease off when it leaps."
@@ -2244,7 +2304,10 @@ function reactToFight(F: Fight) {
   }
 
   if (F.result === "landed") succeed();
-  else if (F.result === "snap") fail("snap", "snap");
+  else if (F.result === "snap") {
+    if (F.worn) lossHooks().loseLure?.("worn");
+    fail("snap", F.worn ? "worn" : "snap");
+  }
   else if (F.result === "slip") fail("slip", F.dist >= 1.3 ? "line" : "jump");
 }
 
@@ -2502,8 +2565,12 @@ function hook() {
   }
   /* In an event the fight is built from the event's tackle and the cast's seed, exactly as the server builds it. */
   if (sim.troll) sim.troll.hookMs = Math.max(0, Math.round(elapsed * 1000));
+  /* Line wear (10 §1): the line's health, and how forgiving this mode is. `difficulty` is WP-16's hook (1 = normal). */
+  const tierHealth = healthOf(s.line);
+  const lineHealth = sv ? healthOf(0) * holdMulOfGear(sv.gear) : tierHealth;
+  const wearMul = wearMulFor({ recreational: modeRules().id === "recreational", kid: kidOn(s), difficulty: difficulty.wear });
   const F = sim.troll
-    ? newFight(fightInitOf(sim.troll.roll, s.drag))
+    ? newFight(fightInitOf(sim.troll.roll, s.drag, tourneyRules(s.tourney)))
     : newFight({
         seed: (rng() * 4294967296) >>> 0,
         rarity: fish.t,
@@ -2516,6 +2583,8 @@ function hook() {
         drag: s.drag,
         pullMul,
         bandPad: sv ? bandPad + bandPadOfGear(sv.gear) : bandPad,
+        lineHealth,
+        wearMul,
       });
   sim.fight = F;
   sim.dragAtHook = s.drag;
@@ -2717,6 +2786,10 @@ type Store = Save &
     buyAuto: () => void;
     toggleAuto: () => void;
     buyPack: (index: number) => void;
+    /* WP-14: the line workshop. Lines are crafted and found in packs, never sold. */
+    equipLine: (tier: number) => void;
+    craftLine: (tier: number) => void;
+    openLinePack: (kind: number) => void;
     equipLure: (index: number) => void;
     buySig: (index: number) => void;
     equipSig: (index: number) => void;
@@ -3099,13 +3172,52 @@ export const useGame = create<Store>((set, get) => ({
   buyGear: (kind, index) => {
     const s = get();
     const item = GEAR[kind][index];
+    /* Lines are no longer sold (docs/architecture/10 §1.3): they are crafted and found in packs. */
+    if (kind === "line") return;
     if (!item || index <= s[kind]) return;
+    const gate = gateOf(s, kind, index);
+    if (!gate.ok) {
+      audio.fail("slip");
+      set((st) => ({ toasts: pushToast([...st.toasts], gate.text) }));
+      return;
+    }
     if (s.c < item.price) {
       audio.fail("slip");
       return;
     }
     audio.coin();
     set({ c: s.c - item.price, [kind]: index });
+    persistSoon();
+  },
+  equipLine: (tier) => {
+    const s = get();
+    if (!Number.isInteger(tier) || tier < 0 || tier >= LINES.length || !canUse(s.lineGear, tier)) return;
+    set({ line: tier });
+    persistSoon();
+  },
+  craftLine: (tier) => {
+    const s = get();
+    if (isTournament(modeRules()) || modeRules().survival) return;
+    const gear = craftLineGear(s.lineGear, tier, s.lv, new Set(s.mastered).size);
+    if (!gear) {
+      audio.fail("slip");
+      return;
+    }
+    audio.coin();
+    /* The line in use is replaced by the new one when crafting used up its last copy. */
+    const line = canUse(gear, s.line) ? s.line : tier;
+    set((st) => ({ lineGear: gear, line, toasts: pushToast([...st.toasts], `Crafted ${LINES[tier].name}.`) }));
+    persistSoon();
+  },
+  openLinePack: (kind) => {
+    const s = get();
+    const gear = applyOpen(s.lineGear, kind, loose);
+    if (!gear) return;
+    audio.coin();
+    set((st) => ({
+      lineGear: gear,
+      toasts: pushToast([...st.toasts], `${LINE_PACKS[kind].name}: ${gear.last.map((t) => LINES[t].name).join(", ")}.`),
+    }));
     persistSoon();
   },
   buyAuto: () => {
@@ -3125,6 +3237,12 @@ export const useGame = create<Store>((set, get) => ({
     const s = get();
     const pack = PACKS[index];
     if (!pack || s.c < pack.price) return;
+    const gate = gateOf(s, "pack", index);
+    if (!gate.ok) {
+      audio.fail("slip");
+      set((st) => ({ toasts: pushToast([...st.toasts], gate.text) }));
+      return;
+    }
     const box = { ...s.box };
     const names: string[] = [];
     for (let n = 0; n < 3; n++) {
@@ -3372,6 +3490,14 @@ export const useGame = create<Store>((set, get) => ({
     if (sim.phase !== "idle" || index === s.biome || s.rush || isTournament(modeRules())) return;
     const owned = s.ub.includes(index);
     const price = BIOMES[index].price;
+    if (!owned) {
+      const gate = gateOf(s, "map", index);
+      if (!gate.ok) {
+        audio.fail("slip");
+        set((st) => ({ toasts: pushToast([...st.toasts], gate.text) }));
+        return;
+      }
+    }
     if (!owned && s.c < price) return;
     audio.coin();
     if (modeRules().trips && s.trip) {
@@ -3406,7 +3532,8 @@ export const useGame = create<Store>((set, get) => ({
     const kept = s.contracts.filter((c) => c.id !== id);
     const contracts = [...kept, nextContract(s, kept)];
     audio.coin();
-    set({ c: s.c + contract.reward, tot: s.tot + contract.reward, contracts });
+    const packs = modeRules().economy ? { lineGear: givePack(s.lineGear, PACK_SOURCES.contract) } : {};
+    set({ c: s.c + contract.reward, tot: s.tot + contract.reward, contracts, ...packs });
     persistSoon();
   },
   pin: (key) => {
@@ -3473,6 +3600,8 @@ export const useGame = create<Store>((set, get) => ({
       titles: s.titles,
       bobberSkin: s.bobberSkin,
       tourneyHistory: s.tourneyHistory,
+      lineGear: s.lineGear,
+      line: s.line,
       events: s.events,
       tab: s.tab,
       phase: "idle",

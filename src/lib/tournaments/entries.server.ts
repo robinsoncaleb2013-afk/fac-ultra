@@ -7,6 +7,7 @@
 
 import type { Sql } from "@/lib/db";
 import { BIOMES } from "@/game/content";
+import { rulesVersionOf } from "@/game/line-wear";
 import { claimMatches, parseEnvelope, replayCast, type Envelope, type Replayed } from "@/game/replay";
 import { scoreEntry, type Landed } from "@/game/scoring";
 import { fillCount, rivalRows, rivalsAhead } from "@/game/fill";
@@ -317,7 +318,7 @@ export async function handleCatch(sql: Sql, req: ApiReq): Promise<ApiRes> {
   }
 
   /* The replay. */
-  const rep = replayCast({ id: e.id, seed: e.seed, water: e.water, startsAt: e.startsAt }, playerId, env);
+  const rep = replayCast({ id: e.id, seed: e.seed, water: e.water, startsAt: e.startsAt, rulesVersion: rulesVersionOf(e.rules.rulesVersion) }, playerId, env);
   if (!rep.ok) {
     await record("mismatch", { reason: rep.reason }, 0);
     const n = await strike(sql, e.id, playerId, now);

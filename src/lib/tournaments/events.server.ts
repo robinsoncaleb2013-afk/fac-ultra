@@ -3,6 +3,7 @@
 
 import type { Sql } from "@/lib/db";
 import { BIOMES } from "@/game/content";
+import { rulesVersionOf } from "@/game/line-wear";
 import {
   CODE_LETTERS,
   isCode,
@@ -107,6 +108,8 @@ export function publicEvent(e: EventRow, entrants: number, now: number) {
     entrants,
     /* WP-8: team events, the most anglers, and the four-letter code of a private event. */
     team: !!e.rules.team,
+    /* WP-14: the fight/line rules this event is replayed with (an old row has none: version 1). */
+    rulesVersion: rulesVersionOf(e.rules.rulesVersion),
     maxPlayers: e.rules.maxPlayers ?? null,
     code: e.kind === "private" ? e.id.slice(2) : null,
     state: now < e.startsAt ? "upcoming" : now < e.endsAt ? "live" : "ended",

@@ -10,6 +10,7 @@
    three waters can be summed, and a "survival" event is only a seed and a date. */
 
 import { BIOMES } from "./content.ts";
+import { RULES_VERSION } from "./line-wear.ts";
 import { seedFrom } from "./rng.ts";
 import { CATEGORY_INFO, isCategory, type Category } from "./scoring.ts";
 
@@ -29,6 +30,9 @@ export type Rules = {
   maxPlayers?: number;
   /** WP-8: a team event. Each angler picks a team; the board adds up Total Weight per team (06 §3.4). */
   team?: boolean;
+  /** WP-14: the fight/line rules version every cast of this event is replayed with (docs/architecture/10 §1.6).
+      A row written before WP-14 has none, which means version 1 (no line wear). */
+  rulesVersion?: number;
 };
 
 export type EventSpec = {
@@ -106,6 +110,7 @@ const rulesOf = (category: Category, castBudget: number, fishingSeconds: number)
   fishingSeconds,
   assist: false,
   gear: "fixed",
+  rulesVersion: RULES_VERSION,
 });
 
 /** The quick event that starts at the top of the hour containing `ms`. */

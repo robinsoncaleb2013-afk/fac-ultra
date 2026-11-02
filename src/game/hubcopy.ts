@@ -1,7 +1,8 @@
 /* The words on the pause menu (the Hub). Plain English for a stranger or a kid: short sentences, no internal names.
    Kept apart from the components so a test can check every line (hubcopy.test.ts). */
 
-import { BIOMES, compact, BOATS, LINES, REELS, RODS } from "./content.ts";
+import { BIOMES, compact, BOATS, REELS, RODS } from "./content.ts";
+import { healthOf } from "./lines.ts";
 
 export type PlayMeta = {
   id: string;
@@ -129,7 +130,7 @@ export type GearKindName = "rod" | "reel" | "line" | "boat";
 export const GEAR_TEXT: Record<GearKindName, { title: string; one: string; noun: string }> = {
   rod: { title: "Rods", one: "A better rod gives you a wider green to land fish in, and more luck finding rare ones.", noun: "rod" },
   reel: { title: "Reels", one: "A smoother reel makes fish bite sooner and makes reeling steadier.", noun: "reel" },
-  line: { title: "Lines", one: "Stronger line can hold bigger fish before it snaps.", noun: "line" },
+  line: { title: "Lines", one: "Lines are found in packs and crafted from spares. Stronger line lasts longer against big fish.", noun: "line" },
   boat: { title: "Boats", one: "A better boat takes you to where the fish are. More luck and quicker bites.", noun: "boat" },
 };
 
@@ -140,7 +141,7 @@ export function gearFacts(kind: GearKindName, i: number): string[] {
     case "reel":
       return [`Bites come ${REELS[i].speed * 4}% sooner`, `Reeling ${REELS[i].speed * 7}% steadier`];
     case "line":
-      return [`Holds up to ${compact(LINES[i].hold)}`];
+      return [`Health ${healthOf(i)}: fish wear it down as you fight`];
     case "boat":
       return [`Luck +${BOATS[i].luck}`, `Bites come ${i * 4}% sooner`];
   }

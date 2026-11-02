@@ -1,6 +1,8 @@
 import { BIOMES, biomeSpeciesCaught, money, STAGE_NAMES } from "@/game/content";
 import { useGame } from "@/game/engine";
 import { MODES, stageIn } from "@/game/modes";
+import { checkMap, gatesOn, MAP_LEVEL } from "@/game/gear-rules";
+import { kidActive } from "@/game/kid";
 import { waterBlurb } from "@/game/hubcopy";
 import { useHubUi } from "@/game/hubstate";
 import { spotsOf } from "@/game/spots";
@@ -45,7 +47,12 @@ function Detail({ index }: { index: number }) {
   const travel = useGame((s) => s.travel);
   /* Survival: you stay on the water your run started on, so this page is a map to read, not a way to travel. */
   const survival = useGame((s) => !!MODES[s.mode].survival);
+  const lv = useGame((s) => s.lv);
+  const kid = useGame((s) => s.kid);
   const owned = ub.includes(index);
+  /* The level and boss rule for unlocking a water (docs/architecture/10 section 2). */
+  const gate = !owned && gatesOn(MODES[mode], kidActive(kid, MODES[mode])) ? checkMap(index, { lv, ub, mastered }) : null;
+  const lock = gate && !gate.ok ? gate.text : "";
   const here = biome === index;
   const afford = coins >= place.price;
   const caught = biomeSpeciesCaught(dex, index);
@@ -57,6 +64,7 @@ function Detail({ index }: { index: number }) {
       <SpotMap index={index} mystery={!owned} />
       <div className="mt-4">
         <Title sub={owned ? waterBlurb(index) : survival ? "Not part of your Survival waters." : `Costs ${money(place.price)} to unlock. You have ${money(coins)}.`}>{owned ? place.name : `${place.name} (locked)`}</Title>
+        {lock && !survival ? <p className="mt-3 rounded-lg bg-black/10 p-2 text-[15px] font-semibold text-[#8a3a14]">{lock}</p> : null}
         {owned && !survival ? (
           <Facts
             facts={[
@@ -92,13 +100,13 @@ function Detail({ index }: { index: number }) {
           <p className="hub-ink-muted text-[14px]">{here ? "This is the water your run is on." : "In Survival you stay on the water you started on. Start a new run to pick another."}</p>
         ) : (
         <PaperButton
-          disabled={busy || here || (!owned && !afford)}
+          disabled={busy || here || (!owned && (!afford || !!lock))}
           onClick={() => {
             travel(index);
             closeHub();
           }}
         >
-          {here ? "You are here" : owned ? "Go fishing here" : afford ? `Unlock for ${money(place.price)}` : `Needs ${money(place.price)}`}
+          {here ? "You are here" : owned ? "Go fishing here" : lock ? "Locked" : afford ? `Unlock for ${money(place.price)}` : `Needs ${money(place.price)}`}
         </PaperButton>
         )}
         {busy && !survival ? <span className="hub-ink-muted text-[14px]">Land or lose this fish before you travel.</span> : null}
@@ -116,7 +124,7 @@ export function WatersTab({ split }: { split: boolean }) {
   const items: HubItem[] = BIOMES.map((b, i) => ({
     id: String(i),
     title: b.name,
-    sub: ub.includes(i) ? (biome === i ? "You are here" : `${biomeSpeciesCaught(dex, i)} of 24 fish`) : `Locked · ${money(b.price)}`,
+    sub: ub.includes(i) ? (biome === i ? "You are here" : `${biomeSpeciesCaught(dex, i)} of 24 fish`) : `Locked · level ${MAP_LEVEL[i]} · ${money(b.price)}`,
     locked: !ub.includes(i),
     thumb: <Painting id={b.id} mystery={!ub.includes(i)} className="size-11 shrink-0 rounded-lg" />,
   })).filter((it) => !survival || ub.includes(Number(it.id)));

@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import type { Sql } from "@/lib/db";
+import { RULES_VERSION } from "@/game/line-wear";
 import { decentPlayer, recordCast, type Choice, type Envelope, type ReplayEvent } from "@/game/replay";
 import { quickAt } from "@/game/schedule";
 import { spotsOf } from "@/game/spots";
@@ -35,7 +36,8 @@ function choice(water: number, n: number): Choice {
   const spots = spotsOf(water);
   return { spot: spots[n % spots.length].id, p: { family: "worm", depth: 1, retrieve: "slow" }, drag: 1, hookMs: 220 };
 }
-const evOf = (e: { id: string; seed: number; water: number; startsAt: number }): ReplayEvent => ({ id: e.id, seed: e.seed, water: e.water, startsAt: e.startsAt });
+/* Events made today carry the current fight/line rules version (docs/architecture/10 §1.6). */
+const evOf = (e: { id: string; seed: number; water: number; startsAt: number }): ReplayEvent => ({ id: e.id, seed: e.seed, water: e.water, startsAt: e.startsAt, rulesVersion: RULES_VERSION });
 
 /** Join and play `count` honest casts, one every 30 s of server time. */
 async function fish(eventId: string, playerId: string, count: number, start: number, extra: Record<string, unknown> = {}) {

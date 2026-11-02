@@ -572,3 +572,26 @@ test("hostile events data is clamped or dropped", () => {
   assert.deepEqual(s.events.seen, {});
   assert.ok(s.events.rolled <= 1e5);
 });
+
+/* ── WP-14 (save v11): lines became an inventory ─────────────────────────── */
+
+test("an older save's single line becomes one copy of each line up to it, and stays in use", () => {
+  const raw = JSON.parse(readFileSync(join(dir, "save-v10.json"), "utf8")) as Record<string, unknown>;
+  const s = sanitize({ ...raw, line: 5 });
+  assert.equal(s.version, fresh().version);
+  assert.equal(s.line, 5);
+  assert.deepEqual(s.lineGear.lines.slice(0, 7), [1, 1, 1, 1, 1, 1, 0]);
+  assert.deepEqual(s.lineGear.packs, [0, 0, 0, 0]);
+});
+
+test("a v11 save keeps its spares, its packs and the line in use; a line with no copies falls back to the hand line", () => {
+  const raw = JSON.parse(readFileSync(join(dir, "save-v11.json"), "utf8")) as Record<string, unknown>;
+  const s = sanitize(raw);
+  assert.equal(s.line, 3);
+  assert.equal(s.lineGear.lines[0], 2);
+  assert.equal(s.lineGear.lines[3], 3);
+  assert.deepEqual(s.lineGear.packs, [1, 0, 2, 0]);
+  assert.deepEqual(s.lineGear.last, [1, 0, 3]);
+  const gone = sanitize({ ...raw, line: 7 });
+  assert.equal(gone.line, 0, "no copy of tier 7 is owned");
+});

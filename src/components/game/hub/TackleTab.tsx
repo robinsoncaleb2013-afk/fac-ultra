@@ -1,5 +1,9 @@
 import { Suspense, useEffect, useState } from "react";
-import { BAITS, BOSS_CHUM_INDEX, bossChumPrice, compact, GEAR, LURES, money, PACKS, SIG_LURES, type GearKind } from "@/game/content";
+import { BAITS, BOSS_CHUM_INDEX, bossChumPrice, compact, GEAR, LINES, LURES, money, PACKS, SIG_LURES, type GearKind } from "@/game/content";
+import { checkGear, gatesOn } from "@/game/gear-rules";
+import { MODES } from "@/game/modes";
+import { kidActive } from "@/game/kid";
+import { canUse, checkCraft, CRAFT_GATE, healthOf, LINE_PACKS, LINE_TIERS, RECIPE_DUPES, secondsAgainst } from "@/game/lines";
 import { useGame } from "@/game/engine";
 import { GEAR_TEXT, gearFacts } from "@/game/hubcopy";
 import { useHubUi } from "@/game/hubstate";
@@ -18,7 +22,7 @@ import { cn } from "@/lib/cn";
    way to sell or buy anything. */
 export type TackleView = "tackle" | "shop";
 
-type CatId = "sell" | "satchel" | "rig" | "rod" | "reel" | "line" | "boat" | "box" | "sig" | "bait" | "pack";
+type CatId = "sell" | "satchel" | "rig" | "rod" | "reel" | "line" | "linepack" | "boat" | "box" | "sig" | "bait" | "pack";
 
 const CATS: Record<CatId, { title: string; sub: string; icon: IconName; group: string }> = {
   sell: { title: "Sell your catch", sub: "Turn your fish into coins", icon: "coin", group: "Your catch" },
@@ -26,7 +30,8 @@ const CATS: Record<CatId, { title: string; sub: string; icon: IconName; group: s
   rig: { title: "How to fish", sub: "Depth and how fast you reel", icon: "hook", group: "Your bag" },
   rod: { title: "Rods", sub: "Wider green, more luck", icon: "tackle", group: "Gear" },
   reel: { title: "Reels", sub: "Quicker bites, steadier reeling", icon: "wheel", group: "Gear" },
-  line: { title: "Lines", sub: "Hold bigger fish", icon: "hook", group: "Gear" },
+  line: { title: "Line workshop", sub: "Craft stronger line from spares", icon: "hook", group: "Gear" },
+  linepack: { title: "Line packs", sub: "Open them to find lines", icon: "satchel", group: "Gear" },
   boat: { title: "Boats", sub: "More luck on the water", icon: "waters", group: "Gear" },
   box: { title: "Lure box", sub: "The lures you own", icon: "hook", group: "Lures and bait" },
   sig: { title: "Special lures", sub: "One strong trick each", icon: "hook", group: "Lures and bait" },
@@ -36,8 +41,9 @@ const CATS: Record<CatId, { title: string; sub: string; icon: IconName; group: s
 
 /** Which categories each view shows. Tackle: your catch, how you fish, and what you own. Shop: selling, then everything for sale. */
 export function catsFor(view: TackleView): CatId[] {
-  if (view === "shop") return ["sell", "rod", "reel", "line", "boat", "sig", "bait", "pack"];
-  return ["satchel", "rig", "rod", "reel", "line", "boat", "box", "sig", "bait"];
+  /* Lines are not sold (WP-14): they are found in packs and crafted, so the workshop and the packs live in Tackle. */
+  if (view === "shop") return ["sell", "rod", "reel", "boat", "sig", "bait", "pack"];
+  return ["satchel", "rig", "rod", "reel", "line", "linepack", "boat", "box", "sig", "bait"];
 }
 
 type TItem = {
@@ -56,21 +62,82 @@ type TItem = {
   owned: boolean;
   /** A "none" choice (bare hook, no bait): never for sale. */
   none?: boolean;
+  /** Why this cannot be bought yet, as one plain sentence. Greyed out when set. */
+  lock?: string;
 };
 
 function useAllItems(cat: CatId): TItem[] {
   const s = useGame();
-  if (cat === "rod" || cat === "reel" || cat === "line" || cat === "boat") {
+  const gated = gatesOn(MODES[s.mode], kidActive(s.kid, MODES[s.mode]));
+  if (cat === "line") {
+    const bosses = new Set(s.mastered).size;
+    return Array.from({ length: LINE_TIERS }, (_, t): TItem => {
+      const have = s.lineGear.lines[t] ?? 0;
+      const inUse = s.line === t;
+      const craftable = t > 0 ? checkCraft(s.lineGear, t, s.lv, bosses) : null;
+      const gate = t > 0 ? CRAFT_GATE[t] : null;
+      const facts = [
+        `Health ${healthOf(t)}. Fish wear it down as you fight.`,
+        `Lasts ${secondsAgainst(t, 0, false, false)} seconds against a common fish and ${secondsAgainst(t, 4, false, false)} against a legendary one. Reeling in the green makes it last twice as long.`,
+        t > 0 ? `Craft it from ${craftable!.need} copies of ${LINES[t - 1].name}.` : "The line you start with. Packs can give you more.",
+        `Copies you own: ${have}.`,
+        ...(t < LINE_TIERS - 1 ? [`The next line up needs ${RECIPE_DUPES[t]} copies of this one.`] : ["The best line there is."]),
+        ...(gate ? [`To craft it: level ${gate.lv}${gate.bosses ? ` and ${gate.bosses} ${gate.bosses === 1 ? "boss" : "bosses"} beaten` : ""}.`] : []),
+      ];
+      return {
+        id: `line:${t}`,
+        title: LINES[t].name,
+        status: inUse ? "In use" : have > 0 ? `x${have}` : craftable?.ok ? "Can craft" : craftable ? "Locked" : "Spare",
+        level: t / (LINE_TIERS - 1),
+        icon: "hook",
+        kind: "line",
+        summary: "Lines are found in packs and crafted from spares. A stronger line lasts longer against big fish.",
+        facts,
+        current: inUse,
+        owned: true,
+        lock: !canUse(s.lineGear, t) && craftable && !craftable.ok ? craftable.why : undefined,
+        actions: [
+          { label: inUse ? "In use" : "Use this line", run: () => s.equipLine(t), disabled: inUse || !canUse(s.lineGear, t), t: "use" },
+          ...(t > 0 ? [{ label: craftable!.ok ? `Craft (uses ${craftable!.need})` : "Craft", run: () => s.craftLine(t), disabled: !craftable!.ok, quiet: true, t: "use" as const }] : []),
+        ],
+      };
+    });
+  }
+  if (cat === "linepack") {
+    return LINE_PACKS.map<TItem>((p, i) => {
+      const n = s.lineGear.packs[i] ?? 0;
+      return {
+        id: `linepack:${i}`,
+        title: p.name,
+        status: n > 0 ? `x${n}` : "None",
+        level: i / (LINE_PACKS.length - 1),
+        icon: "satchel",
+        kind: "pack",
+        summary: "Three lines in every pack. Packs come from levelling up, beating bosses, contracts and lucky catches.",
+        facts: [
+          `You have ${n}.`,
+          s.lineGear.last.length ? `Last pack: ${s.lineGear.last.map((t) => LINES[t].name).join(", ")}.` : "Nothing opened yet.",
+          "Spare copies are good: craft them into a better line.",
+        ],
+        owned: true,
+        actions: [{ label: n > 0 ? "Open one" : "None to open", run: () => s.openLinePack(i), disabled: n <= 0, t: "use" }],
+      };
+    });
+  }
+  if (cat === "rod" || cat === "reel" || cat === "boat") {
     const kind: GearKind = cat;
     const owned = s[kind];
     return GEAR[kind].map((g, i) => {
       const equipped = owned === i;
       const have = owned > i;
       const afford = s.c >= g.price;
+      const gate = gated && !equipped && !have ? checkGear(kind, i, s) : null;
+      const lock = gate && !gate.ok ? gate.text : undefined;
       return {
         id: `${kind}:${i}`,
         title: g.name,
-        status: equipped ? "In use" : have ? "Replaced" : money(g.price),
+        lock,
+        status: equipped ? "In use" : have ? "Replaced" : lock ? "Locked" : money(g.price),
         level: i / (GEAR[kind].length - 1),
         icon: kind === "rod" ? "tackle" : kind === "boat" ? "waters" : kind === "reel" ? "wheel" : "hook",
         kind,
@@ -82,7 +149,7 @@ function useAllItems(cat: CatId): TItem[] {
           ? [{ label: "In use", run: () => undefined, disabled: true }]
           : have
             ? [{ label: "You have a better one", run: () => undefined, disabled: true }]
-            : [{ label: afford ? `Buy for ${money(g.price)}` : `Needs ${money(g.price)}`, run: () => s.buyGear(kind, i), disabled: !afford, t: "buy" }],
+            : [{ label: lock ? "Locked" : afford ? `Buy for ${money(g.price)}` : `Needs ${money(g.price)}`, run: () => s.buyGear(kind, i), disabled: !afford || !!lock, t: "buy" }],
       };
     });
   }
@@ -196,18 +263,23 @@ function useAllItems(cat: CatId): TItem[] {
     ];
   }
   if (cat === "pack") {
-    return PACKS.map<TItem>((p, i) => ({
+    return PACKS.map<TItem>((p, i) => {
+      const gate = gated ? checkGear("pack", i, s) : null;
+      const lock = gate && !gate.ok ? gate.text : undefined;
+      return {
       id: `pack:${i}`,
       title: p.name,
-      status: money(p.price),
+      lock,
+      status: lock ? "Locked" : money(p.price),
       level: i / 2,
       icon: "satchel",
       kind: "pack",
       summary: "Three lures picked for you, with a handful of casts each.",
       facts: s.pull ? [`Last time you pulled: ${s.pull}`] : ["A surprise every time"],
       owned: false,
-      actions: [{ label: s.c >= p.price ? `Buy for ${money(p.price)}` : `Needs ${money(p.price)}`, run: () => s.buyPack(i), disabled: s.c < p.price, t: "buy" }],
-    }));
+      actions: [{ label: lock ? "Locked" : s.c >= p.price ? `Buy for ${money(p.price)}` : `Needs ${money(p.price)}`, run: () => s.buyPack(i), disabled: s.c < p.price || !!lock, t: "buy" }],
+    };
+    });
   }
   return [];
 }
@@ -240,7 +312,7 @@ function Grid({ items, selected, onSelect, wide }: { items: TItem[]; selected: s
           onPointerEnter={(e) => e.pointerType === "mouse" && onSelect(it.id)}
           onFocus={() => onSelect(it.id)}
           onClick={() => onSelect(it.id)}
-          className={cn("hub-card flex min-h-[148px] flex-col text-left", it.current && "border-[#ffd37a]")}
+          className={cn("hub-card flex min-h-[148px] flex-col text-left", it.current && "border-[#ffd37a]", it.lock && "opacity-60 grayscale")}
         >
           <TackleArt kind={it.kind} level={it.level} icon={it.icon} className="h-[84px] w-full" />
           <span className="flex flex-1 flex-col gap-0.5 p-2">
@@ -261,6 +333,7 @@ function ItemDetail({ item }: { item: TItem }) {
       </Framed>
       <div className="mt-4">
         <Title sub={item.summary}>{item.title}</Title>
+        {item.lock ? <p className="mt-3 rounded-lg bg-black/10 p-2 text-[15px] font-semibold text-[#8a3a14]">{item.lock}</p> : null}
         {item.facts.length ? <Facts facts={item.facts} /> : null}
       </div>
       <div className="mt-auto flex flex-wrap gap-3 pt-4">

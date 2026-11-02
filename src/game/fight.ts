@@ -19,6 +19,7 @@
 
 import type { FightHelp } from "./assist.ts";
 import type { FightStyle } from "./habits.ts";
+import { tickPoints, WEAR, wearFactor } from "./line-wear.ts";
 
 /** Fixed step, seconds. Client and server both tick at this rate. */
 export const FIGHT_STEP = 0.05;
@@ -107,6 +108,10 @@ export type FightInit = {
   pullMul?: number;
   /** Extra width on both sides of the green band (calm lures). Default 0. */
   bandPad?: number;
+  /** Line wear (WP-14, rules version 2): the line's health in points. 0 or missing = the line never wears out. */
+  lineHealth?: number;
+  /** Multiplies the wear: mode, Kid Mode, difficulty (docs/architecture/10 §1.5). Default 1. */
+  wearMul?: number;
 };
 
 export type Fight = {
@@ -172,6 +177,13 @@ export type Fight = {
   redTime: number;
   rs: number;
   result: FightResult;
+  /* line wear (10 §1): health in points left and at the start (0 max = no wear), the base multiplier and the one
+     Helping Hand has eased it to, and whether the fight ended because the line wore out. */
+  life: number;
+  lifeMax: number;
+  wearBase: number;
+  wearMul: number;
+  worn: boolean;
 };
 
 /* ── The fight's own random stream (mulberry32 on F.rs) ──────────────────── */
@@ -254,6 +266,11 @@ export function newFight(init: FightInit): Fight {
     redTime: 0,
     rs: init.seed >>> 0,
     result: null,
+    life: Math.max(0, init.lineHealth ?? 0),
+    lifeMax: Math.max(0, init.lineHealth ?? 0),
+    wearBase: Math.max(0, init.wearMul ?? 1),
+    wearMul: Math.max(0, init.wearMul ?? 1),
+    worn: false,
   };
   F.next = between(F, F.style === "jumper" ? FIGHT.jumpEvery : FIGHT.runEvery);
   F.trickNext = 4 + rand(F) * 3;
@@ -272,6 +289,7 @@ export function applyHelp(F: Fight, help: FightHelp | null) {
   F.strainMul = 1 - 0.5 * s;
   F.tele = FIGHT.telegraph + (FIGHT.telegraphHelp - FIGHT.telegraph) * s;
   F.pullMul = F.basePull * (help ? help.pullMul : 1);
+  F.wearMul = F.wearBase * (1 - WEAR.helpEase * s);
 }
 
 /* ── One step ────────────────────────────────────────────────────────────── */
@@ -445,10 +463,19 @@ export function stepFight(F: Fight, held: boolean, dt: number = FIGHT_STEP): voi
   const eighths = clamp(Math.floor((1 - F.dist) * 8), 0, 8);
   if (eighths > F.ticks) F.ticks = eighths;
 
+  /* the line wears: one tick of the fish's rate every WEAR.tickSteps steps (whole steps, so a replay is exact) */
+  if (F.lifeMax > 0 && F.steps % WEAR.tickSteps === 0) {
+    F.life = Math.max(0, F.life - tickPoints(F.rarity, F.boss) * wearFactor(F) * F.wearMul);
+  }
+
   if (!F.result) {
     if (F.strain >= F.hold) F.result = "snap";
     else if (F.dist <= 0) F.result = "landed";
     else if (F.dist >= FIGHT.slipDist) F.result = "slip";
+    else if (F.lifeMax > 0 && F.life <= 0) {
+      F.result = "snap";
+      F.worn = true;
+    }
   }
 }
 
@@ -465,9 +492,11 @@ export function progressOf(F: Pick<Fight, "dist">): number {
   return clamp(1 - F.dist, 0, 1);
 }
 
-/** Line left, 0–100. */
-export function linePercent(F: Pick<Fight, "strain" | "hold">): number {
-  return Math.max(0, Math.round(100 * (1 - F.strain / Math.max(0.01, F.hold))));
+/** Line left, 0–100: the lower of what the strain and the wear have left. */
+export function linePercent(F: Pick<Fight, "strain" | "hold"> & Partial<Pick<Fight, "life" | "lifeMax">>): number {
+  const strain = 100 * (1 - F.strain / Math.max(0.01, F.hold));
+  const wear = F.lifeMax && F.lifeMax > 0 ? (100 * (F.life ?? 0)) / F.lifeMax : 100;
+  return Math.max(0, Math.round(Math.min(strain, wear)));
 }
 
 /* ── Input traces (the envelope in 06 §1.3) ──────────────────────────────── */

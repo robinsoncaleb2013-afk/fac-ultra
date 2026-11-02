@@ -4,7 +4,6 @@ import {
   compact,
   GEAR,
   type GearKind,
-  LINES,
   money,
   REELS,
   RODS,
@@ -33,7 +32,6 @@ export function GearPanel() {
         title="Reels"
         hint={(i) => `Wait −${REELS[i].speed * 4}% · control +${REELS[i].speed * 7}%`}
       />
-      <GearList kind="line" title="Lines" hint={(i) => `Strain ${compact(LINES[i].hold)}`} />
       <GearList kind="boat" title="Boats" hint={(i) => `Luck +${BOATS[i].luck} · wait −${i * 4}%`} />
     </div>
   );
