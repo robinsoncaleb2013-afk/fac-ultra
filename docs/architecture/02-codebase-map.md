@@ -145,3 +145,7 @@ It is simple and already respects `motion` (reduced-motion) and `flash` settings
 - **Layouts:** `DesktopLayout` and `MobileLayout` now show only the water, the corner HUD, the cast dock and (portrait phones) the inline cast panel.
 - **Self-hosting fix:** `scripts/copy-pglite-assets.mjs` runs at the end of `npm run build` and copies PGLite's `pglite.data`, `pglite.wasm` and `initdb.wasm` next to a node-server bundle (`.output/server/_libs/`); it does nothing on the Vercel build. Without it a `node-server` build with no `DATABASE_URL` answered every database route with 500.
 - **Touch-target check:** `node scripts/check-touch-targets.mjs [url]` (needs `playwright` installed and a running build).
+
+## As built in WP-12 (two-level menu)
+- **New:** `src/game/leave.ts` (when to ask before leaving, and the words), `src/game/peek.ts` (read-only look at a mode's saved collection), `hub/LeaveDialog.tsx`, `hub/CollectionsTab.tsx` (main menu), `hub/SurvivalTabs.tsx` (Camp, Larder, Event), tests `menu-levels.test.ts` and `menu-flow.test.ts`.
+- **Changed:** `modes.ts` (`menuTabs`, `hasShop`, `MODE_SELECT_IDS`), `hubnav.ts` (`MAIN_TABS`, `tabsFor(screen, mode)`, `resolveHubTarget`), `Hub.tsx` (two levels, Resume and Leave), `PlayTab` (mode select), `TackleTab` (Tackle and Shop & Sell views), `LodgeTab` (Lodge, Log, Collection, Logbook), `PlayersTab` (Friends on the main menu, compact Players in game), `SettingsTab` (+ Account tab), engine `leaveToMenu` and `currentLeaveFacts`.

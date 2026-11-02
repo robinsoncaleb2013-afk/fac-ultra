@@ -13,7 +13,8 @@ import { lastPlayed, openCard } from "@/components/game/hub/PlayTab";
 import { Button } from "@/components/ui/button";
 import { TestingLine } from "@/components/game/test-phase";
 
-/** The front door: the current water painted behind the logo, one big Play button, and Continue / Settings underneath. */
+/** The front door, and the first level of the menu (WP-12): the water painted behind the logo, one big Play button, and Continue, Settings,
+    Friends and Collections underneath (the cloud button is top right). Nothing on this level is about one mode, and nothing changes a game. */
 export function TitleScreen({ plan }: { plan: LayoutPlan }) {
   const dex = useGame((s) => dexCount(s.dex));
   const lv = useGame((s) => s.lv);
@@ -87,6 +88,14 @@ export function TitleScreen({ plan }: { plan: LayoutPlan }) {
             ) : null}
             <Button variant="ghost" className="flex-1" onClick={() => openHub("settings")}>
               Settings
+            </Button>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="ghost" className="flex-1" data-testid="title-friends" onClick={() => openHub("friends")}>
+              Friends
+            </Button>
+            <Button variant="ghost" className="flex-1" data-testid="title-collections" onClick={() => openHub("collections")}>
+              Collections
             </Button>
           </div>
         </div>

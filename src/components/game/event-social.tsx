@@ -46,7 +46,7 @@ export function EmoteBar({ className }: { className?: string }) {
           aria-label={e.text}
           onPointerDown={(ev) => ev.stopPropagation()}
           onClick={() => sendEmote(e.id)}
-          className="grid size-10 shrink-0 place-items-center rounded-full border border-line bg-bg/70 text-xl backdrop-blur-sm transition-opacity enabled:hover:border-brass disabled:opacity-40"
+          className="grid size-11 shrink-0 place-items-center rounded-full border border-line bg-bg/70 text-xl backdrop-blur-sm transition-opacity enabled:hover:border-brass disabled:opacity-40"
         >
           <span aria-hidden>{e.glyph}</span>
         </button>

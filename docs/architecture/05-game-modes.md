@@ -170,3 +170,12 @@ Decision (owner, 2026-11-02): Recreational, the old Sandbox, is a super-easy, ev
 - **Cloud.** `recreational` was already its own row in `saves`; the server runs it through the same `sanitize()`. A test pushes both and proves neither moves the other.
 - **Tests.** `modes-flow.test.ts` (real store, real `localStorage` slots): a Recreational catch leaves the career slot byte for byte unchanged and the reverse; stickers, shinies, pet, claim and Regulars stay apart; reload restores Recreational from its own slot; an old Sandbox save opens as it was; the Lair is open with an empty book. `fun-flow.test.ts`, `modes.test.ts`, `cloud.test.ts` and `accounts.test.ts` assert the same separation.
 
+
+## 12. As built: WP-12 two-level menu
+
+- **The rules table decides the in-game menu.** `ModeRules.menuTabs` lists each mode's tabs, so a new mode is data. Ids: `tackle`, `shop`, `lodge`, `waters`, `players`, `settings`, `camp`, `larder`, `log`, `logbook`, `collection`, `event`. `hasShop(rules)` is true exactly where the economy is on (Expedition, Local Co-op); a test pins it.
+- **Expedition / Local Co-op:** Tackle (what you carry: catch, how you fish, rods, lures, bait), **Shop & Sell** (sell fish, buy gear, special lures, bait, lure packs), Lodge (trophies, records, fish book, buddy, Regulars, Aquarium, Derby, online room), Waters (bounties and bosses stay in the water views as before), Players (friends, requests, events), Settings.
+- **Recreational:** Tackle (everything already unlocked), Waters, Logbook (trips), Collection (its own fish book, records, buddy, Regulars, aquarium). No shop, no selling, no trophies (WP-11). Derby, online rooms and boss rush are Expedition extras.
+- **Survival:** Camp (eat, smoke, make things, sleep), Larder (the fish you keep; nothing sells), Waters (a map to read; you stay on your run's water), Log (best runs, every run, fish book).
+- **Tournaments:** Event (clock, standing, board, room, emotes, the bait family), Lodge (trophies, records, book), Players (friends and events). Nothing that changes the tackle.
+- **Main menu mode select** shows `MODE_SELECT_IDS`; Kid-friendly play is a switch (the old Kid card still works as an id for old links). Entering a mode loads its own save slot; leaving saves, drops any line in the water and goes back to the title with the career loaded behind it (`leaveToMenu` in the engine). Tests: `menu-levels.test.ts` (tab lists, no shop on the main menu, leave rules, collections peek) and `menu-flow.test.ts` (enter, menu, leave, continue; the saved slot is unchanged).

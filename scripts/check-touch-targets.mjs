@@ -21,9 +21,15 @@ try {
 const base = process.argv[2] || "http://localhost:4173";
 const MIN = 44;
 const SIZES = { phone: { width: 390, height: 844 }, landscape: { width: 844, height: 390 } };
-const TABS = ["play", "tackle", "lodge", "waters", "players", "settings"];
+/* Two levels (WP-12): the main menu outside a game, and each mode's own in-game tabs. */
+const MAIN_TABS = ["play", "collections", "friends", "account", "settings"];
+const GAME_TABS = {
+  expedition: ["tackle", "shop", "lodge", "waters", "players", "settings"],
+  recreational: ["tackle", "waters", "logbook", "collection", "settings"],
+  survival: ["camp", "larder", "waters", "log", "settings"],
+};
 
-const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, args: ["--no-sandbox"] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 const bad = new Map();
 const scan = async (page, where) => {
   const found = await page.evaluate((min) => {
@@ -52,22 +58,38 @@ for (const [name, viewport] of Object.entries(SIZES)) {
   await page.getByRole("button", { name: "A grown-up", exact: true }).click().catch(() => {});
   await scan(page, `${name} title`);
   await page.getByTestId("title-play").click();
-  for (const tab of TABS) {
-    await page.locator(`#hub-tab-${tab}`).click();
-    await page.waitForTimeout(500);
-    await scan(page, `${name} ${tab}`);
-    const row = page.locator("#hub-panel [role=option]").first();
-    if ((await row.count()) && tab !== "play") {
-      await row.click();
+  const walk = async (tabs, where) => {
+    for (const tab of tabs) {
+      await page.locator(`#hub-tab-${tab}`).click();
       await page.waitForTimeout(500);
-      await scan(page, `${name} ${tab} detail`);
-      await page.locator("[data-nav=back]").first().click().catch(() => {});
+      await scan(page, `${name} ${where} ${tab}`);
+      const row = page.locator("#hub-panel [role=option]").first();
+      if ((await row.count()) && tab !== "play") {
+        await row.click();
+        await page.waitForTimeout(500);
+        await scan(page, `${name} ${where} ${tab} detail`);
+        await page.locator("[data-nav=back]").first().click().catch(() => {});
+      }
     }
+  };
+  await walk(MAIN_TABS, "main");
+  for (const [mode, tabs] of Object.entries(GAME_TABS)) {
+    await page.locator("#hub-tab-play").click();
+    await page.locator(`[data-item="${mode}"]`).first().click().catch(() => {});
+    await page.waitForTimeout(1500);
+    await page.getByRole("button", { name: /^Start (fishing|the run)/ }).first().click({ timeout: 800 }).catch(() => {});
+    await scan(page, `${name} ${mode} game`);
+    await page.getByTestId("open-menu").click();
+    await page.waitForTimeout(500);
+    await scan(page, `${name} ${mode} menu`);
+    await walk(tabs, mode);
+    await page.getByTestId("hub-leave").click();
+    await page.waitForTimeout(300);
+    await page.getByTestId("leave-confirm").click({ timeout: 800 }).catch(() => {});
+    await page.waitForTimeout(800);
+    await scan(page, `${name} ${mode} after leaving`);
+    await page.getByTestId("title-play").click();
   }
-  await page.keyboard.press("Escape");
-  await page.locator('[data-item="expedition"]').first().click().catch(() => {});
-  await page.waitForTimeout(1200);
-  await scan(page, `${name} game`);
   await ctx.close();
 }
 await browser.close();
@@ -76,4 +98,4 @@ if (bad.size) {
   for (const k of bad.keys()) console.log("  " + k);
   process.exit(1);
 }
-console.log(`[touch-targets] every visible target is at least ${MIN}px, on the title screen, all menu tabs and the game.`);
+console.log(`[touch-targets] every visible target is at least ${MIN}px, on the title screen, both menu levels and the game.`);

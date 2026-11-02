@@ -117,6 +117,7 @@ const PATHS = {
     </>
   ),
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  exit: <path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9" />,
   flag: <path d="M6 21V4M6 5h11l-2.2 3.5L17 12H6" />,
 } as const;
 

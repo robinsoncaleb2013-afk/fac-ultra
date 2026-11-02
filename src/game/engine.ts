@@ -175,7 +175,8 @@ import {
   type Level,
 } from "@/game/device";
 import { setActiveLevel, tierSpec } from "@/game/graphics";
-import { hubTargetFor } from "@/game/hubnav";
+import { hubTargetFor, resolveHubTarget, tabsFor } from "@/game/hubnav";
+import type { LeaveFacts } from "@/game/leave";
 import { useHubUi } from "@/game/hubstate";
 import { probedLevel } from "@/game/probe";
 import {
@@ -1003,6 +1004,17 @@ const persistListeners = new Set<PersistListener>();
 export function onPersisted(fn: PersistListener): () => void {
   persistListeners.add(fn);
   return () => persistListeners.delete(fn);
+}
+
+/** What leaving now would interrupt (see leave.ts). */
+export function currentLeaveFacts(): LeaveFacts {
+  const s = useGame.getState();
+  return {
+    line: sim.phase === "idle" ? "none" : sim.phase === "wait" ? "waiting" : "fight",
+    trip: !!s.trip && !!MODES[s.mode].trips,
+    event: s.mode === "tournament" && !!s.tourney,
+    run: !!s.survival && !s.survival.over,
+  };
 }
 
 /** Write the live game to this device right now (instead of in a moment). */
@@ -2489,8 +2501,11 @@ export function nudgeDrag(delta: -1 | 1) {
 function syncHub(tab: Tab, lodgeView: LodgeView) {
   const target = hubTargetFor(tab, lodgeView);
   const hub = useHubUi.getState();
-  if (!target) hub.closeHub();
-  else hub.openHub(target.tab, target.item);
+  if (!target) return hub.closeHub();
+  /* The same request lands on the tab this mode (or the main menu) really has for it. */
+  const st = useGame.getState();
+  const to = resolveHubTarget(tabsFor(st.screen, st.mode), target.tab, target.item);
+  hub.openHub(to.tab, to.item);
 }
 
 /* ── Graphics level (WP-10) ───────────────────────────────────────────────── */
@@ -2581,6 +2596,8 @@ type Store = Save &
     campSleep: () => void;
     campCraft: (id: RecipeId) => void;
     setScreen: (screen: "menu" | "game") => void;
+    /** WP-12: save, drop any line in the water and go back to the main menu. Nothing in the save changes. */
+    leaveToMenu: () => void;
     setLodgeView: (view: LodgeView) => void;
     switchMode: (mode: Mode) => void;
     dismissWelcome: () => void;
@@ -2775,6 +2792,7 @@ export const useGame = create<Store>((set, get) => ({
   },
   leaveEvent: () => {
     if (sim.phase !== "idle") return;
+    useHubUi.getState().closeHub();
     get().setScreen("menu");
   },
   syncTrophies: async (quiet = false) => {
@@ -2940,6 +2958,15 @@ export const useGame = create<Store>((set, get) => ({
       return;
     }
     set({ screen });
+  },
+  leaveToMenu: () => {
+    if (get().screen !== "game") return;
+    /* Save first, so nothing is lost; then drop any cast or fight in the air (a fish on the line gets away). */
+    flushSave();
+    resetSim();
+    useHubUi.getState().closeHub();
+    set({ tab: "cast", phase: "idle", celebration: null, helping: false, lobby: false, message: "Ready to cast.", detail: "" });
+    get().setScreen("menu");
   },
   setLodgeView: (view) => {
     set({ lodgeView: view, tab: "lodge" });

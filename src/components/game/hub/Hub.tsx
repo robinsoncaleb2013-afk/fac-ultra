@@ -1,31 +1,72 @@
 import { lazy, Suspense, useEffect, useRef, type ComponentType } from "react";
 import { money, rankName } from "@/game/content";
 import { useGame } from "@/game/engine";
-import { HUB_TABS, tabsForMode, type HubTab } from "@/game/hubnav";
+import { HUB_TABS, resolveHubTarget, tabsFor, type HubTab } from "@/game/hubnav";
 import { useHubUi } from "@/game/hubstate";
+import { leaveLabel } from "@/game/leave";
 import { showsMoney, MODES } from "@/game/modes";
 import { FullscreenButton } from "@/components/game/fullscreen";
-import { closeHub, hubBack, hubFocusFirst, hubTab } from "@/components/game/hub/actions";
+import { closeHub, hubBack, hubFocusFirst, hubLeave, hubTab } from "@/components/game/hub/actions";
 import { Icon, type IconName } from "@/components/game/hub/icons";
+import { LeaveDialog } from "@/components/game/hub/LeaveDialog";
 import { useHubLayout } from "@/components/game/hub/parts";
 import { PlayTab } from "@/components/game/hub/PlayTab";
-import { TackleTab } from "@/components/game/hub/TackleTab";
+import { ShopTab, TackleTab } from "@/components/game/hub/TackleTab";
 import { WatersTab } from "@/components/game/hub/WatersTab";
 import { cn } from "@/lib/cn";
 
 /* The heavier tabs load when first opened (09 §5): nobody opens the Lodge in the first ten seconds. */
-const LodgeTab = lazy(() => import("@/components/game/hub/LodgeTab").then((m) => ({ default: m.LodgeTab })));
-const PlayersTab = lazy(() => import("@/components/game/hub/PlayersTab").then((m) => ({ default: m.PlayersTab })));
-const SettingsTab = lazy(() => import("@/components/game/hub/SettingsTab").then((m) => ({ default: m.SettingsTab })));
+const lazyTab = <K extends string>(load: () => Promise<Record<K, ComponentType<{ split: boolean }>>>, key: K) =>
+  lazy(() => load().then((m) => ({ default: m[key] })));
+const Lodge = () => import("@/components/game/hub/LodgeTab");
+const LodgeTab = lazyTab(Lodge, "LodgeTab");
+const CollectionTab = lazyTab(Lodge, "CollectionTab");
+const LogTab = lazyTab(Lodge, "LogTab");
+const LogbookTab = lazyTab(Lodge, "LogbookTab");
+const PlayersTab = lazyTab(() => import("@/components/game/hub/PlayersTab"), "PlayersTab");
+const FriendsTab = lazyTab(() => import("@/components/game/hub/PlayersTab"), "FriendsTab");
+const SettingsTab = lazyTab(() => import("@/components/game/hub/SettingsTab"), "SettingsTab");
+const AccountTab = lazyTab(() => import("@/components/game/hub/SettingsTab"), "AccountTab");
+const CollectionsTab = lazyTab(() => import("@/components/game/hub/CollectionsTab"), "CollectionsTab");
+const CampTab = lazyTab(() => import("@/components/game/hub/SurvivalTabs"), "CampTab");
+const LarderTab = lazyTab(() => import("@/components/game/hub/SurvivalTabs"), "LarderTab");
+const EventTab = lazyTab(() => import("@/components/game/hub/SurvivalTabs"), "EventTab");
 
-const ICON: Record<HubTab, IconName> = { play: "play", tackle: "tackle", lodge: "lodge", waters: "waters", players: "players", settings: "settings" };
+const ICON: Record<HubTab, IconName> = {
+  play: "play",
+  collections: "lodge",
+  friends: "players",
+  account: "cloud",
+  tackle: "tackle",
+  shop: "coin",
+  lodge: "lodge",
+  waters: "waters",
+  players: "players",
+  camp: "flag",
+  larder: "satchel",
+  log: "map",
+  logbook: "map",
+  collection: "lodge",
+  event: "flag",
+  settings: "settings",
+};
 
 const BODY: Record<HubTab, ComponentType<{ split: boolean }>> = {
   play: PlayTab,
+  collections: CollectionsTab,
+  friends: FriendsTab,
+  account: AccountTab,
   tackle: TackleTab,
+  shop: ShopTab,
   lodge: LodgeTab,
   waters: WatersTab,
   players: PlayersTab,
+  camp: CampTab,
+  larder: LarderTab,
+  log: LogTab,
+  logbook: LogbookTab,
+  collection: CollectionTab,
+  event: EventTab,
   settings: SettingsTab,
 };
 
@@ -61,7 +102,9 @@ export function Hub() {
   const coins = useGame((s) => s.c);
   const lv = useGame((s) => s.lv);
   const layout = useHubLayout();
-  const tabs = tabsForMode(mode);
+  const inGame = screen === "game";
+  const rules = MODES[mode];
+  const tabs = tabsFor(screen, mode);
   const prev = useRef(0);
   const root = useRef<HTMLDivElement>(null);
   const idx = Math.max(0, tabs.indexOf(tab));
@@ -70,9 +113,14 @@ export function Hub() {
   useEffect(() => {
     document.documentElement.dataset.motion = motion ? "on" : "off";
   }, [motion]);
+  /* A tab this level does not have (the Lodge asked for from a mode without one, Tackle from the main menu) moves to the
+     nearest one it does have; the main menu can never show a game tab. */
+  const tabKey = tabs.join();
   useEffect(() => {
-    if (open && !tabs.includes(tab)) setTab(tabs[0]);
-  }, [open, tab, tabs, setTab]);
+    if (!open || tabs.includes(tab)) return;
+    const to = resolveHubTarget(tabs, tab);
+    setTab(to.tab);
+  }, [open, tab, tabKey, tabs, setTab]);
   /* Put the keys somewhere sensible whenever the menu or its tab changes, and give focus back on close. */
   useEffect(() => {
     if (!open) return;
@@ -91,15 +139,15 @@ export function Hub() {
   }, [tab, open, idx, detail]);
 
   if (!open) return null;
-  const Body = BODY[tab] ?? PlayTab;
+  const Body = tabs.includes(tab) ? BODY[tab] : BODY[tabs[0]];
   const phoneTop = !layout.split && !layout.bottomTabs;
   const tournament = mode === "tournament";
-  const cash = showsMoney(MODES[mode]) ? money(coins) : "";
+  const cash = inGame && showsMoney(rules) ? money(coins) : "";
 
   const strip = (
     <nav
       role="tablist"
-      aria-label="Game menu sections"
+      aria-label={inGame ? "Game menu sections" : "Main menu sections"}
       className={cn(
         "no-scrollbar flex snap-x snap-mandatory overflow-x-auto",
         layout.bottomTabs ? "hub-wood safe-bot safe-x w-full justify-between border-t border-[#caa45a]/40" : "justify-center",
@@ -121,7 +169,7 @@ export function Hub() {
             data-nav="tab"
             title={`${meta.label} (${tabs.indexOf(id) + 1}): ${meta.blurb}`}
             onClick={() => setTab(id)}
-            className={cn("hub-tab", layout.bottomTabs && "min-h-14 flex-1 flex-col gap-0.5 px-1 text-[12px]")}
+            className={cn("hub-tab", layout.bottomTabs && "min-h-14 min-w-16 flex-1 flex-col gap-0.5 px-1 text-[12px]")}
           >
             <Icon name={ICON[id]} className={layout.bottomTabs ? "size-6" : "size-5"} />
             <span className={cn("font-serif", layout.bottomTabs ? "text-[12px]" : "text-lg")}>{meta.label}</span>
@@ -135,7 +183,7 @@ export function Hub() {
   );
 
   return (
-    <div ref={root} data-hub-root role="dialog" aria-modal="true" aria-label="Game menu" className="hub fixed inset-0 z-40 text-[#f1e5c9]">
+    <div ref={root} data-hub-root role="dialog" aria-modal="true" aria-label={inGame ? "Game menu" : "Main menu"} data-level={inGame ? "game" : "main"} className="hub fixed inset-0 z-40 text-[#f1e5c9]">
       <div className="hub-backdrop" onClick={screen === "game" ? closeHub : undefined} />
       <Motes />
       <div className="relative mx-auto flex h-full max-w-[1560px] flex-col">
@@ -147,9 +195,9 @@ export function Hub() {
               </button>
             ) : null}
             <div className="min-w-0">
-              <p className="truncate font-serif text-2xl leading-none">{screen === "menu" ? "FAC Ultra" : "Game menu"}</p>
+              <p className="truncate font-serif text-2xl leading-none">{inGame ? rules.title : "FAC Ultra"}</p>
               <p className="mt-1 truncate text-[13px] text-[#c9b890]">
-                {screen === "menu" ? "Pick how you want to fish" : tournament ? "The event keeps running while you look around" : "The game is paused"}
+                {!inGame ? "Pick how you want to fish" : tournament ? "The event keeps running while you look around" : "Paused. Your fish are saved."}
               </p>
             </div>
           </div>
@@ -160,8 +208,31 @@ export function Hub() {
               {cash ? <span className="block font-serif text-lg text-brass">{cash}</span> : null}
             </p>
             <FullscreenButton />
-            <button type="button" data-nav="close" onClick={closeHub} aria-label="Close menu" title="Close (Esc)" className="grid size-11 place-items-center rounded-full border border-white/25 bg-black/35 hover:border-brass">
-              <Icon name="close" className="size-5" />
+            {inGame ? (
+              <button
+                type="button"
+                data-nav="leave"
+                data-testid="hub-leave"
+                onClick={hubLeave}
+                aria-label={`${leaveLabel(rules)}: save and go back to the main menu`}
+                title="Save and go back to the main menu"
+                className={cn("flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/25 bg-black/35 hover:border-brass", layout.split ? "px-4" : "size-11")}
+              >
+                <Icon name="exit" className="size-5" />
+                {layout.split ? <span className="font-serif text-base">{leaveLabel(rules)}</span> : null}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              data-nav="close"
+              data-testid="hub-close"
+              onClick={closeHub}
+              aria-label={inGame ? "Resume" : "Close menu"}
+              title={inGame ? "Back to the water (Esc)" : "Close (Esc)"}
+              className={cn("flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/25 bg-black/35 hover:border-brass", inGame && layout.split ? "px-4" : "size-11")}
+            >
+              <Icon name={inGame ? "play" : "close"} className="size-5" />
+              {inGame && layout.split ? <span className="font-serif text-base">Resume</span> : null}
             </button>
           </div>
         </header>
@@ -173,8 +244,9 @@ export function Hub() {
           </div>
         </main>
         {layout.bottomTabs ? strip : null}
-        {layout.split ? <HintBar pad={pad} /> : null}
+        {layout.split ? <HintBar pad={pad} inGame={inGame} /> : null}
       </div>
+      <LeaveDialog />
     </div>
   );
 }
@@ -184,7 +256,7 @@ function Key({ children }: { children: string }) {
 }
 
 /** The bottom bar: which keys (or gamepad buttons) do what, on a PC. */
-function HintBar({ pad }: { pad: boolean }) {
+function HintBar({ pad, inGame }: { pad: boolean; inGame: boolean }) {
   return (
     <footer className="hub-wood safe-x mx-4 mb-3 flex shrink-0 items-center justify-center gap-5 rounded-full border border-[#caa45a]/40 px-5 py-2 text-[13px] text-[#e7d9b6]" aria-label="Controls">
       {pad ? (
@@ -193,7 +265,7 @@ function HintBar({ pad }: { pad: boolean }) {
           <span><Key>B</Key>Back</span>
           <span><Key>D-pad</Key>Move</span>
           <span><Key>LB</Key><Key>RB</Key>Section</span>
-          <span><Key>Start</Key>Close</span>
+          <span><Key>Start</Key>{inGame ? "Resume" : "Close"}</span>
         </>
       ) : (
         <>
@@ -201,7 +273,7 @@ function HintBar({ pad }: { pad: boolean }) {
           <span><Key>Enter</Key>Choose</span>
           <span><Key>Q</Key><Key>E</Key>Section</span>
           <span><Key>F</Key>Full screen</span>
-          <span><Key>Esc</Key>Close</span>
+          <span><Key>Esc</Key>{inGame ? "Resume" : "Close"}</span>
         </>
       )}
     </footer>

@@ -15,13 +15,16 @@ export function HubKeys() {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.code === "Escape") {
         e.preventDefault();
+        /* Handled here: the game's own Esc (which opens the menu) must not see the same key press and open it again. */
+        e.stopImmediatePropagation();
         if (typing) return void (t as HTMLElement).blur();
         return void hubBack();
       }
       if (typing) return;
-      const digit = /^Digit([1-6])$/.exec(e.code);
+      const digit = /^Digit([1-9])$/.exec(e.code);
       if (digit) {
         e.preventDefault();
+        e.stopImmediatePropagation();
         const id = currentTabs()[Number(digit[1]) - 1];
         if (id) (hub.tab === id ? closeHub : () => hub.setTab(id))();
         return;

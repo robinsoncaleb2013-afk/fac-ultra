@@ -338,15 +338,20 @@ export function SavesSection() {
   );
 }
 
+/* `at: "game"` sections are only in the in-game Settings (WP-12): the main menu has its own Account tab, and "Your saves" works on
+   the save of the mode you are in (export, import, start over), which the main menu must not change. */
 export const SETTINGS_SECTIONS = [
-  { id: "sound", title: "Sound", sub: "Music, water sounds and volume", icon: "sound", View: SoundSection },
-  { id: "picture", title: "Picture quality", sub: "Auto, or Ultra down to Potato", icon: "eye", View: GraphicsSection },
-  { id: "fullscreen", title: "Full screen", sub: "Hide the browser bars", icon: "expand", View: FullscreenSection },
-  { id: "account", title: "Account and cloud saves", sub: "Sign in, family profiles, keep your fish safe", icon: "cloud", View: AccountSection },
-  { id: "help", title: "Help for playing", sub: "Colour-blind colours, motion, Kid Mode", icon: "players", View: HelpSection },
-  { id: "controls", title: "Controls", sub: "Keys, gamepad and reel drag", icon: "pad", View: ControlsSection },
-  { id: "saves", title: "Your saves", sub: "Files, save codes, start over", icon: "satchel", View: SavesSection },
+  { id: "sound", title: "Sound", sub: "Music, water sounds and volume", icon: "sound", View: SoundSection, at: "both" },
+  { id: "picture", title: "Picture quality", sub: "Auto, or Ultra down to Potato", icon: "eye", View: GraphicsSection, at: "both" },
+  { id: "fullscreen", title: "Full screen", sub: "Hide the browser bars", icon: "expand", View: FullscreenSection, at: "both" },
+  { id: "help", title: "Help for playing", sub: "Colour-blind colours, motion, Kid Mode", icon: "players", View: HelpSection, at: "both" },
+  { id: "controls", title: "Controls", sub: "Keys, gamepad and reel drag", icon: "pad", View: ControlsSection, at: "both" },
+  { id: "account", title: "Account and cloud saves", sub: "Sign in, family profiles, keep your fish safe", icon: "cloud", View: AccountSection, at: "game" },
+  { id: "saves", title: "Your saves", sub: "Files, save codes, start over", icon: "satchel", View: SavesSection, at: "game" },
 ] as const;
+
+/** The sections each level shows. */
+export const settingsFor = (inGame: boolean) => SETTINGS_SECTIONS.filter((s) => inGame || s.at === "both");
 
 /** Everything on one scrolling page: the old Lodge → Settings route. */
 export function AllSettings() {

@@ -1,4 +1,4 @@
-/* Which part of the pause menu ("the Hub") is open (docs/architecture/02, WP-10).
+/* Which part of the menu ("the Hub": the main menu outside a game, the in-game menu inside one, WP-12) is open (docs/architecture/02, WP-10).
    A tiny store of its own: nothing here is saved, and nothing here is a game rule. The game store's setTab() and
    setLodgeView() open the Hub through this, so every old route into a panel still lands somewhere sensible. */
 
@@ -19,6 +19,9 @@ type HubUi = {
   satchel: { held: boolean } | null;
   /** A gamepad has been seen: the hint bar shows its buttons. */
   pad: boolean;
+  /** The "Leave?" question is showing over the in-game menu (WP-12). */
+  leaveAsk: boolean;
+  askLeave: (v: boolean) => void;
   openHub: (tab?: HubTab, item?: string) => void;
   closeHub: () => void;
   setTab: (tab: HubTab) => void;
@@ -41,6 +44,8 @@ export const useHubUi = create<HubUi>((set, get) => ({
   wheel: null,
   satchel: null,
   pad: false,
+  leaveAsk: false,
+  askLeave: (leaveAsk) => set({ leaveAsk }),
   openHub: (tab, item) =>
     set((s) => ({
       open: true,
@@ -49,8 +54,9 @@ export const useHubUi = create<HubUi>((set, get) => ({
       tab: tab ?? s.tab,
       item: item && tab ? { ...s.item, [tab]: item } : s.item,
       detail: !!item,
+      leaveAsk: false,
     })),
-  closeHub: () => set({ open: false, detail: false }),
+  closeHub: () => set({ open: false, detail: false, leaveAsk: false }),
   setTab: (tab) => set({ tab, detail: false }),
   selectItem: (tab, id) => set((s) => ({ item: { ...s.item, [tab]: id } })),
   setDetail: (detail) => set({ detail }),

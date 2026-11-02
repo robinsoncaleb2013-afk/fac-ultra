@@ -1,28 +1,54 @@
 /* Navigating the Hub with keys, a gamepad and the keyboard shortcuts (docs/architecture/09 §2.3, WP-10).
    Pure: a key code in, an action out; a gamepad snapshot in, a list of actions out. The component applies them. */
 
-import type { Mode } from "./modes.ts";
+import { MODES, type MenuTabId, type Mode } from "./modes.ts";
 import type { LodgeView, Tab } from "./engine.ts";
 
-export type HubTab = "play" | "tackle" | "lodge" | "waters" | "players" | "settings";
+/* Two levels of menu (WP-12, Caleb's feedback). The MAIN menu is outside any game: Play (pick a mode), a read-only look at
+   your collections, friends, your account and the settings. The IN-GAME menu belongs to the mode you are fishing: its tabs
+   come from `MODES[mode].menuTabs`, so a new mode is data and nothing here needs an `if`. */
+
+/** Level 1: the main menu. Nothing here can sell, buy, craft, cast or change a game. */
+export type MainTab = "play" | "collections" | "friends" | "account" | "settings";
+/** Level 2: the in-game menu (see modes.ts). */
+export type HubTab = MenuTabId | MainTab;
+
+export const MAIN_TABS: readonly MainTab[] = ["play", "collections", "friends", "account", "settings"];
 
 export const HUB_TABS: readonly { id: HubTab; label: string; blurb: string }[] = [
   { id: "play", label: "Play", blurb: "Pick how you want to fish" },
-  { id: "tackle", label: "Tackle", blurb: "Rods, reels, lures and your bag" },
+  { id: "collections", label: "Collections", blurb: "Look at your fish and trophies" },
+  { id: "friends", label: "Friends", blurb: "Add, accept, remove or block" },
+  { id: "account", label: "Account", blurb: "Sign in and keep your fish safe in the cloud" },
+  { id: "tackle", label: "Tackle", blurb: "The rods, lures and bait you carry" },
+  { id: "shop", label: "Shop & Sell", blurb: "Sell your fish and buy new gear" },
   { id: "lodge", label: "Lodge", blurb: "Your trophies, records and fish book" },
   { id: "waters", label: "Waters", blurb: "Where to fish, and the spots in each" },
   { id: "players", label: "Players", blurb: "Friends and events" },
-  { id: "settings", label: "Settings", blurb: "Sound, picture, full screen and your account" },
+  { id: "camp", label: "Camp", blurb: "Eat, make things and rest" },
+  { id: "larder", label: "Larder", blurb: "The fish you are keeping" },
+  { id: "log", label: "Log", blurb: "Your best runs and every run you finished" },
+  { id: "logbook", label: "Logbook", blurb: "Every fishing trip you took" },
+  { id: "collection", label: "Collection", blurb: "Your fish book, records and buddy" },
+  { id: "event", label: "Event", blurb: "The clock, the board and your standing" },
+  { id: "settings", label: "Settings", blurb: "Sound, picture, full screen and controls" },
 ];
 
-/** Which tabs a mode shows, in order. A tournament event fixes your gear and water; Survival has no shop or travel. */
+/** Which tabs the in-game menu shows for a mode, in order. It is the mode's own list. */
 export function tabsForMode(mode: Mode): HubTab[] {
-  if (mode === "tournament") return ["play", "lodge", "players", "settings"];
-  if (mode === "survival") return ["play", "tackle", "lodge", "players", "settings"];
-  return ["play", "tackle", "lodge", "waters", "players", "settings"];
+  return [...MODES[mode].menuTabs];
 }
 
-/** The old panel names (cast/bag/gear/…) open the Hub at the matching tab and item. */
+/** The tabs for whichever level is showing: the main menu outside a game, the mode's menu inside one. */
+export function tabsFor(screen: "menu" | "game", mode: Mode): HubTab[] {
+  return screen === "menu" ? [...MAIN_TABS] : tabsForMode(mode);
+}
+
+/* What the main menu must never offer: anything that changes a game. (A test walks this list.) */
+export const MAIN_MENU_FORBIDDEN: readonly string[] = ["shop", "tackle", "camp", "larder", "waters", "event", "lodge"];
+
+/** The old panel names (cast/bag/gear/…) open the menu at the matching tab and item. This is the career-shaped answer;
+    `resolveHubTarget` then moves it to where the current mode keeps that thing. */
 export function hubTargetFor(tab: Tab, lodgeView: LodgeView): { tab: HubTab; item?: string } | null {
   switch (tab) {
     case "cast":
@@ -34,7 +60,7 @@ export function hubTargetFor(tab: Tab, lodgeView: LodgeView): { tab: HubTab; ite
     case "lures":
       return { tab: "tackle", item: "box" };
     case "camp":
-      return { tab: "tackle", item: "camp" };
+      return { tab: "camp" };
     case "waters":
       return { tab: "waters" };
     case "dex":
@@ -42,6 +68,29 @@ export function hubTargetFor(tab: Tab, lodgeView: LodgeView): { tab: HubTab; ite
     case "lodge":
       return lodgeView === "settings" ? { tab: "settings" } : { tab: "lodge", item: lodgeView };
   }
+}
+
+/** Move a request ("open the Lodge on the logbook") to the tab this mode really has for it. A tab the mode does not show
+    falls back to the nearest thing it does, then to its first tab. Pure. */
+export function resolveHubTarget(tabs: readonly HubTab[], want: HubTab, item?: string): { tab: HubTab; item?: string } {
+  const has = (t: HubTab) => tabs.includes(t);
+  if (item === "satchel" && has("larder") && !has("tackle")) return { tab: "larder" };
+  if (item === "camp" && has("camp")) return { tab: "camp" };
+  if (want === "tackle" && item === "satchel" && has("tackle")) return { tab: "tackle", item };
+  if (want === "lodge" && !has("lodge")) {
+    if (item === "logbook" && has("logbook")) return { tab: "logbook" };
+    if (has("collection")) return { tab: "collection", item: item === "logbook" ? undefined : item };
+    if (has("log")) return { tab: "log", item };
+  }
+  if (want === "tackle" && !has("tackle")) {
+    if (has("camp")) return { tab: "camp" };
+    if (has("event")) return { tab: "event" };
+  }
+  if (want === "players" && has("friends")) return { tab: "friends", item };
+  if (want === "players" && !has("players") && has("event")) return { tab: "event" };
+  if (want === "shop" && !has("shop") && has("tackle")) return { tab: "tackle" };
+  if (has(want)) return { tab: want, item };
+  return { tab: tabs[0] };
 }
 
 export type NavAction = "up" | "down" | "left" | "right" | "prevTab" | "nextTab" | "select" | "back" | "close";

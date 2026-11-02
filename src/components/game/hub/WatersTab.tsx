@@ -43,6 +43,8 @@ function Detail({ index }: { index: number }) {
   const mastered = useGame((s) => s.mastered);
   const phase = useGame((s) => s.phase);
   const travel = useGame((s) => s.travel);
+  /* Survival: you stay on the water your run started on, so this page is a map to read, not a way to travel. */
+  const survival = useGame((s) => !!MODES[s.mode].survival);
   const owned = ub.includes(index);
   const here = biome === index;
   const afford = coins >= place.price;
@@ -54,8 +56,8 @@ function Detail({ index }: { index: number }) {
     <DetailPaper label={place.name} className="flex h-full flex-col">
       <SpotMap index={index} mystery={!owned} />
       <div className="mt-4">
-        <Title sub={owned ? waterBlurb(index) : `Costs ${money(place.price)} to unlock. You have ${money(coins)}.`}>{owned ? place.name : `${place.name} (locked)`}</Title>
-        {owned ? (
+        <Title sub={owned ? waterBlurb(index) : survival ? "Not part of your Survival waters." : `Costs ${money(place.price)} to unlock. You have ${money(coins)}.`}>{owned ? place.name : `${place.name} (locked)`}</Title>
+        {owned && !survival ? (
           <Facts
             facts={[
               `${caught} of 24 fish found here`,
@@ -79,13 +81,16 @@ function Detail({ index }: { index: number }) {
             </ol>
           </div>
         ) : null}
-        {here ? (
+        {here && !survival ? (
           <div className="mt-3 rounded-xl bg-[#1b130b] p-2">
             <BossControls />
           </div>
         ) : null}
       </div>
       <div className="mt-auto flex flex-wrap items-center gap-3 pt-4">
+        {survival ? (
+          <p className="hub-ink-muted text-[14px]">{here ? "This is the water your run is on." : "In Survival you stay on the water you started on. Start a new run to pick another."}</p>
+        ) : (
         <PaperButton
           disabled={busy || here || (!owned && !afford)}
           onClick={() => {
@@ -95,7 +100,8 @@ function Detail({ index }: { index: number }) {
         >
           {here ? "You are here" : owned ? "Go fishing here" : afford ? `Unlock for ${money(place.price)}` : `Needs ${money(place.price)}`}
         </PaperButton>
-        {busy ? <span className="hub-ink-muted text-[14px]">Land or lose this fish before you travel.</span> : null}
+        )}
+        {busy && !survival ? <span className="hub-ink-muted text-[14px]">Land or lose this fish before you travel.</span> : null}
       </div>
     </DetailPaper>
   );
@@ -106,13 +112,14 @@ export function WatersTab({ split }: { split: boolean }) {
   const biome = useGame((s) => s.biome);
   const dex = useGame((s) => s.dex);
   const saved = useHubUi((s) => s.item.waters);
+  const survival = useGame((s) => !!MODES[s.mode].survival);
   const items: HubItem[] = BIOMES.map((b, i) => ({
     id: String(i),
     title: b.name,
     sub: ub.includes(i) ? (biome === i ? "You are here" : `${biomeSpeciesCaught(dex, i)} of 24 fish`) : `Locked · ${money(b.price)}`,
     locked: !ub.includes(i),
     thumb: <Painting id={b.id} mystery={!ub.includes(i)} className="size-11 shrink-0 rounded-lg" />,
-  }));
+  })).filter((it) => !survival || ub.includes(Number(it.id)));
   return (
     <MasterDetail
       tab="waters"
