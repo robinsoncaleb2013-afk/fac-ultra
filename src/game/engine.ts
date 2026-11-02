@@ -301,6 +301,23 @@ function bool(v: unknown, d: boolean) {
   if (typeof v === "number") return v !== 0;
   return d;
 }
+/** A string from untrusted save data, clipped to `max` characters. */
+export function str(v: unknown, d: string, max = 80) {
+  return typeof v === "string" ? v.slice(0, max) : d;
+}
+/** An array from untrusted save data: each item passed through `item`,
+    items it rejects (returns `undefined`) dropped, clipped to `max` entries. */
+export function list<T>(v: unknown, item: (x: unknown) => T | undefined, max = 500): T[] {
+  if (!Array.isArray(v)) return [];
+  const out: T[] = [];
+  for (const x of v) {
+    const y = item(x);
+    if (y !== undefined) out.push(y);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+export { num as saveNum, int as saveInt, bool as saveBool };
 function uid() {
   return Math.random().toString(36).slice(2, 9);
 }
@@ -525,7 +542,7 @@ export function sanitize(raw: unknown): Save {
   };
 }
 
-function snapshot(s: Save): Save {
+export function snapshot(s: Save): Save {
   return {
     version: SAVE_VERSION,
     c: s.c,
