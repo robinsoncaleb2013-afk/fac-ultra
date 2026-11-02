@@ -1,3 +1,4 @@
+import { EventLayer } from "@/components/game/events";
 import { useEffect } from "react";
 import type { LayoutPlan } from "@/game/device";
 import { act, useGame } from "@/game/engine";
@@ -42,6 +43,7 @@ export function DesktopLayout({ plan }: { plan: LayoutPlan }) {
       {photo ? null : (
         <>
           <CornerHud />
+          <EventLayer className="top-2" />
           <StageChips className="absolute top-16 z-10" style={{ left: railW + 12 }} />
           <div className="pointer-events-none absolute top-24 right-4 z-10 flex w-96 max-w-[45vw] flex-col items-end gap-2">
             {derby ? <DerbyBanner /> : null}

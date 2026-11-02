@@ -90,6 +90,11 @@ Spec: `09-mobile.md` §1.0 (five graphics levels), §2.3 and §6 ("as built" not
 
 ---
 
+## WP-15 · Rare long-play events and event mutations
+Spec: `11-events-and-mutations.md`. **Done when:** eleven events (Caleb's table) start deterministically after 1 to 10 hours of continuous play with night-only and Astral-only rules; some fish get a named XP and/or worth mutation with tint and shape; banner, countdown chip, catch-card line and Lodge Events list work; save v10 round-trips the streak and seen events; Tournament and Survival never run it and the replayed rng stream is untouched.
+
+---
+
 ## PR description template
 
 ```

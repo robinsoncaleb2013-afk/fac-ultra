@@ -25,11 +25,12 @@ Field inventory planned by this chapter (so names don't collide):
 | `survival` | WP-5 | `SurvivalRun \| null` (own save key) |
 | `pet`, `stickers`, `shiny`, `fotdClaimed`, `rivalRecord` (+ device `volume`, `cb`) | WP-6 | save v8, see `05` §6 and §10 |
 | `trophies`, `titles`, `bobberSkin`, `tourneyHistory` | WP-8 | arrays |
+| `events` | WP-15 | save v10: streak clock, running event, seen events, mutated-fish counts; see `11` §8 |
 | `cloud` | WP-9 | `{ userId, lastSync, rev }` |
 
 Save v4 is the version that ships with WP-1; each later package bumps once.
 
-> WP-14: `SAVE_VERSION` is 10. It adds `lineGear` (lines owned, unopened line packs, last pull). Old saves get one copy of each line up to the one they used. See `10-gear-progression-and-line.md` section 1.7.
+> WP-14: `SAVE_VERSION` is 11 (WP-15 took 10). It adds `lineGear` (lines owned, unopened line packs, last pull). Old saves get one copy of each line up to the one they used. See `10-gear-progression-and-line.md` section 1.7.
 
 ## 2. Save slots
 

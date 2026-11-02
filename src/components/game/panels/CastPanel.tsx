@@ -1,3 +1,5 @@
+import { CatchEventLine } from "@/components/game/events";
+import { useMutationText } from "@/components/game/use-mutation";
 import { useEffect, useState } from "react";
 import {
   AUTO_PRICE,
@@ -10,7 +12,6 @@ import {
   LURES,
   money,
   multOf,
-  MUTATIONS,
   RARITIES,
   STAGE_NAMES,
   TONE,
@@ -157,6 +158,7 @@ function CastPanelCareer() {
   const luck = useGame((s) => Math.round(luckTotal(s, s.lure)));
   const streak = useGame((s) => s.streak);
   const last = useGame((s) => s.lastCatch);
+  const mut = useMutationText();
   const mult = useGame((s) => multOf(s.dex, s.rb));
   const taught = useGame((s) => s.taught);
   const stage = useGame((s) => stageIn(MODES[s.mode], s.dex, s.biome));
@@ -192,9 +194,10 @@ function CastPanelCareer() {
             <p className={cn("text-xs font-semibold tracking-wide uppercase", TONE[last.rarity])}>
               <RarityMark rarity={last.rarity} className="mr-1" />
               {RARITIES[last.rarity].name}
-              {last.mutation ? ` · ${MUTATIONS[last.mutation].name}` : ""}
+              {last.mutation ? ` · ${mut.name(last.mutation)}` : ""}
             </p>
             <h2 className="font-serif text-2xl leading-tight">{last.name}</h2>
+            <CatchEventLine mutation={last.mutation} />
             <p className="text-sm text-muted">
               {BIOMES[last.biome].name} · {last.weight} lb{survival ? "" : ` · worth ${money(Math.round(last.value * mult))}`}
             </p>

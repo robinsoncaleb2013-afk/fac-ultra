@@ -1,8 +1,10 @@
 import { lazy, Suspense, type ComponentType } from "react";
 import { useGame } from "@/game/engine";
 import { useHubUi } from "@/game/hubstate";
+import { eventModeOn } from "@/game/events";
 import { MODES } from "@/game/modes";
 import { useFunOn } from "@/components/game/fun-hooks";
+import { EventsView } from "@/components/game/events";
 import { ModeLabel } from "@/components/game/mode-label";
 import { Logbook } from "@/components/game/trips";
 import { PetView, RegularsView } from "@/components/game/fun";
@@ -42,10 +44,13 @@ function entries(scope: LodgeScope, rules: { trips: boolean; aquarium: boolean; 
   const logbook: Entry = { id: "logbook", title: "Logbook", sub: "Your fishing trips", icon: "map", art: "lake", view: Logbook };
   const pet: Entry = { id: "pet", title: "Your buddy", sub: "A friend who finds lures", icon: "players", art: "mangrove", view: PetView };
   const regulars: Entry = { id: "regulars", title: "The Regulars", sub: "The anglers you race against", icon: "players", art: "swamp", view: RegularsView };
+  const events: Entry = { id: "events", title: "Events", sub: "Rare things that happen on long fishing days", icon: "flag", art: "mangrove", view: EventsView };
+  const evOn = eventModeOn(rules as Parameters<typeof eventModeOn>[0]);
   const tank: Entry = { id: "tank", title: "Aquarium", sub: "Fish that earn coins", icon: "waters", art: "reef", view: Aquarium };
   const trophies: Entry = { id: "trophies", title: "Trophies and medals", sub: "Prizes from tournaments", icon: "flag", art: "coast", view: TrophyShelf };
   if (scope === "collection") {
     const list: Entry[] = [book, record];
+    if (evOn) list.push(events);
     if (fun) list.push(pet, regulars);
     if (rules.aquarium) list.push(tank);
     return list;
@@ -55,6 +60,7 @@ function entries(scope: LodgeScope, rules: { trips: boolean; aquarium: boolean; 
   const list: Entry[] = [trophies, record];
   if (rules.trips) list.push(logbook);
   list.push(book);
+  if (evOn) list.push(events);
   if (fun) list.push(pet, regulars);
   list.push(
     tank,

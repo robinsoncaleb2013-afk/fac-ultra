@@ -18,6 +18,7 @@ It is written so that an implementing agent — any model, any tool — can pick
 | [`07-data-saves-cloud.md`](07-data-saves-cloud.md) | Save schema v4, migrations, accounts and cloud saves (WP-9). |
 | [`09-mobile.md`](09-mobile.md) §1.0, §2.4, §6.1 | Graphics levels (Ultra to Potato), the pause menu (Hub) and full screen, as built in WP-10. |
 | [`10-gear-progression-and-line.md`](10-gear-progression-and-line.md) | Line health, packs, crafting, and the gear progression gates (WP-14). |
+| [`11-events-and-mutations.md`](11-events-and-mutations.md) | Building or tuning the rare long-play events, their mutations and the Events list (WP-15). |
 | [`08-work-packages.md`](08-work-packages.md) | **The build order.** Each package: scope, files, acceptance criteria, how to verify. Start here when asked "what should I build next?" |
 
 The older `docs/EXPANSION-DESIGN.md` describes the game as shipped on 2026-11-01 (15 biomes, 375 fish, bosses, Aquarium, co-op, derby). It stays as history. Where the two disagree, **this folder wins**.

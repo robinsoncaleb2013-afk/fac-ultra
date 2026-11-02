@@ -51,7 +51,7 @@ The **Line workshop** (Tackle tab) lists every tier. The detail panel shows heal
 Wear changes how a replayed cast ends, so fight/line rules are versioned (`RULES_VERSION` in `line-wear.ts`): **1** is the original fight, **2** adds wear. New events store `rules.rulesVersion` (2). An event row with none means version 1. The server replays every cast with its event's version; the client stamps `rv` on the envelope when the version is above 1, and the server refuses a cast whose stamp is not the event's version (`rules_version`). Tests prove an old-version cast still verifies and a new one verifies. The daily Survival board stays on version 1. To change the fight again: bump `RULES_VERSION` and add the case.
 
 ### 1.7 Saves
-`SAVE_VERSION` 10 adds `lineGear { lines[12], packs[4], last[] }`. `line` is the tier in use. An old save owned every line up to `line`: it gets one copy of each. Rebirth keeps your lines.
+`SAVE_VERSION` 11 adds `lineGear { lines[12], packs[4], last[] }`. `line` is the tier in use. An old save owned every line up to `line`: it gets one copy of each. Rebirth keeps your lines.
 
 ## 2. Gear progression rules
 
@@ -68,4 +68,4 @@ Client rules in `gear-rules.ts`; one table, pure functions, used by the engine (
 Sentences look like "Reach level 12, unlock the Coast map and buy the Tracker Combo first." and "Reach level 3 and beat the Pond boss."
 
 ## 3. Tests
-`lines.test.ts` (wear, determinism, crafting, packs, saves), `gear-rules.test.ts` (each rule, a full progression walk, no skipping), `replay-versions.test.ts` and `api.test.ts` (rules versions end to end), `save-migration.test.ts` (v10 fixture).
+`lines.test.ts` (wear, determinism, crafting, packs, saves), `gear-rules.test.ts` (each rule, a full progression walk, no skipping), `replay-versions.test.ts` and `api.test.ts` (rules versions end to end), `save-migration.test.ts` (v11 fixture).

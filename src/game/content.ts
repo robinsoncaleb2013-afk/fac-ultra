@@ -1,4 +1,5 @@
 import type { LureFamily } from "./presentation.ts";
+import { EVENT_RARITIES, EVENTS } from "./event-data.ts";
 import { rng, weighted } from "./rng.ts";
 
 export type DexEntry = { c: number; w: number; m: number };
@@ -46,14 +47,36 @@ export const RARITIES = [
 
 export const TONE = ["text-r0", "text-r1", "text-r2", "text-r3", "text-r4"] as const;
 
-export const MUTATIONS = [
-  { name: "", mult: 1, w: 70 },
-  { name: "Albino", mult: 2, w: 15 },
-  { name: "Golden", mult: 4, w: 8 },
-  { name: "Neon", mult: 8, w: 4 },
-  { name: "Rainbow", mult: 20, w: 2 },
-  { name: "Cosmic", mult: 60, w: 0.6 },
-] as const;
+/** One mutation. `mult` multiplies the fish's sale value, `xp` its XP. Rolled mutations (indexes 0-5) have `w` > 0 and
+    `xp` 1. The event mutations (WP-15) come after them, are never rolled (`w` 0) and are handed out by an event
+    (events.ts), each with the event's rarity multiplier on its XP, its worth, or both (event-data.ts is the table). */
+export type Mutation = { name: string; mult: number; w: number; xp: number; ev?: string };
+
+const NATURAL_MUTATIONS: readonly Mutation[] = [
+  { name: "", mult: 1, w: 70, xp: 1 },
+  { name: "Albino", mult: 2, w: 15, xp: 1 },
+  { name: "Golden", mult: 4, w: 8, xp: 1 },
+  { name: "Neon", mult: 8, w: 4, xp: 1 },
+  { name: "Rainbow", mult: 20, w: 2, xp: 1 },
+  { name: "Cosmic", mult: 60, w: 0.6, xp: 1 },
+];
+
+/** Index of the first event mutation. Everything below it is an ordinary rolled mutation. */
+export const FIRST_EVENT_MUTATION = NATURAL_MUTATIONS.length;
+
+export const MUTATIONS: readonly Mutation[] = [
+  ...NATURAL_MUTATIONS,
+  ...EVENTS.map((e) => {
+    const mult = EVENT_RARITIES[e.rarity].mult;
+    return { name: e.mutation, mult: e.kind === "xp" ? 1 : mult, w: 0, xp: e.kind === "worth" ? 1 : mult, ev: e.id };
+  }),
+];
+
+/** Which of two mutations is the better one to keep in the book (bigger combined boost wins; ties keep the first). */
+export function betterMutation(a: number, b: number): number {
+  const rank = (m: number) => (MUTATIONS[m]?.mult ?? 1) * (MUTATIONS[m]?.xp ?? 1);
+  return rank(b) > rank(a) ? b : a;
+}
 
 export const WEATHER = [
   { id: "sunny", name: "Sunny", luck: 0, bite: 0 },
