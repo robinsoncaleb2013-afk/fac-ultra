@@ -138,7 +138,7 @@ test("the pet opens at level 5, brings a gift once an hour, and keeps across a r
   assert.ok(LURES.length > 0);
   await flush();
   const saved = JSON.parse(mem.get(MODE_KEYS.expedition)!);
-  assert.equal(saved.version, 8);
+  assert.equal(saved.version, 9);
   assert.equal(saved.pet.kind, "otter");
   hydrate();
   assert.equal(st().pet.kind, "otter");

@@ -1,6 +1,7 @@
 import { act, partnerDown, partnerUp, reelDown, reelUp, sim, useGame } from "@/game/engine";
 import { Button } from "@/components/ui/button";
 import { SpeakButton } from "@/components/game/kid";
+import { EmoteBar } from "@/components/game/event-social";
 import { useKidOn, useRules } from "@/components/game/use-kid";
 import { isLongMessage } from "@/game/kid";
 import { cn } from "@/lib/cn";
@@ -53,6 +54,7 @@ export function CastDock({ mobile, onCast }: { mobile?: boolean; onCast?: () => 
         <p className="min-h-4 text-xs text-muted">{sub}</p>
         {readable ? <SpeakButton text={`${message} ${sub}`} className="absolute top-1/2 right-1 -translate-y-1/2" /> : null}
       </div>
+      <EmoteBar />
       <div className="flex gap-2">
         <Button
           data-cast

@@ -9,6 +9,8 @@ import type { Sql } from "@/lib/db";
 import { BIOMES } from "@/game/content";
 import { claimMatches, parseEnvelope, replayCast, type Envelope, type Replayed } from "@/game/replay";
 import { scoreEntry, type Landed } from "@/game/scoring";
+import { fillCount, rivalRows, rivalsAhead } from "@/game/fill";
+import { teamById, TEAM_MAX } from "@/game/social";
 import {
   asObject,
   AT_AHEAD_MS,
@@ -45,11 +47,12 @@ type EntryRaw = {
   joined_ms: number;
   banned_ms: number | null;
   name: string;
+  team: string | null;
 };
 
 const ENTRY_COLUMNS = `e.casts_used, e.seconds_used::float8 as seconds_used, e.score::float8 as score, e.tiebreak::float8 as tiebreak,
   e.best_weight::float8 as best_weight, e.species, e.fish, e.strikes, e.last_ms, ${MS("e.joined_at")} as joined_ms,
-  ${MS("p.banned_until")} as banned_ms, p.name`;
+  ${MS("p.banned_until")} as banned_ms, p.name, e.team`;
 
 async function getEntry(sql: Sql, eventId: string, playerId: string): Promise<EntryRaw | null> {
   const rows = await sql.query<EntryRaw>(
@@ -66,7 +69,17 @@ export async function rankOf(sql: Sql, eventId: string, score: number, tiebreak:
        from entries where event_id = $1`,
     [eventId, score, tiebreak],
   );
-  return { rank: Number(rows[0]?.ahead ?? 0) + 1, entrants: Number(rows[0]?.total ?? 0) };
+  return { rank: Number(rows[0]?.ahead ?? 0) + 1, entrants: Number(rows[0]?.total ?? 0), humans: Number(rows[0]?.total ?? 0) };
+}
+
+/** Like `rankOf`, but a Quick board that is short of anglers is topped up with Regulars (06 §3.2),
+    so the rank and the headcount match what the board shows. */
+export async function rankIn(sql: Sql, e: EventRow, score: number, tiebreak: number, now: number) {
+  const base = await rankOf(sql, e.id, score, tiebreak);
+  const n = fillCount(e.kind, base.humans);
+  if (!n) return base;
+  const rivals = rivalRows({ id: e.id, seed: e.seed, water: e.water, startsAt: e.startsAt, endsAt: e.endsAt, category: e.rules.category, castBudget: e.rules.castBudget }, n, now);
+  return { rank: base.rank + rivalsAhead(rivals, score, tiebreak), entrants: base.entrants + n, humans: base.humans };
 }
 
 const isBanned = (banMs: number | null, now: number) => banMs != null && Number(banMs) > now;
@@ -124,14 +137,29 @@ export async function handleEntry(sql: Sql, req: ApiReq): Promise<ApiRes> {
       const [{ n }] = await sql.query<{ n: number }>("select count(*)::int as n from entries where event_id = $1", [e.id]);
       if (Number(n) >= max) return fail(409, "event_full", { max });
     }
+    /* Team events (06 §3.4): pick one of the eight preset teams; each holds four. */
+    let team: string | null = null;
+    if (e.rules.team) {
+      const t = teamById(body.team);
+      if (!t) return fail(400, "pick_a_team");
+      const [{ n }] = await sql.query<{ n: number }>("select count(*)::int as n from entries where event_id = $1 and team = $2", [e.id, t.id]);
+      if (Number(n) >= TEAM_MAX) return fail(409, "team_full", { max: TEAM_MAX });
+      team = t.id;
+    }
     await sql.query(
-      `insert into entries (event_id, player_id, joined_at) values ($1, $2, ${TS(3)}) on conflict do nothing`,
-      [e.id, playerId, req.now],
+      `insert into entries (event_id, player_id, joined_at, team) values ($1, $2, ${TS(3)}, $4) on conflict do nothing`,
+      [e.id, playerId, req.now, team],
     );
     en = await getEntry(sql, e.id, playerId);
   }
   if (!en) return fail(500, "join_failed");
-  const { rank, entrants } = await rankOf(sql, e.id, Number(en.score), Number(en.tiebreak));
+  /* Presence for friends, and any invite to this event is now answered. */
+  await sql.query(`update players set last_seen = ${TS(2)}, at_event = $3 where id = $1`, [playerId, req.now, e.id]);
+  await sql.query(
+    "delete from invites where to_id = $1 and event_id = $2",
+    [playerId, e.id],
+  );
+  const { rank, entrants } = await rankIn(sql, e, Number(en.score), Number(en.tiebreak), req.now);
   return ok({
     event: publicEvent(e, entrants, req.now),
     seed: e.seed,
@@ -141,6 +169,7 @@ export async function handleEntry(sql: Sql, req: ApiReq): Promise<ApiRes> {
     startsAt: e.startsAt,
     endsAt: e.endsAt,
     name: en.name,
+    team: en.team,
     ...state(e, en, rank, entrants, req.now),
   });
 }
@@ -235,7 +264,7 @@ export async function handleCatch(sql: Sql, req: ApiReq): Promise<ApiRes> {
 
   const reply = async (verdict: string, extra: Record<string, unknown> = {}, status = 200): Promise<ApiRes> => {
     const fresh = (await getEntry(sql, e.id, playerId)) ?? en;
-    const { rank, entrants } = await rankOf(sql, e.id, Number(fresh.score), Number(fresh.tiebreak));
+    const { rank, entrants } = await rankIn(sql, e, Number(fresh.score), Number(fresh.tiebreak), now);
     return { status, body: { verdict, ...extra, ...state(e, fresh, rank, entrants, now) } };
   };
 

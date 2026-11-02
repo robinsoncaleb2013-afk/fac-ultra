@@ -10,7 +10,7 @@
    tournament: the fun layer stays out of anything a server verifies (06). WP-8 can call
    `rivalCast` to fill an empty Quick board. */
 
-import { BIOMES, rollFish } from "./content.ts";
+import { BIOMES, rollFish, type Rolled } from "./content.ts";
 import { matchVector, windowOf } from "./match.ts";
 import { DEPTHS, FAMILIES, RETRIEVES, type Window } from "./presentation.ts";
 import { makeRng, rng, seedFrom, setRng, type Rng } from "./rng.ts";
@@ -212,11 +212,11 @@ export function bonus(skill: number): number {
   return 1 + 0.25 * skill;
 }
 
-/** The value of this rival's k-th cast in this Derby (0 = the fish got away). Same inputs, same answer, always.
+/** The fish this rival's k-th cast brings in (null = it got away). Same inputs, same answer, always.
     The live `rng()` stream is not touched. */
-export function rivalCast(r: Rival, ctx: DerbyCtx, k: number): number {
+export function rivalFish(r: Rival, ctx: DerbyCtx, k: number): Rolled | null {
   const mine = makeRng(seedFrom("rival", r.id, ctx.seed, k));
-  if (mine() < missChance(r.skill)) return 0;
+  if (mine() < missChance(r.skill)) return null;
   const spots = spotsOf(ctx.biome);
   let best: number[] | null = null;
   let bestScore = -1;
@@ -239,11 +239,16 @@ export function rivalCast(r: Rival, ctx: DerbyCtx, k: number): number {
   const keep: Rng = rng;
   setRng(mine);
   try {
-    const fish = rollFish(ctx.biome, rivalLuck(r.skill, ctx.luck), { stage: ctx.stage, match: best ?? undefined });
-    return Math.round(fish.v * bonus(r.skill));
+    return rollFish(ctx.biome, rivalLuck(r.skill, ctx.luck), { stage: ctx.stage, match: best ?? undefined });
   } finally {
     setRng(keep);
   }
+}
+
+/** The value of this rival's k-th cast in this Derby (0 = the fish got away). */
+export function rivalCast(r: Rival, ctx: DerbyCtx, k: number): number {
+  const fish = rivalFish(r, ctx, k);
+  return fish ? Math.round(fish.v * bonus(r.skill)) : 0;
 }
 
 /** A rival in a Derby: what they have so far and how many casts that took. */

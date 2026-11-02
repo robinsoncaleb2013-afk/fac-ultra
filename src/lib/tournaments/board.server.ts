@@ -3,6 +3,9 @@
 import type { Sql } from "@/lib/db";
 import { BIOMES } from "@/game/content";
 import { claimMatches, parseEnvelope, replayCast, type ReplayEvent } from "@/game/replay";
+import { fillCount, rivalRows } from "@/game/fill";
+import { rankTeams, type TeamRow } from "@/game/social";
+import { finalizeEvent } from "./awards.server.ts";
 import { dateStamp, DAY, survivalAt, survivalId, SURVIVAL_WATERS, survivalSeed } from "@/game/schedule";
 import {
   asObject,
@@ -30,6 +33,11 @@ export type BoardRow = {
   fish: number;
   casts: number;
   you: boolean;
+  /** A Regular topping up a short Quick board (06 §3.2); `portrait` is their emoji. */
+  rival?: boolean;
+  portrait?: string;
+  /** The preset team id, in a team event. */
+  team?: string | null;
 };
 
 type Raw = {
@@ -42,6 +50,8 @@ type Raw = {
   casts: number;
   rk: number;
   rn: number;
+  team?: string | null;
+  tb?: number;
 };
 
 const toRow = (r: Raw, me: string | null): BoardRow => ({
@@ -53,6 +63,7 @@ const toRow = (r: Raw, me: string | null): BoardRow => ({
   fish: Number(r.fish),
   casts: Number(r.casts),
   you: me != null && r.pid === me,
+  ...(r.team !== undefined ? { team: r.team } : {}),
 });
 
 /** GET /api/board?eventId=…[&top=25][&around=playerId][&final=1]  ·  ?series=w-… (the weekly's waters added up).
@@ -90,35 +101,95 @@ export async function handleBoard(sql: Sql, req: ApiReq): Promise<ApiRes> {
   if (e.kind === "survival") return fail(400, "survival_uses_its_own_board");
   const final = q.get("final") === "1";
   if (final && req.now < e.endsAt) return fail(409, "not_over_yet", { endsAt: e.endsAt });
+  if (final) await finalizeEvent(sql, e, req.now);
 
-  const rows = await sql.query<Raw>(
-    `with ranked as (
-       select e.player_id as pid, p.name, e.score::float8 as score, e.best_weight::float8 as best, e.species, e.fish,
-              e.casts_used as casts,
-              rank() over (order by e.score desc, e.tiebreak desc) as rk,
-              row_number() over (order by e.score desc, e.tiebreak desc, e.joined_at asc, e.player_id) as rn
-         from entries e join players p on p.id = e.player_id
-        where e.event_id = $1)
-     select * from ranked
-      where rn <= $2 or pid = $3::text
-         or rn between (select rn - 2 from ranked where pid = $3::text) and (select rn + 2 from ranked where pid = $3::text)
-      order by rn`,
-    [e.id, final ? 3 : top, me],
-  );
+  /* Asking about the board while fishing is also the heartbeat friends see (presence, 06 §3.3). */
+  if (me && req.now < e.endsAt) {
+    await sql.query(
+      `update players set last_seen = ${TS(2)}, at_event = $3 where id = $1 and exists (select 1 from entries where event_id = $3 and player_id = $1)`,
+      [me, req.now, e.id],
+    );
+  }
+
   const [{ n }] = await sql.query<{ n: number }>("select count(*)::int as n from entries where event_id = $1", [e.id]);
-  const mapped = rows.map((r) => toRow(r, me));
+  const humans = Number(n);
+  const fill = fillCount(e.kind, humans);
+  const limit = final ? 3 : top;
+  let mapped: BoardRow[];
+  if (fill) {
+    /* A short Quick board: every human (there are fewer than six) plus the Regulars, ranked together. */
+    const all = await sql.query<Raw>(
+      `select e.player_id as pid, p.name, e.score::float8 as score, e.tiebreak::float8 as tb, e.best_weight::float8 as best,
+              e.species, e.fish, e.casts_used as casts, e.team, 0 as rk, 0 as rn
+         from entries e join players p on p.id = e.player_id where e.event_id = $1`,
+      [e.id],
+    );
+    const rivals = rivalRows({ id: e.id, seed: e.seed, water: e.water, startsAt: e.startsAt, endsAt: e.endsAt, category: e.rules.category, castBudget: e.rules.castBudget }, fill, req.now);
+    type Item = { row: BoardRow; tb: number; human: boolean };
+    const items: Item[] = [
+      ...all.map((r) => ({ row: toRow(r, me), tb: Number(r.tb ?? 0), human: true })),
+      ...rivals.map((r) => ({
+        row: { rank: 0, name: r.rival.name, score: r.score, bestWeight: r.best, species: r.kinds, fish: r.fish, casts: r.casts, you: false, rival: true, portrait: r.rival.emoji } as BoardRow,
+        tb: r.tiebreak,
+        human: false,
+      })),
+    ];
+    items.sort((a, b) => b.row.score - a.row.score || b.tb - a.tb || Number(b.human) - Number(a.human) || a.row.name.localeCompare(b.row.name));
+    items.forEach((it, i) => {
+      const ahead = items.filter((o) => o.row.score > it.row.score || (o.row.score === it.row.score && o.tb > it.tb)).length;
+      it.row.rank = ahead + 1;
+      void i;
+    });
+    const mine = items.findIndex((it) => it.row.you);
+    mapped = items
+      .filter((_, i) => i < limit || (mine >= 0 && Math.abs(i - mine) <= 2))
+      .map((it) => it.row);
+  } else {
+    const rows = await sql.query<Raw>(
+      `with ranked as (
+         select e.player_id as pid, p.name, e.score::float8 as score, e.best_weight::float8 as best, e.species, e.fish,
+                e.casts_used as casts, e.team,
+                rank() over (order by e.score desc, e.tiebreak desc) as rk,
+                row_number() over (order by e.score desc, e.tiebreak desc, e.joined_at asc, e.player_id) as rn
+           from entries e join players p on p.id = e.player_id
+          where e.event_id = $1)
+       select * from ranked
+        where rn <= $2 or pid = $3::text
+           or rn between (select rn - 2 from ranked where pid = $3::text) and (select rn + 2 from ranked where pid = $3::text)
+        order by rn`,
+      [e.id, limit, me],
+    );
+    mapped = rows.map((r) => toRow(r, me));
+  }
+  if (!e.rules.team) for (const r of mapped) delete r.team;
+
+  /* Team events: the board adds each team's Total Weight (06 §3.4). */
+  let teams: TeamRow[] | undefined;
+  if (e.rules.team) {
+    const t = await sql.query<{ team: string; score: number; best: number; members: number; fish: number }>(
+      `select team, sum(score)::float8 as score, max(best_weight)::float8 as best, count(*)::int as members, sum(fish)::int as fish
+         from entries where event_id = $1 and team is not null group by team order by sum(score) desc, max(best_weight) desc, team`,
+      [e.id],
+    );
+    const myTeam = me ? ((await sql.query<{ team: string | null }>("select team from entries where event_id = $1 and player_id = $2", [e.id, me]))[0]?.team ?? null) : null;
+    teams = rankTeams(t).map((r) => ({ ...r, you: myTeam != null && r.team === myTeam }));
+  }
+
   return ok(
     {
       eventId: e.id,
       title: e.title,
+      kind: e.kind,
       category: e.rules.category,
       state: req.now < e.startsAt ? "upcoming" : req.now < e.endsAt ? "live" : "ended",
       endsAt: e.endsAt,
       serverNow: req.now,
-      entrants: Number(n),
+      entrants: humans + fill,
+      humans,
       final,
       rows: mapped,
       me: mapped.find((r) => r.you) ?? null,
+      ...(teams ? { teams } : {}),
     },
     final && req.now >= e.endsAt ? "public, max-age=60" : cache,
   );

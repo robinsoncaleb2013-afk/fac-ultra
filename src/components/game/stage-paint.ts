@@ -11,6 +11,8 @@ import { pickedHour, sim, useGame } from "@/game/engine";
 import { TIERS } from "@/game/graphics";
 import { spotResidents } from "@/game/match";
 import { peerBoats } from "@/game/multiplayer";
+import { eventBoats, myBubble } from "@/game/eventroom";
+import { skinOf, type Emote } from "@/game/social";
 import { nearestSpot, resolveSpot, spotRingPx, spotsOf, type Spot } from "@/game/spots";
 import { waterLineOf } from "@/game/water";
 import { drawFightRing, ringRadius } from "@/components/game/fight-ring";
@@ -389,8 +391,9 @@ export function paint(canvas: HTMLCanvasElement, view: View) {
     countDraw(14);
   }
 
-  /* Online co-op: guest boats. */
-  for (const boat of peerBoats(s.biome, sim.t)) {
+  /* Online co-op and event rooms: guest boats (an event boat may have an emote bubble up). */
+  const guests: { x: number; y: number; dir: number; name: string; emote?: Emote }[] = [...peerBoats(s.biome, sim.t), ...eventBoats(s.biome, sim.t)];
+  for (const boat of guests) {
     drawFish(ctx, boat.x * w, boat.y * h, 30, boat.dir, {
       biome: s.biome, species: 3, rarity: 1, mutation: 0, wag: Math.sin(sim.t * 6) * 0.35, alpha: 0.95,
     });
@@ -404,6 +407,7 @@ export function paint(canvas: HTMLCanvasElement, view: View) {
     ctx.fillStyle = "#e7f3f1";
     ctx.textAlign = "center";
     ctx.fillText(label, boat.x * w, boat.y * h - 22);
+    if (boat.emote) drawBubble(ctx, boat.x * w, boat.y * h - 44, boat.emote);
   }
 
   if (!menu) {
@@ -489,14 +493,25 @@ export function paint(canvas: HTMLCanvasElement, view: View) {
       ctx.ellipse(bobx, boby + 2, 6 + p * 18 + nib * 2, 2.5 + p * 5, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.fillStyle = "#e2a23a";
+    /* The bobber skin you earned (WP-8): cosmetic only. */
+    const skin = skinOf(s.bobberSkin);
+    ctx.fillStyle = skin.bottom;
     ctx.beginPath();
     ctx.arc(bobx, boby + nib, sim.phase === "bite" ? 7.5 : 6, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#f4f7f6";
+    ctx.fillStyle = skin.top;
     ctx.beginPath();
     ctx.arc(bobx, boby + nib, sim.phase === "bite" ? 7.5 : 6, Math.PI, 0);
     ctx.fill();
+    if (skin.id !== "plain") {
+      ctx.strokeStyle = skin.ring;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(bobx, boby + nib, (sim.phase === "bite" ? 7.5 : 6) + 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    const mine = myBubble();
+    if (mine) drawBubble(ctx, bobx, boby - 26, mine);
     countDraw(14);
 
     drawFightRing(ctx, bobx, boby, ringRadius(w, h, big), big, motion, !!sim.fish?.boss);
@@ -549,4 +564,26 @@ export function paint(canvas: HTMLCanvasElement, view: View) {
     ctx.lineWidth = 3;
     ctx.strokeRect(2, 2, w - 4, h - 4);
   }
+}
+
+/** A small speech bubble with an emote in it, tail pointing down at (x, y + 12). */
+function drawBubble(ctx: CanvasRenderingContext2D, x: number, y: number, emote: Emote) {
+  ctx.save();
+  ctx.font = "11px Outfit, sans-serif";
+  const tw = ctx.measureText(emote.text).width;
+  const w = tw + 34;
+  ctx.fillStyle = "rgba(244,247,246,0.95)";
+  ctx.beginPath();
+  ctx.roundRect(x - w / 2, y - 14, w, 28, 12);
+  ctx.moveTo(x - 5, y + 13);
+  ctx.lineTo(x, y + 20);
+  ctx.lineTo(x + 5, y + 13);
+  ctx.fill();
+  ctx.font = "16px sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#13202a";
+  ctx.fillText(emote.glyph, x - w / 2 + 8, y + 6);
+  ctx.font = "11px Outfit, sans-serif";
+  ctx.fillText(emote.text, x - w / 2 + 28, y + 4);
+  ctx.restore();
 }

@@ -4,6 +4,7 @@
    PGLite without going through `@/lib/db`, and routes stay thin. */
 
 import type { Sql } from "@/lib/db";
+import { safeName } from "@/game/safe";
 
 /** What a handler needs to know about a request, already read and size-checked by the route. */
 export type ApiReq = {
@@ -57,17 +58,10 @@ export function cleanEventId(v: unknown): string | null {
   return typeof v === "string" && /^[A-Za-z0-9_-]{3,40}$/.test(v) ? v : null;
 }
 
-/** A display name: letters, numbers, spaces and a little punctuation, 2–20 characters. */
+/** A display name: letters, numbers, spaces and a little punctuation, 2–20 characters, and kid-safe
+    (no rude words, web addresses or phone numbers: src/game/safe.ts). Anything else becomes `fallback`. */
 export function cleanName(v: unknown, fallback: string): string {
-  const raw = typeof v === "string" ? v : "";
-  const name = raw
-    .normalize("NFKC")
-    .replace(/[^\p{L}\p{N} _.'-]/gu, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 20)
-    .trim();
-  return name.length >= 2 ? name : fallback;
+  return safeName(v, fallback);
 }
 
 export const defaultName = (playerId: string) => `Angler ${playerId.slice(0, 4).toUpperCase()}`;

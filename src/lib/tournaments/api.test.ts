@@ -95,11 +95,13 @@ test("join: returns the seed, the rules and where you stand; joining twice is th
   assert.equal((r.body.rules as { castBudget: number }).castBudget, 40);
   assert.equal(r.body.nextCast, 0);
   assert.equal(r.body.castsLeft, 40);
-  assert.equal(r.body.rank, 1);
+  /* On a short Quick board the Regulars have been fishing for five minutes: a fresh angler starts behind some of them. */
+  assert.ok((r.body.rank as number) >= 1 && (r.body.rank as number) <= 6);
   assert.equal(r.body.serverNow, NOW);
   const again = await join(q.id, p, NOW + 5000, "Casey");
   assert.equal(again.status, 200);
-  assert.equal(again.body.entrants, 1);
+  /* One human on a Quick board is topped up with five Regulars (WP-8), and the headcount says so. */
+  assert.equal(again.body.entrants, 6);
   const bad = [
     await handleEntry(sql, post({ op: "join", eventId: "nope-nope", playerId: p }, NOW)),
     await handleEntry(sql, post({ op: "join", eventId: q.id, playerId: "short" }, NOW)),

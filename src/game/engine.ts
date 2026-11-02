@@ -31,6 +31,21 @@ import {
 } from "@/game/replay";
 import { scoreEntry } from "@/game/scoring";
 import {
+  applyResults,
+  isSkinId,
+  newMedals,
+  readHistory,
+  readResults,
+  readTitles,
+  readTrophies,
+  titleFor,
+  unlockedSkins,
+  MEDAL_NAMES,
+  type History,
+  type SkinId,
+  type Trophy,
+} from "@/game/social";
+import {
   api,
   cantCast,
   castsLeft,
@@ -203,7 +218,7 @@ export type Tab = "cast" | "bag" | "gear" | "lures" | "waters" | "dex" | "lodge"
 export type Phase = "idle" | "wait" | "bite" | "reel";
 export type { Mode } from "@/game/modes";
 export { MODE_KEYS } from "@/game/modes";
-export type LodgeView = "record" | "logbook" | "tank" | "derby" | "regulars" | "pet" | "crew" | "settings";
+export type LodgeView = "record" | "logbook" | "tank" | "derby" | "regulars" | "pet" | "crew" | "trophies" | "settings";
 
 /** WP-6: the Derby is fished against the Regulars (rivals.ts); old random-walk Derbies are converted on load. */
 export type DerbyState = DerbyRun | null;
@@ -287,6 +302,12 @@ export type Save = {
   rivalRecord: RivalRecord;
   volume: number;
   cb: boolean;
+  /* WP-8 (save v9): what tournaments left you with. The server keeps the truth (api/trophies); these are
+     your cabinet: medals, titles, the bobber skin you picked, and your last 50 events. */
+  trophies: Trophy[];
+  titles: string[];
+  bobberSkin: SkinId;
+  tourneyHistory: History[];
 };
 
 export type LastCatch = {
@@ -313,7 +334,7 @@ export type LastCatch = {
 
 type Toast = { id: number; text: string };
 
-const SAVE_VERSION = 8;
+const SAVE_VERSION = 9;
 const MARKS = [10, 25, 50, 100, 150, 200, 250, 300, 375];
 
 let currentMode: Mode = "expedition";
@@ -532,6 +553,10 @@ export function fresh(): Save {
     rivalRecord: {},
     volume: DEFAULT_VOLUME,
     cb: false,
+    trophies: [],
+    titles: [],
+    bobberSkin: "plain",
+    tourneyHistory: [],
   };
 }
 
@@ -858,6 +883,11 @@ export function sanitize(raw: unknown): Save {
     ...readFun(o),
     volume: o.volume === undefined ? DEFAULT_VOLUME : clampVolume(num(o.volume, DEFAULT_VOLUME, 0, 100)),
     cb: bool(o.cb, false),
+    /* v8 → v9 (WP-8): four new fields, nothing existing changed meaning. Old saves get an empty cabinet and the Classic bobber. */
+    trophies: readTrophies(o.trophies),
+    titles: readTitles(o.titles),
+    bobberSkin: isSkinId(o.bobberSkin) ? o.bobberSkin : "plain",
+    tourneyHistory: readHistory(o.tourneyHistory),
   };
 }
 
@@ -925,6 +955,10 @@ export function snapshot(s: Save): Save {
     rivalRecord: s.rivalRecord,
     volume: s.volume,
     cb: s.cb,
+    trophies: s.trophies,
+    titles: s.titles,
+    bobberSkin: s.bobberSkin,
+    tourneyHistory: s.tourneyHistory,
   };
 }
 
@@ -1803,6 +1837,7 @@ export function runFrom(j: JoinInfo, id: string, offset: number, queued: number)
     castsUsed: j.castsUsed + queued,
     secondsUsed: j.secondsUsed,
     family: "minnow",
+    team: j.team ?? null,
     pending: queued,
     mine: [],
     score: j.score,
@@ -1867,7 +1902,7 @@ function succeed() {
   });
   if (fed) commitRun(fed);
   /* Online co-op: tell the room (multiplayer.ts listens for this). */
-  window.dispatchEvent(new CustomEvent("fac:catch", { detail: { name: next.lastCatch?.name, v: next.lastCatch?.value, b: fish.b } }));
+  window.dispatchEvent(new CustomEvent("fac:catch", { detail: { name: next.lastCatch?.name, v: next.lastCatch?.value, b: fish.b, i: fish.i, w: fish.w } }));
   /* Boss Rush: a boss in the current rush water advances the gauntlet. */
   const st = useGame.getState();
   if (fish.boss && st.rush && fish.b === st.rush.list[st.rush.pos]) {
@@ -2582,6 +2617,10 @@ type Store = Save &
     setFamily: (family: TourneyRun["family"]) => void;
     /** Leave the event screen. The server keeps what it has counted. */
     leaveEvent: () => void;
+    /** WP-8: ask the server how your finished events went and file the medals, titles and history. */
+    syncTrophies: (quiet?: boolean) => Promise<void>;
+    /** WP-8: pick a bobber skin you have earned. */
+    setSkin: (id: SkinId) => void;
     importSave: (raw: unknown) => boolean;
     exportCode: () => string;
     importCode: (code: string) => boolean;
@@ -2694,6 +2733,32 @@ export const useGame = create<Store>((set, get) => ({
   leaveEvent: () => {
     if (sim.phase !== "idle") return;
     get().setScreen("menu");
+  },
+  syncTrophies: async (quiet = false) => {
+    try {
+      const { status, body } = await api.trophies(playerId());
+      if (status !== 200 || !Array.isArray(body.results)) return;
+      const results = readResults(body.results);
+      const s = get();
+      const fresh = newMedals(s, results);
+      const cab = applyResults({ trophies: s.trophies, titles: s.titles, tourneyHistory: s.tourneyHistory, bobberSkin: s.bobberSkin }, results);
+      set({ ...cab });
+      persistSoon();
+      if (!quiet) {
+        for (const r of fresh.slice(0, 3)) {
+          const t = titleFor(r);
+          get().notify(`${MEDAL_NAMES[r.medal]} medal: ${r.title}.${t ? ` New title: ${t}.` : ""}`);
+        }
+      }
+    } catch {
+      /* offline: the cabinet keeps what it has */
+    }
+  },
+  setSkin: (id) => {
+    const s = get();
+    if (!isSkinId(id) || !unlockedSkins(s.trophies).includes(id)) return;
+    set({ bobberSkin: id });
+    persistSoon();
   },
   setKid: (on) => {
     set({ kid: on });
@@ -3211,6 +3276,10 @@ export const useGame = create<Store>((set, get) => ({
       rivalRecord: s.rivalRecord,
       volume: s.volume,
       cb: s.cb,
+      trophies: s.trophies,
+      titles: s.titles,
+      bobberSkin: s.bobberSkin,
+      tourneyHistory: s.tourneyHistory,
       tab: s.tab,
       phase: "idle",
       message: "The ledger turns. Dex and level stay.",
@@ -3403,6 +3472,7 @@ function loadSlot(mode: Mode, toGame: boolean) {
     save.flash = false;
   }
   save = overlayDevice(save, device);
+  if (!isSkinId(save.bobberSkin)) save.bobberSkin = "plain";
   const dev = readDevice();
   if (dexCount(save.dex) >= TOTAL_SPECIES) {
     save.contracts = save.contracts.map((c) =>

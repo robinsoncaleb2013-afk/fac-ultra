@@ -6,7 +6,7 @@
    Rooms and signals live in Postgres, so any number of server instances (and cold starts) agree. */
 
 import type { Sql } from "@/lib/db";
-import { asObject, fail, ok, TS, type ApiReq, type ApiRes } from "./common.server.ts";
+import { asObject, cleanName, fail, ok, TS, type ApiReq, type ApiRes } from "./common.server.ts";
 
 export const PEER_TTL_MS = 20_000;
 export const SIGNAL_TTL_MS = 120_000;
@@ -28,7 +28,7 @@ export async function handleRtc(sql: Sql, req: ApiReq): Promise<ApiRes> {
     const q = req.url.searchParams;
     const room = (q.get("room") || "").slice(0, 64);
     const peer = (q.get("peer") || "").slice(0, 64);
-    const name = (q.get("name") || "").slice(0, 64);
+    const name = (q.get("name") || "").trim() ? cleanName(q.get("name"), "Angler") : "";
     const since = Number(q.get("since") || 0) || 0;
     if (!room || !peer) return fail(400, "room and peer are required");
     await prune(sql, room, req.now);

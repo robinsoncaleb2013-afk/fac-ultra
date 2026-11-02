@@ -167,6 +167,17 @@ export function leaveRoom() {
   useCrew.setState({ status: "off", peers: [], code: "", isHost: false });
 }
 
+/** Where a guest boat is at time `t`: slow drift back and forth along the water, a little different for everyone. */
+export function driftOf(id: string, t: number): { x: number; y: number; dir: number } {
+  let seed = 0;
+  for (let i = 0; i < id.length; i++) seed = (seed * 31 + id.charCodeAt(i)) % 997;
+  const span = 1.24;
+  const raw = (seed / 997 + t * 0.021 * (1 + (seed % 5) * 0.12)) % (span * 2);
+  const x = raw < span ? raw - 0.12 : span * 2 - raw - 0.12;
+  const dir = raw < span ? 1 : -1;
+  return { x, y: 0.66 + (seed % 4) * 0.02, dir };
+}
+
 /** Guest boats for the stage: peers currently on the same biome. Positions
     drift slowly so the canvas stays alive without a physics sim. */
 export function peerBoats(biome: number, t: number): { x: number; y: number; dir: number; name: string }[] {
@@ -174,13 +185,7 @@ export function peerBoats(biome: number, t: number): { x: number; y: number; dir
   const now = Date.now();
   for (const [id, p] of presence) {
     if (p.biome !== biome || now - p.at > 15_000) continue;
-    let seed = 0;
-    for (let i = 0; i < id.length; i++) seed = (seed * 31 + id.charCodeAt(i)) % 997;
-    const span = 1.24;
-    const raw = (seed / 997 + t * 0.021 * (1 + (seed % 5) * 0.12)) % (span * 2);
-    const x = raw < span ? raw - 0.12 : span * 2 - raw - 0.12;
-    const dir = raw < span ? 1 : -1;
-    out.push({ x, y: 0.66 + (seed % 4) * 0.02, dir, name: p.name });
+    out.push({ ...driftOf(id, t), name: p.name });
   }
   return out;
 }

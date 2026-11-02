@@ -36,6 +36,7 @@ import { drawFish } from "@/game/fish-draw";
 import { biomeArt, fitCanvas } from "@/game/art";
 import { Toggle } from "@/components/game/panels/shared";
 import { RecordBook, Stewardship } from "@/components/game/panels/RecordsSection";
+import { TourneyHistory, TrophyShelf } from "@/components/game/trophies";
 
 export function LodgePanel() {
   const view = useGame((s) => s.lodgeView);
@@ -58,6 +59,7 @@ export function LodgePanel() {
       ["regulars", "Regulars"],
       ["pet", "Buddy"],
       ["crew", "Crew"],
+      ["trophies", "Trophies"],
       ["settings", "Settings"],
     ] as const
       ).filter(([id]) => (id !== "logbook" || trips) && ((id !== "regulars" && id !== "pet") || fun)));
@@ -86,6 +88,7 @@ export function LodgePanel() {
       {view === "regulars" && fun ? <RegularsView /> : null}
       {view === "pet" && fun ? <PetView /> : null}
       {view === "crew" && !survival ? <CrewView /> : null}
+      {view === "trophies" && !survival ? <TrophyShelf /> : null}
       {view === "settings" ? <Settings /> : null}
     </div>
   );
@@ -145,6 +148,7 @@ function Record() {
         </p>
       </div>
       <RecordBook />
+      <TourneyHistory />
       <Stewardship />
       <ul className="rounded-2xl border border-line bg-surface p-3 text-sm">
         {parts.map(([label, value]) => (

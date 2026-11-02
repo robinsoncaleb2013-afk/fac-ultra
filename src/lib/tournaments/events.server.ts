@@ -105,6 +105,10 @@ export function publicEvent(e: EventRow, entrants: number, now: number) {
     endsAt: e.endsAt,
     series: e.series,
     entrants,
+    /* WP-8: team events, the most anglers, and the four-letter code of a private event. */
+    team: !!e.rules.team,
+    maxPlayers: e.rules.maxPlayers ?? null,
+    code: e.kind === "private" ? e.id.slice(2) : null,
     state: now < e.startsAt ? "upcoming" : now < e.endsAt ? "live" : "ended",
   };
 }
@@ -136,9 +140,21 @@ export async function handleEvents(sql: Sql, req: ApiReq): Promise<ApiRes> {
         order by e.starts_at asc, e.id asc`,
       [req.now, playerId ?? ""],
     );
+    /* Private events this player made or joined and that are not over: the lobby's Private tab. */
+    const mine = playerId
+      ? await sql.query<Raw & { entrants: number }>(
+          `select ${COLUMNS}, (select count(*)::int from entries en where en.event_id = e.id) as entrants
+             from events e
+            where e.kind = 'private' and e.ends_at > ${TS(1)}
+              and (e.created_by = $2 or exists (select 1 from entries en where en.event_id = e.id and en.player_id = $2))
+            order by e.ends_at asc`,
+          [req.now, playerId],
+        )
+      : [];
     return ok({
       serverNow: req.now,
       events: rows.map((r) => ({ ...publicEvent(toEvent(r), Number(r.entrants), req.now), joined: !!r.mine })),
+      privates: mine.map((r) => ({ ...publicEvent(toEvent(r), Number(r.entrants), req.now), joined: true })),
     });
   }
 

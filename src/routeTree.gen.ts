@@ -14,8 +14,10 @@ import { Route as ApiBoardRouteImport } from './routes/api/board'
 import { Route as ApiCatchRouteImport } from './routes/api/catch'
 import { Route as ApiEntryRouteImport } from './routes/api/entry'
 import { Route as ApiEventsRouteImport } from './routes/api/events'
+import { Route as ApiFriendsRouteImport } from './routes/api/friends'
 import { Route as ApiRtcRouteImport } from './routes/api/rtc'
 import { Route as ApiSurvivalBoardRouteImport } from './routes/api/survival-board'
+import { Route as ApiTrophiesRouteImport } from './routes/api/trophies'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -42,6 +44,11 @@ const ApiEventsRoute = ApiEventsRouteImport.update({
   path: '/api/events',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiFriendsRoute = ApiFriendsRouteImport.update({
+  id: '/api/friends',
+  path: '/api/friends',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiRtcRoute = ApiRtcRouteImport.update({
   id: '/api/rtc',
   path: '/api/rtc',
@@ -52,6 +59,11 @@ const ApiSurvivalBoardRoute = ApiSurvivalBoardRouteImport.update({
   path: '/api/survival-board',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTrophiesRoute = ApiTrophiesRouteImport.update({
+  id: '/api/trophies',
+  path: '/api/trophies',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -59,8 +71,10 @@ export interface FileRoutesByFullPath {
   '/api/catch': typeof ApiCatchRoute
   '/api/entry': typeof ApiEntryRoute
   '/api/events': typeof ApiEventsRoute
+  '/api/friends': typeof ApiFriendsRoute
   '/api/rtc': typeof ApiRtcRoute
   '/api/survival-board': typeof ApiSurvivalBoardRoute
+  '/api/trophies': typeof ApiTrophiesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -68,8 +82,10 @@ export interface FileRoutesByTo {
   '/api/catch': typeof ApiCatchRoute
   '/api/entry': typeof ApiEntryRoute
   '/api/events': typeof ApiEventsRoute
+  '/api/friends': typeof ApiFriendsRoute
   '/api/rtc': typeof ApiRtcRoute
   '/api/survival-board': typeof ApiSurvivalBoardRoute
+  '/api/trophies': typeof ApiTrophiesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -78,8 +94,10 @@ export interface FileRoutesById {
   '/api/catch': typeof ApiCatchRoute
   '/api/entry': typeof ApiEntryRoute
   '/api/events': typeof ApiEventsRoute
+  '/api/friends': typeof ApiFriendsRoute
   '/api/rtc': typeof ApiRtcRoute
   '/api/survival-board': typeof ApiSurvivalBoardRoute
+  '/api/trophies': typeof ApiTrophiesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -89,8 +107,10 @@ export interface FileRouteTypes {
     | '/api/catch'
     | '/api/entry'
     | '/api/events'
+    | '/api/friends'
     | '/api/rtc'
     | '/api/survival-board'
+    | '/api/trophies'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -98,8 +118,10 @@ export interface FileRouteTypes {
     | '/api/catch'
     | '/api/entry'
     | '/api/events'
+    | '/api/friends'
     | '/api/rtc'
     | '/api/survival-board'
+    | '/api/trophies'
   id:
     | '__root__'
     | '/'
@@ -107,8 +129,10 @@ export interface FileRouteTypes {
     | '/api/catch'
     | '/api/entry'
     | '/api/events'
+    | '/api/friends'
     | '/api/rtc'
     | '/api/survival-board'
+    | '/api/trophies'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -117,8 +141,10 @@ export interface RootRouteChildren {
   ApiCatchRoute: typeof ApiCatchRoute
   ApiEntryRoute: typeof ApiEntryRoute
   ApiEventsRoute: typeof ApiEventsRoute
+  ApiFriendsRoute: typeof ApiFriendsRoute
   ApiRtcRoute: typeof ApiRtcRoute
   ApiSurvivalBoardRoute: typeof ApiSurvivalBoardRoute
+  ApiTrophiesRoute: typeof ApiTrophiesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -158,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiEventsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/friends': {
+      id: '/api/friends'
+      path: '/api/friends'
+      fullPath: '/api/friends'
+      preLoaderRoute: typeof ApiFriendsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/rtc': {
       id: '/api/rtc'
       path: '/api/rtc'
@@ -172,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSurvivalBoardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/trophies': {
+      id: '/api/trophies'
+      path: '/api/trophies'
+      fullPath: '/api/trophies'
+      preLoaderRoute: typeof ApiTrophiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -181,8 +221,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCatchRoute: ApiCatchRoute,
   ApiEntryRoute: ApiEntryRoute,
   ApiEventsRoute: ApiEventsRoute,
+  ApiFriendsRoute: ApiFriendsRoute,
   ApiRtcRoute: ApiRtcRoute,
   ApiSurvivalBoardRoute: ApiSurvivalBoardRoute,
+  ApiTrophiesRoute: ApiTrophiesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

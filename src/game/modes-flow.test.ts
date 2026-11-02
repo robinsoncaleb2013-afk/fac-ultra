@@ -148,7 +148,7 @@ test("a Recreational trip: pick the water, time and weather, fish, keep and rele
   /* Going to the menu saves this mode (and shows the career again). */
   useGame.getState().setScreen("menu");
   const saved = slot("recreational");
-  assert.equal(saved.version, 8);
+  assert.equal(saved.version, 9);
   assert.equal(saved.trips.length, 1);
   assert.equal(slot("expedition").c, careerMoney, "career money untouched");
   /* the v7 Recreational save reloads */

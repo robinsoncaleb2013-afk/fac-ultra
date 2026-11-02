@@ -150,7 +150,7 @@ test("a v3 save walks all the way to the current version", () => {
 
 test("fresh saves start with nothing remembered", () => {
   const f = fresh();
-  assert.equal(f.version, 8);
+  assert.equal(f.version, 9);
   assert.deepEqual(f.lastSpot, {});
   assert.deepEqual(f.rig, {});
 });
@@ -223,7 +223,7 @@ test("a v5 save gains empty WP-3 fields, keeps its progress and its spots and ri
   assert.equal(raw.version, 5);
   for (const k of ["records", "released", "stewards", "coached", "drag"]) assert.equal(k in raw, false, k);
   const s = sanitize(raw);
-  assert.equal(s.version, 8);
+  assert.equal(s.version, 9);
   assert.deepEqual(s.records, {});
   assert.deepEqual(s.released, {});
   assert.deepEqual(s.stewards, { species: [], waters: [] });
@@ -241,10 +241,10 @@ test("a v5 save gains empty WP-3 fields, keeps its progress and its spots and ri
   }
 });
 
-test("a v4 save walks all the way to v8 with every new field empty", () => {
+test("a v4 save walks all the way to v9 with every new field empty", () => {
   const raw = JSON.parse(readFileSync(join(dir, "save-v4.json"), "utf8")) as Record<string, unknown>;
   const s = sanitize(raw);
-  assert.equal(s.version, 8);
+  assert.equal(s.version, 9);
   assert.equal(s.kid, false);
   assert.deepEqual(s.trips, []);
   assert.equal(s.trip, null);
@@ -330,7 +330,7 @@ test("a v6 save gains Kid Mode off and an empty logbook, and keeps everything it
   assert.equal(raw.version, 6);
   for (const k of ["kid", "trips", "trip"]) assert.equal(k in raw, false, k);
   const s = sanitize(raw);
-  assert.equal(s.version, 8);
+  assert.equal(s.version, 9);
   assert.equal(s.kid, false);
   assert.deepEqual(s.trips, []);
   assert.equal(s.trip, null);
@@ -345,10 +345,10 @@ test("a v6 save gains Kid Mode off and an empty logbook, and keeps everything it
   }
 });
 
-test("a v3, v4 and v5 save all reach v8 with the WP-4 fields at their defaults", () => {
+test("a v3, v4 and v5 save all reach v9 with the WP-4 fields at their defaults", () => {
   for (const f of ["save-v3.json", "save-v4.json", "save-v5.json"]) {
     const s = sanitize(JSON.parse(readFileSync(join(dir, f), "utf8")));
-    assert.equal(s.version, 8, f);
+    assert.equal(s.version, 9, f);
     assert.equal(s.kid, false, f);
     assert.deepEqual(s.trips, [], f);
     assert.equal(s.trip, null, f);
@@ -365,7 +365,7 @@ test("an old Sandbox-shaped save (nothing to sell, everything unlocked) loads as
   old.dex = { "0-4": { c: 2, w: 3.1, m: 0 } };
   old.inv = [{ name: "Perch", t: 0, v: 4, w: 1.2, i: 4, b: 0, m: 0 }];
   const s = sanitize(old);
-  assert.equal(s.version, 8);
+  assert.equal(s.version, 9);
   assert.equal(s.ub.length, BIOMES.length, "every water is still unlocked");
   assert.deepEqual(s.dex, { "0-4": { c: 2, w: 3.1, m: 0 } });
   assert.equal(s.inv.length, 1);
@@ -415,12 +415,12 @@ import { frameId, pageId } from "./stickers.ts";
 
 const v7 = () => JSON.parse(readFileSync(join(dir, "save-v7.json"), "utf8")) as Record<string, unknown>;
 
-test("a v7 save (a real session, Derby running) loads as v8 with an empty fun layer and keeps its progress", () => {
+test("a v7 save (a real session, Derby running) loads as v9 with an empty fun layer and keeps its progress", () => {
   const raw = v7();
   assert.equal(raw.version, 7);
   assert.equal("pet" in raw, false);
   const s = sanitize(raw);
-  assert.equal(s.version, 8);
+  assert.equal(s.version, 9);
   assert.equal(s.c, raw.c);
   assert.equal(s.caught, raw.caught);
   assert.equal(s.lv, raw.lv);
@@ -489,5 +489,60 @@ test("hostile WP-6 values are cleaned", () => {
     assert.deepEqual(t.stickers, []);
     assert.equal(t.pet.kind, null);
     assert.equal(t.volume, junk === undefined ? DEFAULT_VOLUME : t.volume);
+  }
+});
+
+/* ── v8 → v9 (WP-8): trophies, titles, bobberSkin, tourneyHistory ─────────── */
+
+test("a v8 save gains an empty cabinet and the Classic bobber, and keeps its progress", () => {
+  const raw = JSON.parse(readFileSync(join(dir, "save-v8.json"), "utf8")) as Record<string, unknown>;
+  assert.equal(raw.version, 8);
+  for (const k of ["trophies", "titles", "bobberSkin", "tourneyHistory"]) assert.equal(k in raw, false, `${k} is new in v9`);
+  const s = sanitize(raw);
+  assert.equal(s.version, 9);
+  assert.deepEqual(s.trophies, []);
+  assert.deepEqual(s.titles, []);
+  assert.deepEqual(s.tourneyHistory, []);
+  assert.equal(s.bobberSkin, "plain");
+  assert.equal(s.c, raw.c);
+  assert.equal(s.caught, raw.caught);
+  assert.equal(Object.keys(s.dex).length, Object.keys(raw.dex as object).length);
+  assert.deepEqual(s.pet, raw.pet, "WP-6 fields untouched");
+});
+
+test("the WP-8 cabinet survives a save, a reload and an export code", () => {
+  const s = sanitize({
+    ...fresh(),
+    trophies: [{ id: "q-2026110213", medal: 1, kind: "quick", water: 0, category: "total", team: null, at: 1793000000000 }],
+    titles: ["Pond Champion · Nov 2"],
+    bobberSkin: "gold",
+    tourneyHistory: [{ id: "q-2026110213", title: "Pond Quick", kind: "quick", water: 0, category: "total", team: null, rank: 1, entrants: 6, score: 12.5, best: 4.2, at: 1793000000000, medal: 1 }],
+  });
+  assert.equal(s.trophies.length, 1);
+  assert.equal(s.bobberSkin, "gold");
+  const back = sanitize(JSON.parse(JSON.stringify(snapshot(s))));
+  assert.deepEqual(back, s);
+  const viaCode = sanitize(JSON.parse(decodeURIComponent(escape(atob(btoa(unescape(encodeURIComponent(JSON.stringify(snapshot(s))))))))));
+  assert.deepEqual(viaCode, s);
+});
+
+test("hostile WP-8 values are cleaned", () => {
+  const s = sanitize({
+    ...fresh(),
+    trophies: [{ id: "x", medal: 1 }, { id: "q-2026110213", medal: 99, water: 99, kind: "?", category: "?" }, "no", null],
+    titles: ["<b>Hi</b>", 5, "<b>Hi</b>"],
+    bobberSkin: "rainbow",
+    tourneyHistory: [{ id: "q-2026110213", rank: "first", score: -5, entrants: Infinity }],
+  });
+  assert.equal(s.trophies.length, 1);
+  assert.equal(s.trophies[0].medal, 3);
+  assert.equal(s.trophies[0].kind, "quick");
+  assert.deepEqual(s.titles, ["bHib"]);
+  assert.equal(s.bobberSkin, "plain");
+  assert.equal(s.tourneyHistory[0].rank, 1);
+  assert.equal(s.tourneyHistory[0].score, 0);
+  for (const junk of [null, 5, "x", {}, []]) {
+    const t = sanitize({ ...fresh(), trophies: junk, titles: junk, tourneyHistory: junk, bobberSkin: junk });
+    assert.deepEqual([t.trophies, t.titles, t.tourneyHistory, t.bobberSkin], [[], [], [], "plain"]);
   }
 });

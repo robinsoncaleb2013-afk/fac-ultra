@@ -126,3 +126,7 @@ It is simple and already respects `motion` (reduced-motion) and `flash` settings
 ## WP-6 additions
 - `src/game/{rivals,pet,stickers,fotd,rarity,ambience,fun}.ts` (pure), `components/game/{fun.tsx,fun-hooks.ts,rarity-mark.tsx,pet-fx.ts}`, the sticker-book `panels/DexPanel.tsx`, `public/audio/*.ogg`, `scripts/ambience-build.mjs`. Save v8. `audio.ts` gained the lazy ambience player (`audio.ambient`, `audio.duck`).
 - This branch also carries WP-7 (tournaments) merged in: `Mode` is `expedition | recreational | survival | coop | tournament`, `tabsFor(mode)` in `tabs.ts` returns the tabs for all of them, the menu has nine cards.
+
+## WP-8 additions
+- `src/game/{safe,social,fill}.ts` (pure), `src/game/eventroom.ts` (P2P room store), `src/components/game/{lobby,lobby-text,board,board-state,event-social,trophies,use-tick}`, `src/lib/tournaments/{friends,awards}.server.ts` (never import from client code), `src/routes/api/{friends,trophies}.ts`, `migrations/0008_social.sql`, `src/game/__fixtures__/save-v8.json`.
+- `tournament.tsx` now holds the ticker, panel and results; the lobby moved to `lobby.tsx`.

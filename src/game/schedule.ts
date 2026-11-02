@@ -27,6 +27,8 @@ export type Rules = {
   gear: "fixed";
   /** Most anglers (private events). */
   maxPlayers?: number;
+  /** WP-8: a team event. Each angler picks a team; the board adds up Total Weight per team (06 §3.4). */
+  team?: boolean;
 };
 
 export type EventSpec = {
@@ -220,12 +222,14 @@ const clampInt = (v: unknown, [lo, hi]: readonly [number, number], d: number) =>
 export function privateSpec(
   code: string,
   water: unknown,
-  ask: { category?: unknown; castBudget?: unknown; fishingSeconds?: unknown } | null | undefined,
+  ask: { category?: unknown; castBudget?: unknown; fishingSeconds?: unknown; team?: unknown } | null | undefined,
   minutes: unknown,
   now: number,
 ): EventSpec {
   const w = typeof water === "number" && Number.isInteger(water) && water >= 0 && water < BIOMES.length ? water : 0;
-  const category: Category = isCategory(ask?.category) && ask?.category !== "survival" ? ask.category : "total";
+  const team = ask?.team === true;
+  /* A team event always adds up Total Weight: it is the one thing that sums fairly across a team. */
+  const category: Category = team ? "total" : isCategory(ask?.category) && ask?.category !== "survival" ? ask.category : "total";
   const mins = clampInt(minutes, PRIVATE_LIMITS.minutes, 15);
   const rules: Rules = {
     ...rulesOf(
@@ -234,7 +238,9 @@ export function privateSpec(
       clampInt(ask?.fishingSeconds, PRIVATE_LIMITS.fishingSeconds, mins * 60),
     ),
     maxPlayers: PRIVATE_MAX_PLAYERS,
+    ...(team ? { team: true } : {}),
   };
   const id = `p-${code}`;
-  return make(id, "private", `${BIOMES[w].name} · ${CATEGORY_INFO[category].name} (${code})`, w, rules, now, now + mins * MINUTE);
+  const label = team ? "Team Total Weight" : CATEGORY_INFO[category].name;
+  return make(id, "private", `${BIOMES[w].name} · ${label} (${code})`, w, rules, now, now + mins * MINUTE);
 }

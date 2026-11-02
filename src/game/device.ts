@@ -126,10 +126,12 @@ export type DeviceSettings = {
   /** WP-6: ambience volume 0 to 100 (default 35) and the colour-blind rarity palette. */
   volume: number;
   cb: boolean;
+  /** WP-8: the bobber skin you picked, so it follows you into every mode. */
+  bobberSkin?: string;
 };
 
 export function deviceSubset(s: DeviceSettings): DeviceSettings {
-  return { gfx: s.gfx, sound: s.sound, motion: s.motion, flash: s.flash, followClock: s.followClock, kid: s.kid, volume: s.volume, cb: s.cb };
+  return { gfx: s.gfx, sound: s.sound, motion: s.motion, flash: s.flash, followClock: s.followClock, kid: s.kid, volume: s.volume, cb: s.cb, ...(s.bobberSkin ? { bobberSkin: s.bobberSkin } : {}) };
 }
 
 /** Read the shared device record; unknown or hostile shapes are ignored field by field. */
@@ -142,6 +144,7 @@ export function readDeviceSettings(raw: unknown): Partial<DeviceSettings> {
     if (typeof o[k] === "boolean") out[k] = o[k];
   }
   if (typeof o.cb === "boolean") out.cb = o.cb;
+  if (typeof o.bobberSkin === "string" && /^[a-z]{3,12}$/.test(o.bobberSkin)) out.bobberSkin = o.bobberSkin;
   if (typeof o.volume === "number" && Number.isFinite(o.volume)) out.volume = Math.min(100, Math.max(0, Math.round(o.volume)));
   return out;
 }

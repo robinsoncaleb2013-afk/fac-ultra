@@ -8,6 +8,7 @@ import { loose } from "./rng.ts";
 import type { LureFamily } from "./presentation.ts";
 import type { Envelope } from "./replay.ts";
 import type { Category, Landed } from "./scoring.ts";
+import type { ResultRow, TeamRow } from "./social.ts";
 
 /* ── Who you are (anonymous until WP-9 accounts) ─────────────────────────── */
 
@@ -81,6 +82,11 @@ export type EventInfo = {
   entrants: number;
   state: "upcoming" | "live" | "ended";
   joined?: boolean;
+  /* WP-8 */
+  team?: boolean;
+  maxPlayers?: number | null;
+  /** The four-letter code of a private event. */
+  code?: string | null;
 };
 
 export type Standing = {
@@ -106,6 +112,8 @@ export type JoinInfo = Standing & {
   startsAt: number;
   endsAt: number;
   name: string;
+  /** WP-8: the preset team picked in a team event. */
+  team?: string | null;
 };
 
 export type Verdict = "ok" | "mismatch" | "budget" | "stale" | "rate" | "banned";
@@ -127,19 +135,26 @@ export type BoardRow = {
   fish: number;
   casts: number;
   you: boolean;
+  /* WP-8: a Regular topping up a short Quick board, and the preset team in a team event */
+  rival?: boolean;
+  portrait?: string;
+  team?: string | null;
 };
 
 export type BoardReply = {
   eventId: string;
   title: string;
+  kind?: EventInfo["kind"];
   category: Category;
   state: "upcoming" | "live" | "ended";
   endsAt: number;
   serverNow: number;
   entrants: number;
+  humans?: number;
   final: boolean;
   rows: BoardRow[];
   me: BoardRow | null;
+  teams?: TeamRow[];
 };
 
 /* ── The run the engine keeps ────────────────────────────────────────────── */
@@ -158,6 +173,8 @@ export type TourneyRun = {
   secondsUsed: number;
   /** The tackle chosen for the event. */
   family: LureFamily;
+  /** WP-8: the preset team, in a team event. */
+  team: string | null;
   /** Envelopes sent or waiting for a verdict. */
   pending: number;
   /** What this device believes it has landed (the server's replay has the last word). */
@@ -233,19 +250,33 @@ async function json<T>(f: Fetcher, url: string, init?: RequestInit): Promise<{ s
 
 const post = (body: unknown): RequestInit => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
+/* ── Friends (WP-8) ───────────────────────────────────────────────────────── */
+
+export type FriendInfo = { code: string; name: string; online: boolean; fishing: { id: string; title: string } | null };
+export type InviteInfo = {
+  id: number;
+  from: { code: string; name: string };
+  event: { id: string; title: string; waterName: string; startsAt: number; endsAt: number };
+};
+export type FriendsReply = { serverNow: number; me: { code: string; name: string }; friends: FriendInfo[]; invites: InviteInfo[]; error?: string };
+
 export const api = {
   events: (id: string, f: Fetcher = fetch) =>
-    json<{ serverNow: number; events: EventInfo[]; error?: string }>(f, `/api/events?scope=open&playerId=${encodeURIComponent(id)}`),
+    json<{ serverNow: number; events: EventInfo[]; privates?: EventInfo[]; error?: string }>(f, `/api/events?scope=open&playerId=${encodeURIComponent(id)}`),
+  friends: (id: string, f: Fetcher = fetch) => json<FriendsReply>(f, `/api/friends?playerId=${encodeURIComponent(id)}`),
+  friendOp: (op: "hello" | "add" | "remove" | "invite" | "dismiss", id: string, extra: Record<string, unknown> = {}, f: Fetcher = fetch) =>
+    json<FriendsReply>(f, "/api/friends", post({ op, playerId: id, ...extra })),
+  trophies: (id: string, f: Fetcher = fetch) => json<{ serverNow: number; results: ResultRow[]; error?: string }>(f, `/api/trophies?playerId=${encodeURIComponent(id)}`),
   byCode: (code: string, f: Fetcher = fetch) =>
     json<{ serverNow: number; event: EventInfo; error?: string }>(f, `/api/events?code=${encodeURIComponent(code)}`),
-  create: (b: { playerId: string; name: string; water: number; category: Category; minutes: number; castBudget: number }, f: Fetcher = fetch) =>
+  create: (b: { playerId: string; name: string; water: number; category: Category; minutes: number; castBudget: number; team?: boolean }, f: Fetcher = fetch) =>
     json<{ code: string; event: EventInfo; error?: string }>(
       f,
       "/api/events",
-      post({ op: "create", playerId: b.playerId, name: b.name, water: b.water, minutes: b.minutes, rules: { category: b.category, castBudget: b.castBudget } }),
+      post({ op: "create", playerId: b.playerId, name: b.name, water: b.water, minutes: b.minutes, rules: { category: b.category, castBudget: b.castBudget, ...(b.team ? { team: true } : {}) } }),
     ),
-  join: (eventId: string, id: string, name: string, f: Fetcher = fetch) =>
-    json<JoinInfo & { error?: string; startsAt: number }>(f, "/api/entry", post({ op: "join", eventId, playerId: id, name })),
+  join: (eventId: string, id: string, name: string, f: Fetcher = fetch, team?: string) =>
+    json<JoinInfo & { error?: string; startsAt: number }>(f, "/api/entry", post({ op: "join", eventId, playerId: id, name, ...(team ? { team } : {}) })),
   submit: (eventId: string, id: string, envelope: Envelope, f: Fetcher = fetch) =>
     json<CatchReply>(f, "/api/catch", post({ eventId, playerId: id, envelope })),
   board: (eventId: string, id: string, f: Fetcher = fetch, opts: { final?: boolean; top?: number } = {}) =>

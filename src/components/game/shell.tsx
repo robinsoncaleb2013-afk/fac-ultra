@@ -12,7 +12,8 @@ import { Ambience } from "@/components/game/fun";
 import { useCbAttr } from "@/components/game/fun-hooks";
 import { TripCard, TripStart } from "@/components/game/trips";
 import { SurvivalEnd, SurvivalStart } from "@/components/game/survival";
-import { TournamentLobby, TournamentTicker } from "@/components/game/tournament";
+import { TournamentTicker } from "@/components/game/tournament";
+import { TournamentLobby } from "@/components/game/lobby";
 
 /** The screen router: menu or game, in the layout this device gets (docs/architecture/03 §1, 09 §2). */
 export function Game() {
