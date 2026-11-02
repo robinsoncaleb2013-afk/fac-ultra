@@ -226,6 +226,41 @@ test("cloud save: push, pull on a second device, and every upload is sanitised o
   assert.equal((await home.save("POST", "/api/save", { profile: p.id, mode: "tournament", baseRev: 0, data: {} })).status, 400, "tournaments keep their truth on the tournament server");
 });
 
+test("cloud save: Relaxed Fishing is its own slot, kept whole by the server and never mixed with the Expedition", async () => {
+  const { unlockedSave, snapshot } = await import("@/game/engine");
+  const a = browser();
+  await signIn(a, "relaxed@example.com");
+  const p = (await a.profiles({ op: "create", name: "Mia" })).body.profile as { id: string };
+  await a.save("POST", "/api/save", { profile: p.id, mode: "expedition", baseRev: 0, data: fixture });
+  const careerStored = (await a.save("GET", `/api/save?profile=${p.id}&mode=expedition`)).body.save as { rev: number; data: Record<string, unknown> };
+  const relaxed = snapshot({
+    ...unlockedSave(),
+    dex: { "2-3": { c: 4, w: 9.5, m: 1 } },
+    stickers: ["page-2"],
+    shiny: ["2-3"],
+    fotdClaimed: ["2026-11-02"],
+    pet: { kind: "otter", next: 0, gifts: 1 },
+    rivalRecord: { tilly: { w: 2, l: 1 } },
+  });
+  const pushed = await a.save("POST", "/api/save", { profile: p.id, mode: "recreational", baseRev: 0, data: relaxed, device: "Kitchen tablet" });
+  assert.equal(pushed.status, 200);
+  assert.equal(pushed.body.rev, 1, "its own revision, starting at 1");
+  const back = ((await a.save("GET", `/api/save?profile=${p.id}&mode=recreational`)).body.save as { data: Record<string, any>; summary: { species: number } });
+  assert.deepEqual(Object.keys(back.data.dex), ["2-3"], "only its own book");
+  assert.deepEqual(back.data.stickers, ["page-2"]);
+  assert.deepEqual(back.data.shiny, ["2-3"]);
+  assert.deepEqual(back.data.fotdClaimed, ["2026-11-02"]);
+  assert.equal(back.data.pet.kind, "otter");
+  assert.deepEqual(back.data.rivalRecord, { tilly: { w: 2, l: 1 } });
+  assert.equal(back.data.ub.length, 15, "everything unlocked comes back unlocked");
+  assert.equal(back.summary.species, 1);
+  const careerAfter = (await a.save("GET", `/api/save?profile=${p.id}&mode=expedition`)).body.save as { rev: number; data: Record<string, unknown> };
+  assert.equal(careerAfter.rev, careerStored.rev, "the Expedition revision did not move");
+  assert.deepEqual(careerAfter.data, careerStored.data, "the Expedition save is exactly what it was");
+  const listed = (await a.save("GET", `/api/save?profile=${p.id}`)).body.saves as { mode: string }[];
+  assert.deepEqual(listed.map((x) => x.mode).sort(), ["expedition", "recreational"]);
+});
+
 test("cloud save: an old revision gets the conflict answer with the stored save; 'keep this device' moves forward", async () => {
   const a = browser();
   await signIn(a, "conflict@example.com");

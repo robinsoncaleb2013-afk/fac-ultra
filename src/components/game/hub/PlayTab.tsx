@@ -98,6 +98,7 @@ function Detail({ id }: { id: string }) {
   const lv = useGame((g) => g.lv);
   const dex = useGame((g) => dexCount(g.dex));
   const kid = useGame((g) => g.kid);
+  const mode = useGame((g) => g.mode);
   return (
     <DetailPaper label={locked ? "Locked" : meta.title} className="flex h-full flex-col">
       <Framed>
@@ -106,9 +107,14 @@ function Detail({ id }: { id: string }) {
       <div className="mt-4">
         <Title sub={locked ? undefined : meta.summary}>{locked ? "A mystery" : meta.title}</Title>
         {locked ? <p className="mt-2 text-[16px]">{locked}</p> : <Facts facts={meta.facts} />}
-        {id === "expedition" && hydrated ? (
+        {id === "expedition" && mode === "expedition" && hydrated ? (
           <p className="hub-ink-muted mt-3 text-[14px]">
             You are {rankName(lv)}, level {lv}, with {dex} of {TOTAL_SPECIES} fish in your book.
+          </p>
+        ) : null}
+        {id === "recreational" && mode === "recreational" && hydrated ? (
+          <p className="hub-ink-muted mt-3 text-[14px]">
+            You are level {lv}, with {dex} of {TOTAL_SPECIES} fish in your Relaxed Fishing book.
           </p>
         ) : null}
         {id === "kid" && kid ? <p className="hub-ink-muted mt-3 text-[14px]">Kid Mode is already on.</p> : null}

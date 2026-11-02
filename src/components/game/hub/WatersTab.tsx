@@ -1,5 +1,6 @@
-import { BIOMES, biomeSpeciesCaught, money, stageOf, STAGE_NAMES } from "@/game/content";
+import { BIOMES, biomeSpeciesCaught, money, STAGE_NAMES } from "@/game/content";
 import { useGame } from "@/game/engine";
+import { MODES, stageIn } from "@/game/modes";
 import { waterBlurb } from "@/game/hubcopy";
 import { useHubUi } from "@/game/hubstate";
 import { spotsOf } from "@/game/spots";
@@ -38,6 +39,7 @@ function Detail({ index }: { index: number }) {
   const biome = useGame((s) => s.biome);
   const coins = useGame((s) => s.c);
   const dex = useGame((s) => s.dex);
+  const mode = useGame((s) => s.mode);
   const mastered = useGame((s) => s.mastered);
   const phase = useGame((s) => s.phase);
   const travel = useGame((s) => s.travel);
@@ -45,7 +47,7 @@ function Detail({ index }: { index: number }) {
   const here = biome === index;
   const afford = coins >= place.price;
   const caught = biomeSpeciesCaught(dex, index);
-  const stage = stageOf(dex, index);
+  const stage = stageIn(MODES[mode], dex, index);
   const busy = phase !== "idle";
   const spots = spotsOf(index);
   return (

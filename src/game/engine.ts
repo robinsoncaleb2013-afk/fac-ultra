@@ -16,7 +16,7 @@ import { defaultSpot, resolveSpot, spotById, type Spot } from "@/game/spots";
 import { audio } from "@/game/audio";
 import { clampVolume, DEFAULT_VOLUME } from "@/game/ambience";
 import { addClaim, claimsFotd, FOTD_XP_MULT, fotdFor, today } from "@/game/fotd";
-import { funModeOn, mergeFun, readFun, type Fun } from "@/game/fun";
+import { funModeOn, readFun } from "@/game/fun";
 import { adopt, chooseGift, giftReady, isPetKind, noPet, PETS, takeGift, petUnlocked, type Pet, type PetKind } from "@/game/pet";
 import { derbyEndLine, newDerby, readDerby, recordDerby, stepDerby, derbyRank, rivalById, derbyWindow, type DerbyRun, type RivalRecord } from "@/game/rivals";
 import { frameId, newPages, pageId, rollShiny } from "@/game/stickers";
@@ -69,10 +69,8 @@ import {
   TOURNAMENT_TABS,
   MODE_KEYS,
   MODES,
-  mergeDex,
-  mergeRecords,
   priceIn,
-  sharesCareerDex,
+  stageIn,
   type Mode,
   type ModeRules,
 } from "@/game/modes";
@@ -210,7 +208,6 @@ import {
   SIG_LURES,
   sigEffect,
   SPECIES_PER_BIOME,
-  stageOf,
   TANK_TIERS,
   type TankState,
   tankRatePerHour,
@@ -1031,42 +1028,10 @@ function persistNow() {
     localStorage.setItem(key, json);
     /* Device settings follow the player across modes (07 §2). */
     localStorage.setItem(DEVICE_KEY, JSON.stringify(deviceSubset(useGame.getState())));
-    if (sharesCareerDex(modeRules())) shareWithCareer(useGame.getState());
     for (const fn of persistListeners) fn(currentMode, json);
   } catch {
     /* private mode or quota */
   }
-}
-
-/** The career save as stored, or null. Never throws. */
-function readCareer(): Save | null {
-  try {
-    const raw = JSON.parse(localStorage.getItem(MODE_KEYS.expedition) || "null");
-    return raw ? sanitize(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Recreational still fills the collection (05 §3): its dex and records are merged into the career slot.
-    Money, level and everything else in the career are never touched. */
-function funOf(s: Save): Fun {
-  return { pet: s.pet, stickers: s.stickers, shiny: s.shiny, fotdClaimed: s.fotdClaimed, rivalRecord: s.rivalRecord };
-}
-
-function shareWithCareer(st: Save) {
-  const career = readCareer();
-  const base = career ?? fresh();
-  const dex = mergeDex(base.dex, st.dex);
-  const records = mergeRecords(base.records, st.records);
-  const fun = mergeFun(funOf(base), funOf(st));
-  if (
-    JSON.stringify(dex) === JSON.stringify(base.dex) &&
-    JSON.stringify(records) === JSON.stringify(base.records) &&
-    JSON.stringify(fun) === JSON.stringify(funOf(base))
-  )
-    return;
-  localStorage.setItem(MODE_KEYS.expedition, JSON.stringify(snapshot({ ...base, dex, records, ...fun })));
 }
 
 /* ── Survival (WP-5): the store side. The rules are pure and live in survival.ts. ───────────── */
@@ -1673,7 +1638,7 @@ function castNow(s: Save, lureIdx: number, baitIdx: number, lair: boolean): Cast
   const plan = lair
     ? null
     : planCast(s.biome, spot, p, s.weather, window, luckTotal(s, lureIdx), {
-        stage: stageOf(s.dex, s.biome),
+        stage: stageIn(modeRules(), s.dex, s.biome),
         sig: sigEffect(s.sig),
         bait: baitIdx,
       });
@@ -1688,7 +1653,7 @@ function beginBite() {
     ? sim.troll.roll.fish
     : rollFish(s.biome, luck, {
         boss: sim.castLair,
-        stage: stageOf(s.dex, s.biome),
+        stage: stageIn(modeRules(), s.dex, s.biome),
         sig: sigEffect(s.sig),
         bait: sim.castBait,
         match: sim.cast?.ms ?? undefined,
@@ -2040,7 +2005,7 @@ function autoCatch() {
   /* The auto-reel fishes the spot and rig you set, so knowing fish pays there too. */
   const at = castNow(s, castLure, -1, false);
   const fish = rollFish(s.biome, luck, {
-    stage: stageOf(s.dex, s.biome),
+    stage: stageIn(modeRules(), s.dex, s.biome),
     sig: sigEffect(s.sig),
     match: at.ms ?? undefined,
     sizeMul: sizeMulOf(s.stewards, s.biome),
@@ -2254,7 +2219,7 @@ export function frame(dt: number) {
       const c = sim.cast;
       const spot = spotById(s.biome, c.spotId);
       const hint = spot
-        ? hintForCast(s.biome, spot, c.p, c.weather, c.window, stageOf(s.dex, s.biome), (i) => !!s.dex[`${s.biome}-${i}`]?.c)
+        ? hintForCast(s.biome, spot, c.p, c.weather, c.window, stageIn(modeRules(), s.dex, s.biome), (i) => !!s.dex[`${s.biome}-${i}`]?.c)
         : null;
       if (hint) useGame.setState({ message: hint, detail: "Quiet here." });
     }
@@ -2324,7 +2289,7 @@ function startCast() {
     setRng(makeRng(seedFrom("cast", run.seed, run.casts)));
   }
   const inRush = !!s.rush;
-  const lair = s.lair && (stageOf(s.dex, s.biome) >= 3 || inRush);
+  const lair = s.lair && (stageIn(modeRules(), s.dex, s.biome) >= 3 || inRush);
   if (s.lair && !lair) {
     useGame.setState((st) => ({
       lair: false,
@@ -2406,7 +2371,7 @@ function hook() {
   /* Gear still matters: a better rod widens the green, a better reel gains line faster, a
      stronger line takes more strain, and a calm lure takes some fight out of the fish. */
   let pullMul = 1;
-  if (stageOf(s.dex, s.biome) === 2) pullMul *= 1.1;
+  if (stageIn(modeRules(), s.dex, s.biome) === 2) pullMul *= 1.1;
   pullMul *= modeRules().fightSpeed;
   let bandPad = Math.max(0, RODS[s.rod].zone - 18) * 0.0015;
   if (fx?.kind === "calm") {
@@ -2766,7 +2731,15 @@ export const useGame = create<Store>((set, get) => ({
   campCraft: (id) => runCamp((r) => craft(r, id)),
   tourney: null,
   lobby: false,
-  openLobby: () => set({ lobby: true }),
+  openLobby: () => {
+    /* Tournaments belong to the career side: opening the list from Relaxed Fishing goes back to the career first,
+       so nothing from an event is ever filed in the Recreational save. */
+    if (currentMode === "recreational" && sim.phase === "idle") {
+      persistNow();
+      loadSlot("expedition", false);
+    }
+    set({ lobby: true });
+  },
   closeLobby: () => set({ lobby: false }),
   enterEvent: (j, offset) => {
     if (sim.phase !== "idle") return;
@@ -2802,6 +2775,8 @@ export const useGame = create<Store>((set, get) => ({
     get().setScreen("menu");
   },
   syncTrophies: async (quiet = false) => {
+    /* Medals, titles and event history are the career's: Recreational never files them. */
+    if (currentMode === "recreational") return;
     try {
       const { status, body } = await api.trophies(playerId());
       if (status !== 200 || !Array.isArray(body.results)) return;
@@ -3173,7 +3148,7 @@ export const useGame = create<Store>((set, get) => ({
       seed: (loose() * 4294967296) >>> 0,
       biome: s.biome,
       luck: luckTotal(s, s.lure),
-      stage: stageOf(s.dex, s.biome),
+      stage: stageIn(modeRules(), s.dex, s.biome),
       weather: s.weather,
       window: derbyWindow(now.getHours() + now.getMinutes() / 60, s.weather),
     });
@@ -3517,16 +3492,6 @@ function loadSlot(mode: Mode, toGame: boolean) {
     };
   } else if (!raw && MODES[mode].allUnlocked) save = unlockedSave();
   else save = sanitize(raw);
-  /* Recreational fills the career collection: bring the career dex and records in (and, the first time,
-     the old Sandbox's own dex goes the other way, see persistNow). */
-  if (sharesCareerDex(MODES[mode])) {
-    const career = readCareer();
-    if (career) {
-      save.dex = mergeDex(save.dex, career.dex);
-      save.records = mergeRecords(save.records, career.records);
-      Object.assign(save, mergeFun(funOf(save), funOf(career)));
-    }
-  }
   /* A mode with no contracts has none (a save is never trusted to say so). */
   if (!MODES[mode].contracts) save.contracts = [];
   /* A trip left open for a long time was over when you left: file it. */

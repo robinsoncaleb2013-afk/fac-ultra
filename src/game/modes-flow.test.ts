@@ -1,5 +1,5 @@
 /* The modes working together in the real store: separate save slots, Recreational trips and the
-   shared career collection. A tiny fake browser (localStorage, matchMedia) is enough to run it. */
+   fully separate collection. A tiny fake browser (localStorage, matchMedia) is enough to run it. */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -35,7 +35,7 @@ g.window = Object.assign(globalThis, {
   dispatchEvent: () => true,
 });
 
-const { useGame, sim, act, frame, reelDown, reelUp, hydrate, sanitize, snapshot, MODE_KEYS, resetSim, fresh } =
+const { useGame, sim, act, frame, reelDown, reelUp, hydrate, sanitize, snapshot, MODE_KEYS, resetSim, fresh, flushSave } =
   await import("./engine.ts");
 const { setRng, makeRng } = await import("./rng.ts");
 const { MODES } = await import("./modes.ts");
@@ -85,7 +85,7 @@ test("each mode has its own save slot, and the career is not touched by Recreati
   assert.equal(s.trip, null, "no trip yet: the game asks for one");
   assert.ok(slot("recreational"), "Recreational has its own slot");
   assert.equal(slot("expedition").c, v6.c, "the career slot still has its own money");
-  assert.equal(s.dex["0-4"]?.c, v6.dex["0-4"].c, "the career collection is visible in Recreational");
+  assert.deepEqual(s.dex, {}, "Relaxed Fishing starts with its own empty book, not the career's");
 
   useGame.getState().switchMode("coop");
   assert.equal(useGame.getState().mode, "coop");
@@ -156,31 +156,104 @@ test("a Recreational trip: pick the water, time and weather, fish, keep and rele
   assert.deepEqual(again.trips, s.trips);
 });
 
-test("Recreational catches fill the career collection and records", () => {
+/** Everything a career owns that Recreational must never change (and the reverse). */
+const book = (sv: Record<string, any>) => ({
+  c: sv.c, tot: sv.tot, xp: sv.xp, lv: sv.lv, caught: sv.caught, rb: sv.rb, bosses: sv.bosses,
+  dex: sv.dex, records: sv.records, stickers: sv.stickers, shiny: sv.shiny, fotdClaimed: sv.fotdClaimed,
+  pet: sv.pet, rivalRecord: sv.rivalRecord, trophies: sv.trophies, titles: sv.titles,
+  tourneyHistory: sv.tourneyHistory, mastered: sv.mastered, stewards: sv.stewards, released: sv.released,
+  trips: sv.trips, derbiesWon: sv.derbiesWon,
+});
+
+test("a Recreational catch and record leave the career save byte for byte unchanged", () => {
   mem.clear();
   setRng(makeRng(5));
   mem.set(MODE_KEYS.expedition, JSON.stringify(v6));
   hydrate();
+  const careerBefore = mem.get(MODE_KEYS.expedition)!;
+  const careerBook = book(slot("expedition"));
   useGame.getState().switchMode("recreational");
   useGame.getState().beginTrip(0, "clock", -1);
-  const before = Object.values(slot("expedition").dex as Record<string, { c: number }>).reduce((n, e) => n + e.c, 0);
   assert.ok(landOne());
   useGame.getState().keepCatch();
-  /* persist is debounced; the lifecycle flush writes both slots */
+  flushSave();
+  const rec = slot("recreational");
+  assert.equal(Object.values(rec.dex as Record<string, { c: number }>).reduce((n, e) => n + e.c, 0), 1, "the fish is in Relaxed Fishing's own book");
+  assert.ok(Object.keys(rec.records).length >= 1, "and in its own records");
+  assert.ok(rec.xp > 0 || rec.lv > 1, "Relaxed Fishing has its own XP");
+  assert.equal(mem.get(MODE_KEYS.expedition), careerBefore, "the career slot is byte for byte what it was");
+  /* going back to the career: still the same book, in the same words */
   useGame.getState().switchMode("expedition");
-  const career = slot("expedition");
-  const after = Object.values(career.dex as Record<string, { c: number }>).reduce((n, e) => n + e.c, 0);
-  assert.equal(after, before + 1, "the career collection grew by the fish caught in Recreational");
-  assert.equal(career.c, v6.c, "career money is exactly what it was");
-  assert.equal(career.caught, v6.caught, "the career catch count is its own");
-  assert.equal(useGame.getState().dex["0-4"]?.c >= v6.dex["0-4"].c, true);
-  /* and coming back, Recreational sees the same collection */
-  useGame.getState().switchMode("recreational");
-  const rec = useGame.getState();
-  assert.equal(Object.values(rec.dex).reduce((n, e) => n + e.c, 0), after);
+  assert.deepEqual(book(useGame.getState() as never), careerBook);
+  assert.equal(useGame.getState().dex["0-4"]?.c, v6.dex["0-4"].c);
+  assert.equal(Object.keys(useGame.getState().dex).length, Object.keys(v6.dex).length, "no Relaxed Fishing species in the career");
 });
 
-test("the old Sandbox's own collection is merged into the career the first time it is opened", () => {
+test("a career catch and record leave the Relaxed Fishing save byte for byte unchanged", () => {
+  mem.clear();
+  setRng(makeRng(8));
+  mem.set(MODE_KEYS.expedition, JSON.stringify(v6));
+  hydrate();
+  useGame.getState().switchMode("recreational");
+  useGame.getState().beginTrip(0, "clock", -1);
+  assert.ok(landOne());
+  useGame.getState().keepCatch();
+  useGame.getState().endTrip();
+  useGame.getState().switchMode("expedition");
+  flushSave();
+  const recBefore = mem.get(MODE_KEYS.recreational)!;
+  const recBook = book(JSON.parse(recBefore));
+  const careerCaught = useGame.getState().caught;
+  assert.ok(landOne(), "a career fish");
+  flushSave();
+  assert.equal(useGame.getState().caught, careerCaught + 1);
+  assert.equal(mem.get(MODE_KEYS.recreational), recBefore, "the Relaxed Fishing slot is byte for byte what it was");
+  useGame.getState().switchMode("recreational");
+  assert.deepEqual(book(useGame.getState() as never), recBook);
+});
+
+test("Relaxed Fishing keeps its own stickers, shinies, pet, Fish of the Day and Regulars record", () => {
+  mem.clear();
+  setRng(makeRng(2));
+  mem.set(MODE_KEYS.expedition, JSON.stringify(v6));
+  hydrate();
+  const career = book(useGame.getState() as never);
+  useGame.getState().switchMode("recreational");
+  const s = useGame.getState();
+  assert.deepEqual([s.stickers, s.shiny, s.fotdClaimed, s.rivalRecord], [[], [], [], {}], "nothing carried over from the career");
+  assert.equal(s.pet.kind, null);
+  useGame.setState({ lv: 6 });
+  useGame.getState().choosePet("heron");
+  useGame.setState({ stickers: ["page-0"], shiny: ["0-1"], fotdClaimed: ["2026-01-01"], rivalRecord: { tilly: { w: 2, l: 0 } } });
+  flushSave();
+  useGame.getState().switchMode("expedition");
+  const back = book(useGame.getState() as never);
+  assert.deepEqual(back, career, "the career's stickers, shinies, pet, claims and Regulars did not move");
+  assert.notEqual(useGame.getState().pet.kind, "heron");
+});
+
+test("reload: Relaxed Fishing comes back from its own slot with its own book", () => {
+  mem.clear();
+  setRng(makeRng(13));
+  mem.set(MODE_KEYS.expedition, JSON.stringify(v6));
+  hydrate();
+  useGame.getState().switchMode("recreational");
+  useGame.getState().beginTrip(2, "dusk", 0);
+  assert.ok(landOne());
+  useGame.getState().keepCatch();
+  const dex = useGame.getState().dex;
+  useGame.getState().endTrip();
+  flushSave();
+  /* a new page: the same storage */
+  hydrate("recreational");
+  const s = useGame.getState();
+  assert.equal(s.mode, "recreational");
+  assert.deepEqual(s.dex, dex);
+  assert.equal(s.trips.length, 1);
+  assert.equal(s.dex["0-4"], undefined, "the career's fish never came in");
+});
+
+test("an old Sandbox save opens as it was, and nothing is merged with the career when it opens or saves", () => {
   mem.clear();
   setRng(makeRng(3));
   const sandbox = { ...JSON.parse(JSON.stringify(fresh())), version: 6, dex: { "2-3": { c: 4, w: 9.5, m: 1 } } };
@@ -188,15 +261,47 @@ test("the old Sandbox's own collection is merged into the career the first time 
   delete sandbox.trips;
   delete sandbox.trip;
   mem.set(MODE_KEYS.expedition, JSON.stringify(v6));
-  mem.set(MODE_KEYS.recreational, JSON.stringify(sandbox));
   hydrate();
+  const careerBefore = mem.get(MODE_KEYS.expedition)!;
+  mem.set(MODE_KEYS.recreational, JSON.stringify(sandbox));
   useGame.getState().switchMode("recreational");
   const rec = useGame.getState();
-  assert.ok(rec.dex["2-3"] && rec.dex["0-4"], "both collections are there");
-  const career = slot("expedition");
-  assert.ok(career.dex["2-3"], "the sandbox species reached the career dex");
-  assert.equal(career.dex["2-3"].w, 9.5);
-  assert.equal(career.c, v6.c);
+  assert.ok(rec.dex["2-3"], "the old Sandbox collection is still there");
+  assert.equal(rec.dex["2-3"].w, 9.5);
+  assert.equal(rec.dex["0-4"], undefined, "the career collection is not pulled in");
+  flushSave();
+  assert.equal(mem.get(MODE_KEYS.expedition), careerBefore, "and the career is not written to");
+  assert.equal(slot("expedition").dex["2-3"], undefined);
+  assert.equal(slot("recreational").version, 9);
+});
+
+test("Relaxed Fishing needs nothing from the career: every Lair is open and the fish roll from the whole water", () => {
+  mem.clear();
+  setRng(makeRng(17));
+  hydrate();
+  useGame.getState().switchMode("recreational");
+  useGame.getState().beginTrip(0, "clock", -1);
+  useGame.getState().setLair(true);
+  assert.equal(useGame.getState().lair, true);
+  resetSim();
+  act();
+  assert.equal(sim.castLair, true, "the Lair opened with an empty book");
+  assert.equal(useGame.getState().lair, true, "it was not sealed");
+  resetSim();
+});
+
+test("opening Tournaments from Relaxed Fishing goes through the career, and Relaxed Fishing never files medals", async () => {
+  mem.clear();
+  hydrate();
+  useGame.getState().switchMode("recreational");
+  useGame.getState().beginTrip(0, "clock", -1);
+  useGame.getState().openLobby();
+  assert.equal(useGame.getState().mode, "expedition");
+  assert.equal(useGame.getState().lobby, true);
+  useGame.getState().switchMode("recreational");
+  await useGame.getState().syncTrophies(true);
+  assert.deepEqual(useGame.getState().trophies, []);
+  assert.deepEqual(useGame.getState().tourneyHistory, []);
 });
 
 test("a trip left open for hours is filed when the game opens", () => {

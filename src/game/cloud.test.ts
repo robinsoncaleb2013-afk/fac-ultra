@@ -52,6 +52,7 @@ test("summaries describe real saves and read junk as empty", () => {
   const s = summarize("recreational", played);
   assert.deepEqual([s.caught, s.c, s.lv, s.species], [212, 48_000, 12, 2]);
   assert.equal(describe(s, money, "expedition"), `212 fish, ${money(48_000)}`);
+  assert.equal(describe(s, money, "recreational"), "212 fish, 2 kinds of fish", "Relaxed Fishing has no money to show");
   const sv = summarize("survival", { dex: { "0-0": { c: 4 } }, history: [{}, {}] });
   assert.deepEqual([sv.caught, sv.tot, sv.species], [4, 2, 1]);
   assert.match(describe(sv, money, "survival"), /1 kinds of fish, 2 runs/);

@@ -88,6 +88,8 @@ function same(a: Summary, b: Summary): SyncAction {
 /** "212 fish, $48K" for the chooser. `money` formats the coins (content.money). */
 export function describe(s: Summary, money: (v: number) => string, mode: SyncMode): string {
   if (mode === "survival") return `${s.species} kinds of fish, ${s.tot} ${s.tot === 1 ? "run" : "runs"}`;
+  /* Relaxed Fishing has no money: say how many kinds of fish are in its own book instead. */
+  if (mode === "recreational") return `${s.caught} fish, ${s.species} kinds of fish`;
   return `${s.caught} fish, ${money(s.c)}`;
 }
 

@@ -12,12 +12,11 @@ import {
   multOf,
   MUTATIONS,
   RARITIES,
-  stageOf,
   STAGE_NAMES,
   TONE,
 } from "@/game/content";
 import { useGame } from "@/game/engine";
-import { MODES } from "@/game/modes";
+import { MODES, stageIn } from "@/game/modes";
 import { TripBar } from "@/components/game/trips";
 import { SurvivalCastCard } from "@/components/game/survival";
 import { TournamentPanel } from "@/components/game/tournament";
@@ -160,7 +159,7 @@ function CastPanelCareer() {
   const last = useGame((s) => s.lastCatch);
   const mult = useGame((s) => multOf(s.dex, s.rb));
   const taught = useGame((s) => s.taught);
-  const stage = useGame((s) => stageOf(s.dex, s.biome));
+  const stage = useGame((s) => stageIn(MODES[s.mode], s.dex, s.biome));
   const derby = useGame((s) => s.derby);
   const survival = useGame((s) => !!MODES[s.mode].survival);
   const fun = useFunOn();
@@ -229,7 +228,7 @@ function CastPanelCareer() {
 export function BossCard() {
   const biome = useGame((s) => s.biome);
   const caught = useGame((s) => biomeSpeciesCaught(s.dex, s.biome));
-  const stage = useGame((s) => stageOf(s.dex, s.biome));
+  const stage = useGame((s) => stageIn(MODES[s.mode], s.dex, s.biome));
   const lair = useGame((s) => s.lair);
   const setLair = useGame((s) => s.setLair);
   const mastered = useGame((s) => s.mastered.includes(s.biome));
