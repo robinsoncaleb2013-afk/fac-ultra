@@ -29,3 +29,10 @@ The website-side rules (Chris's repo) are in the `robinson-ai-systems`
 repo's `docs/WEBSITE-BLUEPRINT.md`, "The Caleb Robinson projects section".
 If anything here ever disagrees with that blueprint, the blueprint wins and
 the difference gets reported to Chris.
+
+## FAC Ultra only
+
+`FAC-ULTRA-PAGE-RULES.md` in this folder is specific to this game: what
+counts as website-worthy news for FAC Ultra and what stays off its page.
+It does not travel to other projects — each game writes its own when it
+joins the website.

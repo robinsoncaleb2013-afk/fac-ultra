@@ -365,6 +365,10 @@ website-related file. The short version:
   public page should say, with a dated entry under its Updates heading.
 - Features in the record are claims: only what the current build actually
   contains, verified. No personal information and no secrets in docs.
+- **This game has its own page rules:** `docs/website/FAC-ULTRA-PAGE-RULES.md`
+  — what counts as website-worthy news for FAC Ultra (milestones and big
+  features only; fixes, tuning, and plumbing stay off the page) and how
+  tight to keep the Features list. Follow it for every record update.
 - Never attempt to edit the website itself — no PRs, pushes, or access
   requests against any Robinson AI Systems repository, hosting project,
   or DNS. This side proposes through the record; Chris's side screens
