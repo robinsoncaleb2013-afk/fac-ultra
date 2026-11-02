@@ -36,13 +36,20 @@ so there is nothing to install: open the play address and start fishing.
 
 ## Features
 
-- Playable in a web browser — no download or install
-- Catch fish, make progress, and keep your game with save codes
-- Hosted from home on the Robinson family gaming PC
-- New waters, fish and features arrive as Caleb builds them
+- Playable in a web browser on a PC, tablet or phone — no download or install
+- Fifteen waters and 375 kinds of fish, from a pond to the Astral Sea, with a boss fish to beat in each
+- A live fight on the water: hold to reel, ease off when the fish runs
+- Gear and upgrades: rods, reels, boats, lures and bait, and fishing line that wears out and can be crafted
+- Six ways to play: Expedition (the career, with five difficulty levels and three save slots), Story (fifteen guided chapters), Recreational (relaxed, kept apart from your career), Survival, Local Co-op and Tournaments
+- An aquarium that earns while you are away, contracts and rebirth
+- Rare events after long play that turn some fish into named mutations
+- Tournaments scored by the server, with live boards, friends, teams and trophies
+- Optional sign-in for cloud saves and family profiles, plus save codes
+- Kid Mode with a Helping Hand, five picture-quality levels, full screen and colour-blind colours
 
 ## Updates
 
+- **November 2, 2026** — New ways to play: Story mode with fifteen chapters, five difficulty levels and three save slots for the career, a relaxed Recreational mode kept apart from your career, Survival fishing, and Tournaments with live boards, friends and trophies. Fishing line now wears out and is crafted, and rare events can mutate your catch.
 - **November 2, 2026** — FAC Ultra goes live for friends and family, hosted from
   home with a public play address on the website.
 

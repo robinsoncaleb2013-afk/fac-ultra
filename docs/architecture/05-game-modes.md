@@ -2,6 +2,8 @@
 
 Work packages **WP-4** (mode framework + Recreational + Kid Mode), **WP-5** (Survival Fishing), **WP-6** (Rivals, pets, stickers, ambience — the "fun layer"). Tournaments are in `06`.
 
+> **As built (WP-4, 5, 6, 11, 12, 16; all merged).** There are **six modes** in the `MODES` table (`src/game/modes.ts`): Expedition, Recreational, Survival, Local Co-op, Tournaments and Story (Story arrived in WP-16, see `12`). The `Mode` union is `"expedition" | "recreational" | "survival" | "coop" | "tournament" | "story"` and `MODE_LIST` lists them. **Nothing is shared between modes** (WP-11): where this document's older sections say the career collection is merged or shared, section 11 replaces them. The menus are the two-level menus of section 12. Sections 9 to 12 are the authoritative "as built" notes; the numbered spec sections 1 to 8 keep the original plan. Unverified items (audio, real-player Survival balance, gamepad) are in `../KNOWN-GAPS.md`.
+
 ## 1. The mode framework (WP-4)
 
 Today a mode is a save key and a few `if (currentMode === "sandbox")` branches. Replace that with a **rules table** so a new mode is data, not scattered conditionals.
@@ -33,7 +35,7 @@ export function rules(): ModeRules;    // current mode's rules
 
 Migration: `career → expedition`, `sandbox → recreational` (same save key `fac-ultra-sandbox`, new title), `coop` unchanged. Replace every `currentMode === …` check in `engine.ts` with a `rules().x` lookup. Mode cards on the menu come from `MODES`.
 
-> **As built (WP-4).** `src/game/modes.ts` holds the rules table (`MODES`, `MODE_KEYS`, `rulesOf`), the seven menu cards (`MENU_CARDS`) and the career-collection merge; `modeRules()` in `engine.ts` is the single lookup every mode branch reads. The union is `Mode = "expedition" | "recreational" | "coop"` (the spec's `ModeId` names); WP-5 and WP-7 add `survival` and `tournament` to the union and the table. Beyond the table in this section the rules also carry `trips`, `photo` and `twoPlayer`. Trips live in `src/game/trips.ts`, Kid Mode helpers in `src/game/kid.ts`. Save v7 adds `kid`, `trips` and `trip` (the trip in progress); `kid` is mirrored to `fac-ultra-device`.
+> **As built (WP-4, brought up to date through WP-16).** `src/game/modes.ts` holds the rules table (`MODES`, `MODE_LIST`, `MODE_KEYS`, `rulesOf`) and the menu cards (`MENU_CARDS`: the six modes plus the Expedition extras Online Co-op, Aquarium, Derby and Boss Rush; `MODE_SELECT_IDS` is the six that mode select shows). The career-collection merge that WP-4 had was removed in WP-11. `modeRules()` in `engine.ts` is the single lookup every mode branch reads. The union is called `Mode` (the spec's `ModeId`). Beyond the table in this section the rules also carry `stagesOpen` (WP-11), `trips`, `photo`, `twoPlayer` and `menuTabs` (WP-12), and Survival's `survival` flag. Trips live in `src/game/trips.ts`, Kid Mode helpers in `src/game/kid.ts`. Save v7 adds `kid`, `trips` and `trip` (the trip in progress); `kid` is mirrored to `fac-ultra-device`.
 
 > WP-14: gear gates, line wear and line crafting differ per mode; the table is in `10-gear-progression-and-line.md` (sections 1.5 and 2).
 
@@ -58,7 +60,7 @@ Kid Mode is a **settings profile** applied on top of any mode where `assistAllow
 | `assist` (Helping Hand) | on, and the glow/hint always shows |
 | Text size | +1 step (Tailwind `text-base` → `text-lg` via a root `data-kid` attribute) |
 | Confirmations | selling a rare+ fish and rebirth ask "Are you sure?" |
-| Hints | spot hints after 5 s instead of 8; coaching lines never stop |
+| Hints | spot hints sooner than for grown-ups (as built: 1.9 s against 3 s, `kid.ts`); coaching lines never stop |
 | Reading | every long message gets a 🔊 button: `speechSynthesis.speak()` with the system voice, rate 0.95 |
 | Numbers | money shown as `$1.2K` already; add the word form in tooltips |
 
@@ -132,7 +134,7 @@ First audio *files*: one 30-second ambient loop per biome group (pond/river, lak
 Rarity colours gain a **shape**: common dot, uncommon diamond, rare star, epic hexagon, legendary crown, used wherever a rarity colour appears (badge, dex cell corner, celebration). Add a Settings toggle for a deuteranopia-safe palette (`r1 #2a9d8f, r2 #4a7bd0, r3 #d08a2e, r4 #e8c547`).
 
 ## 7. Menu card order (after WP-5)
-Expedition · Recreational · Survival · Tournaments · Co-op (local + online) · The Aquarium · Boss Rush. Derby is folded into Tournaments.
+*Superseded by section 12 and `09` section 2.5.* The original order was Expedition · Recreational · Survival · Tournaments · Co-op (local + online) · The Aquarium · Boss Rush, with Derby folded into Tournaments. As built, mode select shows six cards in this order: Expedition, Story, Recreational, Survival, Tournaments, Local Co-op (`MODE_SELECT_IDS`), and the Aquarium, Derby, Online Co-op and Boss Rush are shortcuts into Expedition.
 
 ## 8. Done when
 - **WP-4**: `modes.ts` rules table drives every mode branch; Recreational with creel, trip log, Logbook view, photo mode; Kid Mode profile with every row in §4; menu cards from `MODES`; migration from `sandbox` keeps old sandbox saves; tests for `rules()` and trip summaries.
@@ -143,19 +145,19 @@ Expedition · Recreational · Survival · Tournaments · Co-op (local + online) 
 
 - Rules live in `src/game/survival.ts` (pure, seeded, no Math.random). The store hooks are small and additive in `engine.ts`.
 - Own save slot `fac-ultra-survival` with its own dex and run history. Career `SAVE_VERSION` is unchanged. Survival save has its own `sanitizeSurvival` / `migrateSurvival` (fixture: `src/game/__fixtures__/survival-v1.json`).
-- Waters: Pond, Creek, Lake, River, Reservoir, Arctic, Bayou, Delta (ids 0,1,2,3,5,9,4,8). Rescue arrives on day 15.
+- Waters (`SURVIVAL_WATERS` in `survival.ts`, ids 0, 1, 2, 3, 5, 9, 4, 8): Pond, River, Lake, Swamp, Coast, Arctic, Mangrove, Kelp Forest. Rescue arrives on day 15 (`WIN_DAY`); you may keep going after it.
 - Tests: `survival.test.ts` (thresholds: competent player lasts 12+ days on Pond with the 2026-01-01 seed, do-nothing dies on day 2, raw-only eating gives 1+ bad fish per 20) and `survival-flow.test.ts` (real store, slot separation, reload).
 
 ## 10. As built: WP-6 fun layer
 
-Rules are pure and seeded in `src/game/` (`rivals.ts`, `pet.ts`, `stickers.ts`, `fotd.ts`, `rarity.ts`, `ambience.ts`, `fun.ts`); the screens are `components/game/fun.tsx` (+ `fun-hooks.ts`, `rarity-mark.tsx`, `pet-fx.ts`) and the sticker-book `DexPanel`. Career `SAVE_VERSION` is **8**.
+Rules are pure and seeded in `src/game/` (`rivals.ts`, `pet.ts`, `stickers.ts`, `fotd.ts`, `rarity.ts`, `ambience.ts`, `fun.ts`); the screens are `components/game/fun.tsx` (+ `fun-hooks.ts`, `rarity-mark.tsx`, `pet-fx.ts`) and the sticker-book `DexPanel`. Career `SAVE_VERSION` was **8** at that point (it is 12 now, `07`).
 
 - **Where it runs.** Expedition, Recreational and local co-op (`funModeOn()` in `fun.ts`). **Tournaments** are scored on the server from a seed, so the whole layer is off there (no shiny, Fish of the Day, pet, stickers; ambience is muted). **Survival** keeps its own slot and shape, so the layer is off there too, except ambience (camp and water sounds are welcome).
 - **Replay safety.** Rival casts run on their own `makeRng(seedFrom("rival", id, derbySeed, k))` and put the live `rng()` back afterwards. Shiny rolls use `loose()`. Neither ever draws from the stream a tournament replays (tests assert the live stream is untouched).
 - **Rivals (§6.1).** Twelve Regulars (Tilly 0.40 up to Pike Queen 0.95). A Derby holds the seed, the water, your luck, stage, sky and window when it began; each rival makes one simulated cast every 14 to 26 s (skill decides), with a skill-based miss chance, a few tries at picking spot, lure family, depth and pace (they keep the best match), then `rollFish` with the real match vector. A rival's favourite water makes them three times as likely to be picked. Derby results are filed in `rivalRecord`. A v7 Derby (names and scores only) is converted on load and keeps its scores. Tournaments will use `rivalCast` to fill empty Quick boards in WP-8.
 - **Pet (§6.2).** Opens at level 5. Gift: five lures of a family a not-yet-caught fish at your last spot likes (only families that exist as lures), at most one per real hour, first one ready on adoption. Cosmetic: otter claps, heron tilts, dog wags (3-frame canvas sprite).
 - **Sticker dex (§6.3).** One page per water: 5 by 5 cells, silhouette until caught, 300 ms peel on first fill, foil edge for mutations, star on shiny cells, page sticker on completing all 25 (boss included) with the fanfare. Shiny: 2 % of any caught fish, listed once per species.
-- **Fish of the Day (§6.4).** `seedFrom("fotd", date)` over your open waters, species slots 0 to 15 only (always rollable). First catch of the day: double XP and a gold frame sticker. Shown on the menu, the water chips and the Cast tab. Claims are shared by Expedition and Recreational, so the day is claimed once.
+- **Fish of the Day (§6.4).** `seedFrom("fotd", date)` over your open waters, species slots 0 to 15 only (always rollable). First catch of the day: double XP and a gold frame sticker. Shown on the menu, the water chips and the Cast tab. *(Superseded by WP-11: each mode keeps its own claim, so the day can be claimed once in Expedition and once in Recreational.)*
 - **Ambience (§6.5).** Five 30-second OGG loops in `public/audio/` (about 770 KB in all, none over 250 KB), built by `node scripts/ambience-build.mjs` (synthesized offline, reproducible). Fetched lazily after the first tap, only the loop for the water you are in, 2 s crossfade on travel. Rain and wind come from the WebAudio synth. Volume slider in Settings (default 35 %), Sound off mutes everything, Kid Mode speech ducks it. The spec lists no canyon group; canyon plays the fire/sky loop.
 - **Colour-blind rarity (§6.6).** `RarityMark` shows dot, diamond, star, hexagon, crown beside every rarity colour (celebration, last catch, bag, dex cells). Settings toggle swaps r1 to r4 for the deuteranopia-safe palette.
 - **Save v8.** `pet`, `stickers`, `shiny`, `fotdClaimed`, `rivalRecord`, plus the device settings `volume` and `cb` (mirrored to `fac-ultra-device`). Fixture `save-v7.json` is a real v7 session with a Derby running.
@@ -168,7 +170,7 @@ Decision (owner, 2026-11-02): Recreational, the old Sandbox, is a super-easy, ev
 - **Removed.** `sharesCareerDex`, `mergeDex`, `mergeRecords`, `mergeFun`, and the engine's `shareWithCareer` / `readCareer` and the load-time merge. Saving or opening a mode touches only its own slot (plus the device settings key).
 - **Tournaments.** Medals, titles and event history are the career's. Opening Tournaments from Recreational returns to the career first; `syncTrophies` does nothing in Recreational and the Lodge has no Trophies room there.
 - **Words.** The Play card says "Relaxed fishing. Everything is unlocked and nothing here touches your career." Lodge rooms show a small label saying whose book is open ("This is your Relaxed Fishing book. It is kept apart, so nothing here changes your Expedition."). The Fish book, trip card, save code and cloud chooser name the mode.
-- **Saves.** No new fields, so career `SAVE_VERSION` stays **9** and no new fixture was needed. Old Sandbox saves load as they were. **Anything that an earlier build already merged into a career save (species, records, stickers, shinies, claims, Regulars scores) stays there: it cannot be told apart from career catches, so it cannot be un-merged.** Likewise, a Sandbox save that already took in career data keeps it.
+- **Saves.** No new fields, so career `SAVE_VERSION` stayed **9** at that point and no new fixture was needed. Old Sandbox saves load as they were. **Anything that an earlier build already merged into a career save (species, records, stickers, shinies, claims, Regulars scores) stays there: it cannot be told apart from career catches, so it cannot be un-merged.** Likewise, a Sandbox save that already took in career data keeps it.
 - **Cloud.** `recreational` was already its own row in `saves`; the server runs it through the same `sanitize()`. A test pushes both and proves neither moves the other.
 - **Tests.** `modes-flow.test.ts` (real store, real `localStorage` slots): a Recreational catch leaves the career slot byte for byte unchanged and the reverse; stickers, shinies, pet, claim and Regulars stay apart; reload restores Recreational from its own slot; an old Sandbox save opens as it was; the Lair is open with an empty book. `fun-flow.test.ts`, `modes.test.ts`, `cloud.test.ts` and `accounts.test.ts` assert the same separation.
 
@@ -180,7 +182,8 @@ Decision (owner, 2026-11-02): Recreational, the old Sandbox, is a super-easy, ev
 - **Recreational:** Tackle (everything already unlocked), Waters, Logbook (trips), Collection (its own fish book, records, buddy, Regulars, aquarium). No shop, no selling, no trophies (WP-11). Derby, online rooms and boss rush are Expedition extras.
 - **Survival:** Camp (eat, smoke, make things, sleep), Larder (the fish you keep; nothing sells), Waters (a map to read; you stay on your run's water), Log (best runs, every run, fish book).
 - **Tournaments:** Event (clock, standing, board, room, emotes, the bait family), Lodge (trophies, records, book), Players (friends and events). Nothing that changes the tackle.
-- **Main menu mode select** shows `MODE_SELECT_IDS`; Kid-friendly play is a switch (the old Kid card still works as an id for old links). Entering a mode loads its own save slot; leaving saves, drops any line in the water and goes back to the title with the career loaded behind it (`leaveToMenu` in the engine). Tests: `menu-levels.test.ts` (tab lists, no shop on the main menu, leave rules, collections peek) and `menu-flow.test.ts` (enter, menu, leave, continue; the saved slot is unchanged).
+- **Story (WP-16):** Tackle, Shop & Sell, Lodge (with the Story room), Waters, Players, Settings, like Expedition, on its own slots and always at Easy difficulty (`12` section 4).
+- **Main menu mode select** shows `MODE_SELECT_IDS` (six cards, Story second); Kid-friendly play is a switch (the old Kid card still works as an id for old links). Entering a mode loads its own save slot; leaving saves, drops any line in the water and goes back to the title with the career loaded behind it (`leaveToMenu` in the engine). Tests: `menu-levels.test.ts` (tab lists, no shop on the main menu, leave rules, collections peek) and `menu-flow.test.ts` (enter, menu, leave, continue; the saved slot is unchanged).
 
 ## Events and mutations by mode (WP-15)
 

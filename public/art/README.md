@@ -1,6 +1,6 @@
 # Biome paintings
 
-Every water has two pictures here, both WebP:
+Every water has two pictures here, both WebP (the game loads WebP only; there is no JPG fallback):
 
 | File | Width | Used for |
 |---|---|---|

@@ -1,8 +1,10 @@
 # 08 · Work Packages — the build order
 
-One package = one PR = one whole outcome. Build them in order; each one makes the next cheaper. Every package ends with the gates in `README.md` §Rules and a PR description that lists **Played** (what you did in the browser) and **Unverified** (what you couldn't check).
+One package = one PR = one whole outcome. Build them in order; each one makes the next cheaper. Every package ends with the gates in `README.md` (this folder) §Rules and a PR description that lists **Played** (what you did in the browser) and **Unverified** (what you couldn't check).
 
 Branch naming: `wp-<n>-<slug>` off `main`. Open the PR against `main`.
+
+> **As built.** Packages 0 to 16 are merged and WP-17 (this documentation audit) is its own PR. The live status of each, with its PR number and known gaps, is the table in [`README.md`](README.md); the sections below are the original briefs (WP-0 to WP-9), then short briefs for WP-10 to WP-16 that were added as Caleb's feedback arrived. WP-12 to WP-16 were built in parallel and merged in the order 13, 12, 15, 14, 16.
 
 | # | Package | Spec | Size | Depends on |
 |---|---|---|---|---|
@@ -16,6 +18,14 @@ Branch naming: `wp-<n>-<slug>` off `main`. Open the PR against `main`.
 | 7 | Server-verified tournaments | `06` §1–2 | L | 3 (needs fixed-step fight) + 4 |
 | 8 | Lobby, live board, friends, teams, trophies | `06` §3 | M | 7 |
 | 9 | Accounts, cloud saves, asset cleanup | `07` | M | 7 |
+| 10 | Hub menus, five graphics levels, full screen | `09` §1.0, §2.4, §6.1 | L | 9 |
+| 11 | Recreational fully separate from the career | `05` §11 | S | 10 |
+| 12 | Two-level menu (main menu and a menu per mode) | `09` §2.5, `05` §12 | M | 10, 11 |
+| 13 | Test-phase reset on every build | `../TEST-PHASE.md`, `07` §7 | M | 9 |
+| 14 | Line health, crafting, gear rules, tournament rules versions | `10` | L | 12 |
+| 15 | Rare long-play events and mutations | `11` | M | 12 |
+| 16 | Difficulty, Story, Legend dangers, Kids book, slots, achievements, trophy room | `12` | L | 12, 14, 15 |
+| 17 | Documentation audit, `docs/README.md`, `KNOWN-GAPS.md`, the docs check | this folder | S | 16 |
 
 Packages 5, 6 and 7 are independent of each other and can run in parallel on separate branches once 4 is merged. 8 and 9 both follow 7.
 
@@ -86,12 +96,44 @@ Spec: `07`. **Done when:** `07` §6.
 ---
 
 ## WP-10 · High-end menu system, graphics levels, full screen
-Spec: `09-mobile.md` §1.0 (five graphics levels), §2.3 and §6 ("as built" notes), `02` (the Hub files), `06` §3.3 (friend requests, block). **Done when:** a title screen and a single-row pause menu (Play, Tackle, Lodge, Waters, Players, Settings) reach every old feature on a PC, phone and landscape phone; the quick wheel and satchel open on hold; Auto/Ultra/High/Medium/Low/Potato work with a governor that steps down fast and up slowly; full screen works from the HUD, Settings and the F key; friends can be added by name, email or code, removed and blocked; touch targets are at least 44 px (`scripts/check-touch-targets.mjs`).
+Spec: `09-mobile.md` §1.0 (five graphics levels), §2.3 and §6 ("as built" notes), `02` (the Hub files), `06` §3.3 (friend requests, block). *(The single-row menu was split into two levels in WP-12.)* **Done when:** a title screen and a single-row pause menu (Play, Tackle, Lodge, Waters, Players, Settings) reach every old feature on a PC, phone and landscape phone; the quick wheel and satchel open on hold; Auto/Ultra/High/Medium/Low/Potato work with a governor that steps down fast and up slowly; full screen works from the HUD, Settings and the F key; friends can be added by name, email or code, removed and blocked; touch targets are at least 44 px (`scripts/check-touch-targets.mjs`).
+
+---
+
+## WP-11 · Recreational is separate
+Spec: `05` §11. **Done when:** a Recreational catch leaves the career slot byte for byte unchanged and the reverse; its own book, records, stickers, Fish of the Day claim, pet and Regulars; everything unlocked, no shop, no trophies; old Sandbox saves load as they were.
+
+---
+
+## WP-12 · Two-level menu
+Spec: `09` §2.5, `05` §12. **Done when:** the main menu (Play, Collections, Friends, Account, Settings) cannot sell, buy, craft or cast; each mode's `menuTabs` list drives its in-game menu; selling and buying exist only in Shop & Sell; Resume and Leave on every in-game menu; touch targets still 44 px.
+
+---
+
+## WP-13 · Test-phase reset
+Spec: `../TEST-PHASE.md`. **Done when:** one switch (`TEST_PHASE_RESET`, overridden by `FAC_TEST_RESET`) makes every new build wipe saves, tournaments and trophies on the server and in the browser while keeping accounts, profiles, friends and device settings; an old tab reloads once; a test fails if a new table is on neither the wipe nor the keep list.
+
+---
+
+## WP-14 · Line health, crafting and gear rules
+Spec: `10`. **Done when:** lines wear in a fight at the rates in `10` §1.1, are crafted from packs and spares, gear cannot be skipped (`10` §2), tournaments carry a `rulesVersion` and old events still replay, and the save is v11 with a fixture.
 
 ---
 
 ## WP-15 · Rare long-play events and event mutations
 Spec: `11-events-and-mutations.md`. **Done when:** eleven events (Caleb's table) start deterministically after 1 to 10 hours of continuous play with night-only and Astral-only rules; some fish get a named XP and/or worth mutation with tint and shape; banner, countdown chip, catch-card line and Lodge Events list work; save v10 round-trips the streak and seen events; Tournament and Survival never run it and the replayed rng stream is untouched.
+
+---
+
+---
+
+## WP-16 · Difficulty, Story, slots, achievements
+Spec: `12`. **Done when:** five difficulty levels fixed per slot; the Kids book; Legend dangers on their own seeded stream; Story's 15 chapters; three slots for Expedition and Story with per-slot cloud sync ids and no database migration; the 50 achievements and the trophy room; save v12 with a fixture.
+
+---
+
+## WP-17 · Documentation audit
+Every document checked against the code on `main` after WP-16; `docs/README.md` (index, quickstart, the one environment table), `docs/KNOWN-GAPS.md`, an "as built" line in each architecture document, and `scripts/docs-check.mjs` (run by `npm test`) so paths, settings, versions, migrations, modes, routes and npm scripts named in the docs cannot rot silently. **Done when:** the check is green and every discrepancy found is either fixed in the docs or listed in the PR.
 
 ---
 
@@ -108,14 +150,14 @@ Spec: docs/architecture/<file>.md §…
 ### Played
 - At 1440×900: …
 - At 390×844: …
-- Screenshots: screenshots/wp<n>-*.png
+- Screenshots: screenshots/wp<n>-*.jpg (small)
 
 ### Gates
-typecheck ✅ · lint ✅ · test ✅ (<n> tests) · build ✅ · fps <n> on Pond idle
+typecheck ✅ · lint ✅ · test ✅ (<n> tests, includes the docs check) · build ✅ · fps <n> on Pond idle
 
 ### Unverified
 - … (why, and what would verify it)
 
 ### Save migration
-version <a> → <b>; fixtures loaded: save-v3.json, save-v<a>.json
+version <a> → <b>; fixtures loaded: save-v3.json, save-v<a>.json (and update the docs-check markers in docs/README.md and 07)
 ```

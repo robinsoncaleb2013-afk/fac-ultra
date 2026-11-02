@@ -1,5 +1,7 @@
 # 12. Difficulty, Story, hazards, fish books, save slots, achievements, trophy room (WP-16)
 
+> **As built (WP-16, merged; checked against `difficulty.ts`, `hazards.ts`, `slots.ts`, `story.ts` and `achievements.ts` after merge).** The numbers in sections 2 and 3 match the tables in code. Corrections to the first draft of this file: there are **50** achievements (not about 45); the hazard state in the save is `hz`; sections 6 to 10 describe the shipped slot, achievement and menu behaviour. Unplayed at length: hazard feel, Story pacing, cloud slot sync on a real database (`../KNOWN-GAPS.md`). Save fixture `save-v12.json`.
+
 Source: Caleb's feedback 2 (fish books, difficulty, Story, hardest-mode dangers, keep/release, slots, achievements, PB room). Every number lives in one data table in `src/game/`; the table name is given in each section. All the rules are pure modules with unit tests; `engine.ts` only calls them.
 
 ## 1. Fish books
@@ -52,7 +54,7 @@ Its own slot type (`story`, key `fac-ultra-story[-sN]`), a row in `MODES`, a car
 
 ## 5. Keep or release
 
-The player has infinite time. `PENDING_FISH` holds the caught fish; while it is set, casting is blocked and the notice "You have not chosen what to do with this fish yet" shows. It works with Helping Hand, Kid Mode, every auto-keep setting (auto-keep is off while a choice is pending; Survival and Tournament keep their auto-keep rules), the phone layout and the keyboard shortcuts (any cast key shows the notice instead of casting).
+The player has infinite time. While a caught fish is waiting for a choice, casting is blocked and the notice `PENDING_FISH` ("You haven't chosen what to do with this fish yet.") shows. It works with Helping Hand, Kid Mode, every auto-keep setting (auto-keep is off while a choice is pending; Survival and Tournament keep their auto-keep rules), the phone layout and the keyboard shortcuts (any cast key shows the notice instead of casting).
 
 ## 6. Save slots (`slots.ts`)
 
@@ -65,7 +67,7 @@ The player has infinite time. `PENDING_FISH` holds the caught fish; while it is 
 
 ## 7. Achievements (`achievements.ts`)
 
-About 45 data rows (id, name, plain-English hint, a test over `AchStats`). `checkAchievements` runs after catches, sales, level ups and other events, shows a toast once per unlock, and stores `ach: { got, counters }` in the save. The Lodge Achievements room shows a grid; hover (PC) or tap (phone) opens the detail. `registerAchievements(rows)` and the `fac:achievement` window event are the generic hook for WP-15 (events and mutations) to add rows. Not tracked in Survival.
+50 data rows in `ACHIEVEMENTS` (id, name, plain-English hint, a test over `AchStats`; seven categories: fishing, collection, gear, money, bosses, events, modes). `checkAchievements` runs after catches, sales, level ups and other events, shows a toast once per unlock, and stores `ach: { got, counters }` in the save. The Lodge Achievements room shows a grid; hover (PC) or tap (phone) opens the detail. `registerAchievements(rows)` and the `fac:achievement` window event are the generic hook for WP-15 (events and mutations) to add rows. Not tracked in Survival.
 
 ## 8. PB trophy room (`pbroom.ts`)
 
@@ -73,11 +75,11 @@ One plaque per species from the WP-3 records (heaviest weight; length is estimat
 
 ## 9. Menus (WP-12 integration)
 
-Mode select has six cards (Story is the second). Expedition and Story open the slot picker first. The Lodge tab holds the Trophy room, Achievements, the Kids book and (Story only) the Story room. Collections reads every used slot and the Kids book inside it (`collectionEntries` in `peek.ts`).
+Mode select has six cards (Story is the second: `MODE_SELECT_IDS`). Expedition and Story open the slot picker first. The Lodge tab holds the Trophy room, Achievements, the Kids book and (Story only) the Story room. Collections reads every used slot and the Kids book inside it (`collectionEntries` in `peek.ts`).
 
 ## 10. Save fields (SAVE_VERSION 12)
 
-New: `slotName`, `difficulty`, `sideDex`, `story`, `ach`, `hz` (hazards) and `autoKeep` (plus the other additive fields listed in `engine.ts` `Save`). Migration from v11 fills all with defaults. Fixture `__fixtures__/save-v12.json` (the v10 and v11 fixtures also migrate). Test-phase reset wipes every slot key and the new `fac-ultra-slots`, since it wipes by prefix (test in `slots.test.ts`).
+New: `slotName`, `created`, `difficulty`, `sideDex`, `story`, `ach`, `hz` (hazards) and `autoKeep` (plus the other additive fields listed in `engine.ts` `Save`). Migration from v11 fills all with defaults. Fixture `__fixtures__/save-v12.json` (the v10 and v11 fixtures also migrate). Test-phase reset wipes every slot key and the new `fac-ultra-slots`, since it wipes by prefix (test in `slots.test.ts`).
 
 ## 11. Tests
 

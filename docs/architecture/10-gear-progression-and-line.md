@@ -2,6 +2,8 @@
 
 Built from the owner's feedback (Caleb, 2026-11-02). Two parts: **line health, wear and crafting** (section 1) and **gear progression rules** (section 2). Code: `src/game/line-wear.ts`, `lines.ts`, `gear-rules.ts`; hooks in `fight.ts`, `replay.ts`, `engine.ts`; UI in the Tackle tab (`hub/TackleTab.tsx`) and the Waters tab. Every number below lives in one commented table in those files.
 
+> **As built (WP-14, merged; the numbers below were checked against the code after WP-16).** Tournament rules version is **2** (`RULES_VERSION` in `line-wear.ts`): <!-- docs-check:rules-version 2 --> if it is bumped, add the case and change this line (a test reads it). Not yet played end to end: pack pacing and the level gates, and the rare-fish wear of 3 percent is a guess (`../KNOWN-GAPS.md`). "Hardest difficulty" in the old text below is called **Legend** in the game.
+
 ## 1. Line health, wear and crafting
 
 ### 1.1 Wear in a fight
@@ -45,7 +47,7 @@ The **Line workshop** (Tackle tab) lists every tier. The detail panel shows heal
 | Kid Mode | Wear x0.25 (`kidMul`). Helping Hand takes up to half off more, scaled by its strength. |
 | Survival | Same rules on its hand line (health of tier 0 times the camp gear bonus). No packs. |
 | Tournament | The fixed event line (tier 4, 250 health), rules version 2. No packs. |
-| Hardest difficulty (WP-16) | Hook: `difficulty.wear` in `lines.ts` multiplies wear (default 1). `setLossHooks({ loseLure, loseRod })` is called when a line wears out; nothing is lost in WP-14. |
+| Legend and Hard (WP-16) | The difficulty's `lineDrain` (0.5 Super Easy, 0.75 Easy, 1 Normal, 1.25 Hard, 1.5 Legend) multiplies wear through `wearMulFor` in `lines.ts`. When a line wears out the engine calls `lossHooks().loseLure`; WP-16's hazards decide whether a lure or rod is lost (`12` section 3). |
 
 ### 1.6 Rules versions (tournaments)
 Wear changes how a replayed cast ends, so fight/line rules are versioned (`RULES_VERSION` in `line-wear.ts`): **1** is the original fight, **2** adds wear. New events store `rules.rulesVersion` (2). An event row with none means version 1. The server replays every cast with its event's version; the client stamps `rv` on the envelope when the version is above 1, and the server refuses a cast whose stamp is not the event's version (`rules_version`). Tests prove an old-version cast still verifies and a new one verifies. The daily Survival board stays on version 1. To change the fight again: bump `RULES_VERSION` and add the case.

@@ -30,7 +30,7 @@ export type DifficultyRules = {
   worth: number;
   /** Times the XP a catch gives. */
   xp: number;
-  /** Times how fast a fish wears the line down. Waits here for the line-health rules (WP-14); nothing reads it before then. */
+  /** Times how fast a fish wears the line down (read by the engine through `wearMulFor` in lines.ts; docs/architecture/10 §1.5). */
   lineDrain: number;
   assist: AssistRule;
   /** Extra width of the green zone, in percent of the bar (a gentle forgiveness for the easiest level). */

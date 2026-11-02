@@ -1,5 +1,7 @@
 # FAC Ultra — Expansion Design & Roadmap
 
+> **History (kept for the record).** This is the design as it stood on 2026-11-01. It is not kept up to date: the modes, menus, save format and numbers have moved on (for example Sandbox is now Recreational and fully separate, and there are six modes). For what exists now see [`README.md`](README.md) and the architecture folder; for what differs from this plan see [`CHANGES-FROM-PLAN.md`](CHANGES-FROM-PLAN.md).
+
 *More fish, living water, a money-making aquarium, boss fish, five new biomes, and real multiplayer — designed against the game as it actually exists in this repo.*
 
 Prepared 2026-11-01 · Grounded in the repository at main `dc8258a` · Every "today" figure below was read from the game's own code.

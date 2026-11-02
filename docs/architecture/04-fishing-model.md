@@ -2,6 +2,14 @@
 
 Work packages **WP-2** (spots, presentations, species habits, seeded RNG) and **WP-3** (the fight v2, keep/release, records). This is what makes an enthusiast nod. It layers on top of today's `rollFish` and `withCatch`; it does not replace the content tables.
 
+> **As built (WP-2 and WP-3, merged).** All of this exists: `rng.ts`, `spots.ts` (75 spots, five per water), `presentation.ts`, `habits.ts`, `match.ts`, `fight.ts`, keep or release and records. Where the code differs from the pseudo-code below, **the code and its tuning tables win**:
+> - **Match weight.** A species' weight is multiplied by `exp(0.4 x score)` with a bonus for near-perfect fits (`matchWeight`, `MATCH_SLOPE`, `MAX_MATCH`, `MATCH_PERFECT_BONUS` in `content.ts`), not the `1 + 0.55 x score` of section 3.5. Bite time (`biteFactor`) and size bias (`sizeBiasOf`) are as written.
+> - **Hint timing.** The "no bite" hint comes after 3 seconds (1.9 in Kid Mode), not 8 and 5, because the longest wait is about 5.4 s (`HINT_AFTER` in `match.ts`).
+> - **The fight tick** (section 5.3) is a different formulation with the same feel: tension chases a target that depends on whether you hold the reel (`target0/1`, `slack0/1`, `rateUp/Down`), and every number is in the `FIGHT` table in `fight.ts`. The green band is `[0.35, 0.78]` (`[0.28, 0.85]` with Helping Hand) as written. It steps at a fixed 50 ms (`FIGHT_STEP`), which the server replays.
+> - **Line wear (WP-14)** adds a second way a fight ends: the line wearing out (`10` section 1).
+> - **Difficulty (WP-16)** scales fight speed and bite wait per save (`12` section 2).
+> Real-player balance for all of this is untested (`../KNOWN-GAPS.md`).
+
 ## 0. Design in one paragraph
 
 Every water has a handful of **spots** you can cast to. Every species has **habits**: where it holds, when it feeds, what presentation it wants, how it fights. The player chooses a spot and a **presentation** (what's on the line, how deep, how fast). The game turns *how well that choice matches the fish that are there right now* into a **match score**, and the match score drives bite time, which species bite, and how big they are. Then the fight is a **tension game**: hold to reel, ease off when the fish runs, keep the line in the green. Knowledge and feel win; luck still seasons it.
