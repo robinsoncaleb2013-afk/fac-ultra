@@ -2,6 +2,12 @@
 
 Work package **WP-9** (accounts + cloud saves), plus the save-migration procedure every package uses.
 
+> **As built (WP-9 merged; extended by WP-11, 13, 14, 15, 16).** `SAVE_VERSION` is **12** (`src/game/engine.ts`; the table in section 1 lists every version). Accounts are the game's own (`src/lib/accounts/*`), not the platform's Better Auth; section 7 is the authoritative description and wins over sections 3 to 5. The sync state is **not** a `cloud` field in the `Save`. The cloud holds one row per mode **and slot** (section 2.1). Every build wipes saves while the test phase is on (end of section 7, `../TEST-PHASE.md`). Settings for running it are in the environment table in [`../README.md`](../README.md); the sign-in table below it is kept only to say what each setting means to a player. Real email, Google and Neon are unverified (`../KNOWN-GAPS.md`).
+
+<!-- docs-check:save-version 12 -->
+<!-- docs-check:fixtures 3 4 5 6 7 8 9 10 11 12 -->
+<!-- docs-check:migrations 0001 0007 0008 0009 0010 0011 -->
+
 ## 1. The migration procedure (every package)
 
 `src/game/engine.ts` owns `Save`, `fresh()`, `sanitize()`, `snapshot()`, `SAVE_VERSION`. When a package adds or changes a saved field:
@@ -27,23 +33,42 @@ Field inventory planned by this chapter (so names don't collide):
 | `trophies`, `titles`, `bobberSkin`, `tourneyHistory` | WP-8 | arrays |
 | `events` | WP-15 | save v10: streak clock, running event, seen events, mutated-fish counts; see `11` §8 |
 | `slotName`, `difficulty`, `sideDex`, `story`, `ach`, `hz`, `autoKeep`, `created` | WP-16 | save v12: slot name, difficulty, Kids book, Story chapter, achievements, hazard state; see `12` |
-| `cloud` | WP-9 | `{ userId, lastSync, rev }` |
+| `cloud` | WP-9 | **Not built** as a save field: sync state lives in `localStorage["fac-cloud"]` (section 7) |
+| `lineGear` | WP-14 | save v11: lines owned, unopened packs, last pull; see `10` section 1.7 |
 
-Save v4 is the version that ships with WP-1; each later package bumps once.
+### Save version history
 
-> WP-14: `SAVE_VERSION` is 11 (WP-15 took 10). It adds `lineGear` (lines owned, unopened line packs, last pull). Old saves get one copy of each line up to the one they used. See `10-gear-progression-and-line.md` section 1.7.
+Each package that changed the shape bumped once. Every version has a fixture in `src/game/__fixtures__/` (there is no v1 or v2 file; they predate the folder) and loads through `sanitize()`.
+
+| Version | Package | What it added |
+|---|---|---|
+| 1, 2 | the original game | Ten waters; v1 to v3 remapped biome ids when five waters were inserted |
+| 3 | expansion | 15 waters, bosses, aquarium, mutations (fixture `save-v3.json`) |
+| 4 | WP-1 | `gfx`, `assist`, `followClock` |
+| 5 | WP-2 | `lastSpot`, `rig` |
+| 6 | WP-3 | `records`, `released`, `stewards`, `coached`, `drag` |
+| 7 | WP-4 | `kid`, `trips`, `trip` |
+| 8 | WP-6 | `pet`, `stickers`, `shiny`, `fotdClaimed`, `rivalRecord` (+ device `volume`, `cb`) |
+| 9 | WP-8 | `trophies`, `titles`, `bobberSkin`, `tourneyHistory` |
+| 10 | WP-15 | `events` (long-play events and mutations) |
+| 11 | WP-14 | `lineGear` |
+| 12 | WP-16 | `slotName`, `created`, `difficulty`, `sideDex`, `story`, `ach`, `hz`, `autoKeep` |
+
+Survival has its own save shape (`sanitizeSurvival`, fixture `survival-v1.json`) and its own version. WP-5, WP-10, WP-11, WP-12 and WP-13 changed no save field. The numbers 10, 11, 12 follow merge order, not package number.
+
+> WP-14 note: it took v11 (WP-15 took v10); old saves get one copy of each line up to the one they used. See `10-gear-progression-and-line.md` section 1.7.
 
 ## 2. Save slots
 
-One `localStorage` key per mode (`modes.ts` `saveKey`): `fac-ultra` (Expedition), `fac-ultra-sandbox` (Recreational), `fac-ultra-survival`, `fac-ultra-coop`, `fac-ultra-tourney`. **Slots never share data** (WP-11): a mode reads and writes only its own key, including its dex, records, stickers, shinies, Fish of the Day claim, pet and Regulars record. Settings that are about the *device* (gfx, sound, motion, flash, kid, followClock) are **also** mirrored to a shared key `fac-ultra-device` so they apply across modes; `hydrate()` overlays them.
+One `localStorage` key per mode (`modes.ts` `saveKey`): `fac-ultra` (Expedition), `fac-ultra-sandbox` (Recreational; the key keeps the old Sandbox name so old saves carried over), `fac-ultra-survival`, `fac-ultra-coop`, `fac-ultra-tourney` and `fac-ultra-story` (Story). **Slots never share data** (WP-11): a mode reads and writes only its own key, including its dex, records, stickers, shinies, Fish of the Day claim, pet and Regulars record. Settings that are about the *device* (gfx, sound, motion, flash, kid, followClock) are **also** mirrored to a shared key `fac-ultra-device` so they apply across modes; `hydrate()` overlays them.
 
 ### 2.1 Slots and cloud ids (WP-16)
 
-Expedition and Story have up to three slots (`MAX_SLOTS` in `slots.ts`): slot 0 keeps the old key, slots 1 and 2 add `-s1` / `-s2`. The cloud `mode` column is a sync id (`expedition`, `expedition-s1`, `story-s2`); no database change. The server sanitize and delete cover every slot id. Save v12 adds `slotName`, `difficulty`, `sideDex` (Kids book), `story`, `ach` and `hazards`. Full design: `12-difficulty-slots-achievements.md`.
+Expedition and Story have up to three slots (`MAX_SLOTS` in `slots.ts`): slot 0 keeps the old key, slots 1 and 2 add `-s1` / `-s2`. The cloud `mode` column is a sync id (`expedition`, `expedition-s1`, `story-s2`); no database change. The server sanitize and delete cover every slot id. Save v12 adds `slotName`, `created`, `difficulty`, `sideDex` (Kids book), `story`, `ach`, `hz` (hazard state) and `autoKeep`. Full design: `12-difficulty-slots-achievements.md`.
 
 ## 3. Accounts (WP-9)
 
-Better Auth is already installed and migrated (`migrations/auth/0001_auth.sql`, `src/lib/auth/*`) but gated off by the sandbox's `VITE_AUTH_ENABLED` flag. Turn it on **optionally**:
+*(Plan only; superseded by section 7: the game uses its own accounts and leaves the platform's Better Auth alone.)* Better Auth is installed and migrated (`migrations/auth/0001_auth.sql`, `src/lib/auth/*`) but gated by the sandbox's `VITE_AUTH_ENABLED` flag. The plan was to turn it on **optionally**:
 
 - Sign-in is never required to play. The menu gets a quiet "Save to the cloud" button (and the tournament lobby suggests it for ranked history). Providers: email magic link + Google. Kids' flow: a parent signs in once; profiles are **local nicknames inside the account** (`profiles` table: account → up to 4 named profiles, each with its own saves), so a family shares one login. No profile may be created without the account holder present (the create button sits behind the sign-in).
 - `src/lib/auth/gates.tsx` and friends are the template's gate UI; reuse the server pieces (`server.ts`, `middleware.ts`, `verify.server.ts`), replace the gate UI with a 2-screen flow styled like the game. Keep `VITE_AUTH_ENABLED` honoured so the sandbox build still works.
@@ -54,7 +79,7 @@ Better Auth is already installed and migrated (`migrations/auth/0001_auth.sql`, 
 ```sql
 create table saves (
   profile_id text not null,
-  mode text not null,                 -- saveKey
+  mode text not null,                 -- a sync id: expedition, expedition-s1, story-s2, recreational ... (slots.ts)
   rev int not null,                   -- monotonic per (profile, mode)
   data jsonb not null,                -- snapshot()
   device text,                        -- last writer
@@ -73,7 +98,7 @@ create table saves (
 `src/routes/api/save.ts` GET/POST behind the auth middleware; body ≤ 256 KB; `data` is passed through `sanitize()` **on the server too** before storage (the game code is isomorphic) so a hand-edited save can't poison the cloud.
 
 ## 5. Asset cleanup (WP-9)
-Delete the original `public/art/biomes/*.jpg` once every reference uses the WebP set from WP-1. Add `public/art/README.md` describing the sizes and how `scripts/art-build.mjs` regenerates them from the `art-src/` originals (move the JPGs there, gitignored or LFS — decision for Caleb; default: keep in repo under `art-src/`, they're 11 MB).
+*(Done in WP-9.)* Delete the original `public/art/biomes/*.jpg` once every reference uses the WebP set from WP-1. Add `public/art/README.md` describing the sizes and how `scripts/art-build.mjs` regenerates them from the `art-src/` originals (move the JPGs there, gitignored or LFS — decision for Caleb; default: keep in repo under `art-src/`, they're 11 MB).
 
 ## 6. Done when (WP-9)
 - Optional sign-in with magic link + Google; family profiles (≤ 4) under one account; game fully playable signed out.
@@ -94,9 +119,9 @@ Decisions the spec left open, and what shipped. Where this section and §3-5 dif
 
 **Profiles.** Up to 4 per account (`profiles`, slot 0-3). A profile is a nickname (run through `safeName`) and a kid flag. No email, no birthday. Only a signed-in grown-up can add one. Picking a kid's profile turns Kid Mode on for that screen and a grown-up's turns it off. With Kid Mode on, the account screens show no email box, no Google button and no sign-out/delete/add/remove controls. This is a fence for a family, not a lock.
 
-**Cloud saves.** `saves(profile_id, mode, rev, data, device, updated_at)` for `expedition`, `recreational`, `survival` and `coop`, each its own row and revision (Recreational is never folded into Expedition). Tournament saves stay on the tournament server. Differences from §4.2, on purpose:
+**Cloud saves.** `saves(profile_id, mode, rev, data, device, updated_at)` for `expedition`, `story`, `recreational`, `survival` and `coop` (and the extra slots of Expedition and Story, `-s1`, `-s2`), each its own row and revision (Recreational is never folded into Expedition). `allSyncIds()` in `src/game/slots.ts` is the list. Tournament saves stay on the tournament server. Differences from §4.2, on purpose:
 - The browser sends `baseRev` (the revision it last saw) and the server makes it `baseRev + 1` if that is still the stored revision. The browser does not invent revisions. A stale `baseRev` gets `409 conflict` with the stored save. `force: true` is only sent after the player chose "keep this device".
-- Sync state is **not** in the `Save` (the planned `cloud` field would have synced itself and bumped `SAVE_VERSION` for nothing). It lives in `localStorage["fac-cloud"]` beside a 7-day backup list in `fac-cloud-backups`. The save version stays 9.
+- Sync state is **not** in the `Save` (the planned `cloud` field would have synced itself and bumped `SAVE_VERSION` for nothing). It lives in `localStorage["fac-cloud"]` beside a 7-day backup list in `fac-cloud-backups`. The save version was not touched by this package.
 - "Changed since last sync" is a fingerprint of the save without the Aquarium clock (`changeKey`), not a flag, so nothing can forget to set it. A push happens 10 s after a change, when the page is hidden, when the connection returns and every 60 s while offline.
 - The decision table is `decideSync` in `src/game/cloud.ts` (pure, tested). Both sides changed and each has something the other lacks -> the chooser ("Keep this device's fish" / "Keep the cloud's fish" / "Keep the newer one"). The copy that loses is kept for 7 days in Lodge -> Settings -> Cloud save, restorable or copyable as a save code.
 - Every upload is parsed by the same `sanitize()` / `sanitizeSurvival()` the game loads with, on the server, then stored. Bodies over 256 KB are refused.
@@ -106,7 +131,7 @@ Decisions the spec left open, and what shipped. Where this section and §3-5 dif
 
 **Account data.** "Download everything we hold" returns one JSON file (profiles, saves, tournament results, friend count). "Delete my account" (type DELETE) removes the account, profiles, saves, sessions and sign-in links, removes the linked players' friends, invites and results, and renames the players row to "Former angler" with no friend code. Scores already on other people's boards stay, with nothing pointing back to a person.
 
-**Running it on your own PC.** Everything works with no setting at all: the sign-in link is written to the server's console. To make it real, set these where the game's process starts:
+**Running it on your own PC.** Everything works with no setting at all: the sign-in link is written to the server's console, and the database is in memory (set `FAC_DATA_DIR` or `DATABASE_URL` to keep accounts and cloud saves across a restart). To make sign-in real, set these where the game's process starts (the complete list of settings is the environment table in [`../README.md`](../README.md); this table says what these four mean):
 
 | Variable | What it does |
 |---|---|

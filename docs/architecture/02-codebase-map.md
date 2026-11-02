@@ -1,6 +1,8 @@
 # 02 · Codebase Map
 
-What exists today, how it fits together, and where the new work plugs in. Read this before editing anything.
+What exists, how it fits together, and where new work plugs in. Read this before editing anything.
+
+> **As built (through WP-16).** The directory map below is the current one. The sections "State architecture", "The catch loop", "Rendering", "Multiplayer" and "Data layer" describe the original (pre-WP-1) game; their *ideas* still hold (one Zustand store plus a mutable `sim`, `frame(dt)` ticks, `getSql()`), but the fight is now the tension fight of `04` section 5, the rendering stack is the one in `03`/`09`, and the screens are the Hub menus (the "As built" logs at the end of this file). Counts such as file lengths are deliberately not repeated here; `wc -l` is the truth.
 
 ## Directory map
 
@@ -8,34 +10,51 @@ What exists today, how it fits together, and where the new work plugs in. Read t
 src/
   routes/
     __root.tsx          Document shell (fonts, meta, AuthProvider). Don't add og: tags here.
-    index.tsx           "/" → <Game/> from components/game/shell.tsx
-    api/rtc.ts          WebRTC signaling relay (in-memory). Extended in WP-7.
+    index.tsx           "/" -> <Game/> from components/game/shell.tsx
+    api/                One file per route (14): account, board, catch, entry, epoch, events, friends,
+                        google-callback, google-start, profiles, rtc, save, survival-board, trophies.
   components/
     game/
-      shell.tsx         Screen router: MainMenu | game layout (Header, Stage, ActionBand, Panel, Nav), Toasts, WelcomeBack
-      stage.tsx         The canvas. requestAnimationFrame loop → engine.frame(dt) → paint(). All water/fish/particle drawing.
-      panels.tsx        Every tab's UI: Cast, Bag, Gear, Lures, Waters, Dex, Lodge (Record/Aquarium/Derby/Crew/Settings). 1,400 lines; split in WP-1.
+      shell.tsx         Screen router (title / main menu / game) and the overlays. Small: layouts live in layout/.
+      stage.tsx         The canvas. requestAnimationFrame loop -> engine.frame(dt) -> paint(). All water/fish/particle drawing.
+      layout/           DesktopLayout, MobileLayout, CastDock, RigControl, DragButtons, Celebration, use-form.
+      panels/           The older panels (Cast, Bag, Gear, Lure, Waters, Dex, Lodge, Camp, Records), now shown inside the Hub.
+      hub/              The menus (WP-10, WP-12): TitleScreen, Hub, the tabs, CornerHud, Wheel, Satchel, HubKeys, settings-sections.
+      account.tsx, lobby.tsx, board.tsx, tournament.tsx, trophies.tsx, trophy-room.tsx, slots.tsx, difficulty-picker.tsx,
+      story-ui.tsx, achievements-ui.tsx, events.tsx, hazard-alerts.tsx, survival.tsx, trips.tsx, fun.tsx, kid.tsx ...
+                        One file per feature screen. Rules are never computed here.
       portrait.tsx      <FishPortrait/>: a small canvas that draws one fish swimming in place.
     ui/button.tsx       The one shared UI primitive. (Radix is installed but mostly unused in the game.)
-  game/
-    content.ts          THE DATA. Biomes, species names, rarity bands, gear ladders, lures, signature lures, baits, weather, tank tiers, formulas (luck, value, weight, rollFish).
-    modes.ts            The mode rules table (Expedition, Recreational, Co-op …), menu cards, stage rule. Pure. No mode shares data with another.
-    trips.ts            Recreational trips, creel and logbook helpers, photo caption. Pure.
-    kid.ts              Kid Mode helpers (confirmations, hints, number words). Pure.
-    engine.ts           THE RULES + STATE. Save type, sanitize/migrate, Zustand store + actions, the per-frame `sim`, cast → wait → bite → reel → catch, contracts, derby, rush, persistence.
-    fish-draw.ts        Procedural fish artist: 12 archetypes × pattern layer. drawFish(ctx, x, y, len, dir, look).
-    art.ts              Loads the 15 biome paintings (eagerly — fixed in WP-1), fitCanvas() for DPR-correct canvases.
-    audio.ts            WebAudio synth cues: cast, bite, hook, tick, miss, land(rarity), fail, frenzy, perfect. No files.
-    multiplayer.ts      Online co-op glue: room code, presence, weather sync, catch feed, peerBoats() for drawing guests.
+  game/                 THE RULES. Pure TypeScript, no React, tested beside the code (*.test.ts).
+    content.ts          THE DATA. Biomes, species, rarity bands, gear ladders, lures, baits, weather, mutations, formulas (rollFish).
+    engine.ts           State + actions: Save type, sanitize/migrate (SAVE_VERSION), the Zustand store, the per-frame `sim`.
+    modes.ts            The mode rules table (MODES, menuTabs, MODE_LIST, mode-select cards). Nothing is shared between modes.
+    rng.ts, spots.ts, presentation.ts, habits.ts, match.ts, fight.ts   Seeded random numbers and the fishing model (04).
+    replay.ts, schedule.ts, scoring.ts, weather.ts, tourney.ts         The tournament rules the server also runs (06).
+    line-wear.ts, lines.ts, gear-rules.ts                              Line health, crafting, gear gates (10).
+    events.ts, event-data.ts, event-hooks.ts                           Long-play events and mutations (11).
+    difficulty.ts, hazards.ts, story.ts, slots.ts, achievements.ts, pbroom.ts   WP-16 (12).
+    survival.ts, trips.ts, kid.ts, rivals.ts, pet.ts, stickers.ts, fotd.ts, fun.ts   Mode and fun-layer rules (05).
+    cloud.ts, social.ts, safe.ts, fill.ts, eventroom.ts, multiplayer.ts   Cloud-sync decisions, friends, rooms.
+    hubnav.ts, hubstate.ts, leave.ts, peek.ts, spatial.ts, hubcopy.ts  Menu navigation (09 section 2.5).
+    device.ts, graphics.ts (with the fps governor), probe.ts, fullscreen.ts, water.ts   Device, graphics levels, full screen.
+    epoch-gate.ts       Browser half of the test-phase reset (docs/TEST-PHASE.md).
+    fish-draw.ts, art.ts, audio.ts, ambience.ts   Procedural fish, painting loader (WebP only), WebAudio synth, ambient loops.
+    __fixtures__/       save-v3.json ... save-v12.json, survival-v1.json: real saves that must always load.
   lib/
-    multiplayer/p2p.ts  Full-mesh WebRTC room engine (perfect negotiation, two data channels). Generic; keep as is.
-    db.ts               getSql(): Neon when DATABASE_URL set, else embedded PGLite. Runs migrations/*.sql.
-    auth/*              Better Auth wiring from the sandbox template. Currently gated off. Turned on in WP-9.
+    db.ts, db-config.ts getSql(): Postgres when DATABASE_URL is set, else PGLite (on disk when FAC_DATA_DIR is set). Runs migrations/*.sql.
+    accounts/           The game's own sign-in, profiles and cloud saves (WP-9). *.server.ts never goes to the browser.
+    tournaments/        Server side of events, entries, boards, friends, trophies, rooms (WP-7, WP-8).
+    multiplayer/p2p.ts  Full-mesh WebRTC room engine. Generic; keep as is.
+    test-phase.ts, test-reset.server.ts   The test-phase switch and the server wipe (WP-13).
+    auth/*              Better Auth wiring from the Grok sandbox template. Not the game's accounts. Leave alone.
     app-data/*, preview-*, og/   Sandbox-platform plumbing. Leave alone.
-migrations/auth/0001_auth.sql   Better Auth tables (users, sessions …).
-public/art/biomes/*.jpg         15 paintings, 0.5–1 MB each (converted to WebP + sizes in WP-1).
-scripts/                        Sandbox tooling. browser-smoke.mjs is useful; the *.test.mjs files that need .grok/ are skipped by WP-0.
-docs/EXPANSION-DESIGN.md        Historical design doc for the 2026-11-01 expansion.
+migrations/             0007 .. 0011 (the game's tables). migrations/auth/0001_auth.sql is the platform's, applied only with its sign-in on.
+public/art/biomes/      15 paintings at two sizes, WebP only (<id>-1600.webp, <id>-800.webp). Originals in art-src/.
+public/audio/           Five ambient OGG loops (scripts/ambience-build.mjs).
+scripts/                Tooling: run-tests.mjs, docs-check.mjs, art-build.mjs, build-epoch.mjs, migrate.mjs, browser-smoke.mjs,
+                        check-touch-targets.mjs and the Grok sandbox helpers. Tests are scripts/*.test.mjs.
+docs/                   This documentation; docs/README.md is the index.
 ```
 
 ## State architecture
@@ -56,9 +75,9 @@ Two kinds of state, deliberately separate:
 
 - `frame(dt)` in `engine.ts` is the simulation tick. `stage.tsx` calls it once per animation frame, then paints. **Add per-frame logic to `frame()` or functions it calls; never put timers in components.**
 - When the simulation needs to tell React something (a catch landed, the phase changed), it calls `useGame.setState(...)`. Keep those calls to state that actually changed; the HUD bar is driven by direct DOM writes (`hud.track/zone/cursor`) precisely to avoid 60 React renders a second. WP-1 moves that HUD onto the canvas and removes the DOM refs.
-- Persistence: `persistSoon()` debounces a `localStorage` write of `snapshot(state)` under `modeKey()`. `hydrate(mode)` → `loadSlot()` → `sanitize(raw)` → `setState`. Offline aquarium income is settled in `loadSlot` via `settleTank`.
+- Persistence: `persistSoon()` debounces a `localStorage` write of `snapshot(state)` under the active slot's key (`slotKey` in `slots.ts`). `hydrate(mode)` → `loadSlot()` → `sanitize(raw)` → `setState`. Offline aquarium income is settled in `loadSlot` via `settleTank`.
 
-## The catch loop (today)
+## The catch loop (the original game; replaced by the tension fight of `04` section 5)
 
 ```
 idle ──act()──► startCast()  wait 1.2–4 s × factors (reel speed, boat, lure, weather, bait, sig)
@@ -81,19 +100,19 @@ Boss fights add three phases by `hits/need` (fast → reversals/fake-outs → "t
 
 **What the new fishing model keeps:** `rollFish`'s species/mutation weighting, `withCatch`'s bookkeeping, all the content tables. **What it replaces:** the 1-D cursor bar becomes a tension-and-position fight on the water (`04-fishing-model.md`), and `startCast` gains a target spot and a presentation.
 
-## Rendering (today)
+## Rendering (the original game; the effects stack of `03` and `09` now sits between the painting and the fish)
 
 `stage.tsx → paint()` each frame, in order: dark fill → painting (`drawCover`, slow "breathe" zoom) → weather tint → fog/aurora → 4 surface wave lines → bottom shade → background swimmers (`drawFish`) → plankton → guest boats → boss shadow → hooked/leaping fish → rod and line (color = strain) → bobber + ripples → particles → flashes → frenzy frame.
 
 It is simple and already respects `motion` (reduced-motion) and `flash` settings. WP-1 layers the water effects *between* the painting and the fish, and draws the fight ring around the bobber.
 
-## Multiplayer (today)
+## Multiplayer (as it was before WP-7; the relay now lives in the `rooms` and `signals` tables)
 
 - `lib/multiplayer/p2p.ts` — generic WebRTC mesh. Peers register with `GET /api/rtc?room&peer&name&since` (also the poll), post `offer/answer/ice` envelopes with `POST /api/rtc {op:"signal"}`, leave with `{op:"leave"}`. Two data channels per pair: `state` (unreliable) and `reliable`.
 - `game/multiplayer.ts` — co-op glue over it: 4-letter room codes, presence (biome + name), host broadcasts weather, catch feed. **Client-authoritative; fine for co-op, unacceptable for ranked tournaments.** WP-7 adds a server-scored path beside it, not instead of it.
 - Relay storage is a `Map` on `globalThis` → works on one Vercel instance at a time. WP-7 moves rooms/signals to Neon tables so it survives multiple instances and cold starts.
 
-## Data layer (today)
+## Data layer
 
 `lib/db.ts` exposes `getSql()` returning a tagged-template SQL function that works on Neon (`pg`) or PGLite identically, runs pending `migrations/**/*.sql` on first use, and normalises bigint/date. **Use it; don't add another client.** Server code goes in TanStack **server functions** or `src/routes/api/*` route handlers — never import `db.ts` from client components.
 
@@ -104,21 +123,22 @@ It is simple and already respects `motion` (reduced-motion) and `flash` settings
 | Add a per-frame visual | Add state to `sim`, tick it in `frame()` (or a `tickX(dt)` helper called from it), draw it in `paint()`. |
 | Add a game rule | Pure function in `content.ts` (data/formula) or `engine.ts` (state change), with a `*.test.ts` beside it. |
 | Add a store action | Add to the `Store` type and the `create<Store>` body in `engine.ts`. Call `persistSoon()` if it changes saved fields. |
-| Add a saved field | `Save` type → `fresh()` → `sanitize()` (with bounds) → `snapshot()` → bump `SAVE_VERSION` → migration note in `07`. |
-| Add a UI tab/panel | New file under `components/game/panels/` (WP-1 creates the folder), register in `Tab` and `TABS`. |
+| Add a saved field | `Save` type → `fresh()` → `sanitize()` (with bounds) → `snapshot()` → bump `SAVE_VERSION` → new fixture + migration note in `07` → update the `docs-check:save-version` and `docs-check:fixtures` markers in `docs/README.md`. |
+| Add a menu tab | Add its id to `MenuTabId` and to the `menuTabs` list of each mode that shows it in `modes.ts`, give it a label in `HUB_TABS` (`hubnav.ts`), and render it in `hub/Hub.tsx`. Selling and buying belong in the `shop` tab only (a test pins that). |
 | Add a sound | New method on `audio` in `audio.ts`, synthesized. The only audio files are the five ambient loops in `public/audio/` (WP-6, `scripts/ambience-build.mjs`); keep them under 1.25 MB in all. |
-| Add a mode | `Mode` union + `MODE_KEYS` + mode rules table in `05-game-modes.md` → `modeRules()` in `engine.ts` (WP-4 creates it). |
+| Add a mode | `Mode` union, a row in `MODES` (with its `menuTabs`), `MODE_LIST`, `MODE_KEYS` in `modes.ts`; a card in `MENU_CARDS` and `MODE_SELECT_IDS` if it is in mode select; a sync id in `slots.ts` if the cloud should hold it. `modeRules()` in `engine.ts` reads the table. Update the `docs-check:modes` marker in `docs/README.md`. |
 | Add server logic | Route handler in `src/routes/api/<name>.ts` with `createFileRoute(...).server.handlers`, SQL via `getSql()`. |
 
-## Known debt (fix only inside the package that owns it)
+## Known debt (history: every item here is done; kept for the record)
 
-- `panels.tsx` is 1,400 lines; WP-1 splits it per tab.
-- `art.ts` downloads all 15 paintings on first load (~11 MB); WP-1.
-- `Math.random()` everywhere in the fishing model; WP-2 introduces seeded `rng`.
-- The 14 tests that need `.grok/` fail outside the sandbox; WP-0.
-- `src/lib/app-data/client.server.ts:281` empty catch block fails lint; WP-0 (one-line fix, leave the rest).
-- Relay is single-instance; WP-7.
+- ~~`panels.tsx` is 1,400 lines; WP-1 splits it per tab.~~ Done.
+- ~~`art.ts` downloads all 15 paintings on first load (~11 MB); WP-1.~~ Done.
+- ~~`Math.random()` everywhere in the fishing model; WP-2 introduces seeded `rng`.~~ Done.
+- ~~The 14 tests that need `.grok/` fail outside the sandbox; WP-0.~~ Done.
+- ~~`src/lib/app-data/client.server.ts:281` empty catch block fails lint; WP-0 (one-line fix, leave the rest).~~ Done.
+- ~~Relay is single-instance; WP-7.~~ Done.
 - ~~Derby rivals are random-walk numbers~~ Done in WP-6: the twelve Regulars (`rivals.ts`).
+- Still open: `package-lock.json` is stale, and the open items are collected in [`../KNOWN-GAPS.md`](../KNOWN-GAPS.md).
 
 ## WP-7 additions
 - `src/game/{weather,scoring,schedule,replay,tourney}.ts` (pure/shared), `src/components/game/tournament.tsx` (lobby, ticker, panel, results), `src/lib/tournaments/*.server.ts` (never import from client code), `src/routes/api/{events,entry,catch,board,survival-board,rtc}.ts`, `migrations/0007_tournaments.sql`.
@@ -149,3 +169,10 @@ It is simple and already respects `motion` (reduced-motion) and `flash` settings
 ## As built in WP-12 (two-level menu)
 - **New:** `src/game/leave.ts` (when to ask before leaving, and the words), `src/game/peek.ts` (read-only look at a mode's saved collection), `hub/LeaveDialog.tsx`, `hub/CollectionsTab.tsx` (main menu), `hub/SurvivalTabs.tsx` (Camp, Larder, Event), tests `menu-levels.test.ts` and `menu-flow.test.ts`.
 - **Changed:** `modes.ts` (`menuTabs`, `hasShop`, `MODE_SELECT_IDS`), `hubnav.ts` (`MAIN_TABS`, `tabsFor(screen, mode)`, `resolveHubTarget`), `Hub.tsx` (two levels, Resume and Leave), `PlayTab` (mode select), `TackleTab` (Tackle and Shop & Sell views), `LodgeTab` (Lodge, Log, Collection, Logbook), `PlayersTab` (Friends on the main menu, compact Players in game), `SettingsTab` (+ Account tab), engine `leaveToMenu` and `currentLeaveFacts`.
+
+## As built in WP-11 to WP-16 (the later packages)
+- **WP-11 (Recreational separate):** `modes.ts` lost the career merge (`sharesCareerDex`, `mergeDex` and friends) and gained `stagesOpen`/`stageIn()`. Detail: `05` section 11.
+- **WP-13 (test phase):** `src/lib/test-phase.ts` (the switch and keep/wipe lists), `src/lib/test-reset.server.ts` (one SQL statement on the first `getSql()`), `src/game/epoch-gate.ts` (browser), `scripts/build-epoch.mjs` (stamps `src/lib/build-epoch.generated.ts` during `npm run build`), `src/routes/api/epoch.ts`, `src/components/game/test-phase.tsx`, `migrations/0011_test_phase.sql`. Detail: `docs/TEST-PHASE.md`.
+- **WP-14 (line and gear):** `src/game/{line-wear,lines,gear-rules}.ts`; hooks in `fight.ts` (wear in `stepFight`), `replay.ts` (`rulesVersion`), the Tackle tab (Line workshop, Line packs). Detail: `10`.
+- **WP-15 (events):** `src/game/{events,event-data,event-hooks}.ts`, `components/game/{events,use-mutation}.tsx|ts`. No server change. Detail: `11`.
+- **WP-16:** `src/game/{difficulty,hazards,story,slots,achievements,pbroom}.ts`, `components/game/{slots,difficulty-picker,story-ui,achievements-ui,trophy-room,hazard-alerts}.tsx`; cloud slot ids in `src/game/cloud.ts`/`slots.ts`. No server migration. Detail: `12`.

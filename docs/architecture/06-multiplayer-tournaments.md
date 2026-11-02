@@ -2,6 +2,8 @@
 
 Work packages **WP-7** (server-verified tournaments on Neon) and **WP-8** (lobby, live boards, friends' rooms, team events). Pillar 5: *fair when it counts*.
 
+> **As built (WP-7 and WP-8, merged; rules versioned from WP-14).** The server replay, the five categories, the schedule, the lobby, live boards, friends, teams, trophies and titles all exist. Sections 7 and 8 at the end are the as-built notes and win over the plan above them. Differences worth knowing: **every event uses fixed gear** (rod 6, reel 4, line 4, boat 0: `EVENT_GEAR` in `replay.ts`), not "own gear" for Quick and Weekly as section 2.2 first said; team events are Total Weight only; friends added by name or email need an accept (section 8, WP-10 additions) and only the friend **code** is instant and mutual; the `entries.team` column came in `0008_social.sql`, not a `0003` migration; events carry a `rulesVersion` (**2** now, `10` section 1.6) so old events still replay with their old rules. Never verified with real hardware: Neon, two networks, load (`../KNOWN-GAPS.md`).
+
 ## 0. The idea in one paragraph
 
 A tournament is a **seed plus rules plus a time window**. Everyone fishes the same water under the same weather sequence and the same fish rolls, because every roll comes from `seedFrom(eventId, playerId, castIndex)`. The client plays the game exactly as it does offline. For every catch it sends the server a tiny **envelope**: which cast, which spot, which rig, and the fight inputs. The server **replays** the cast with the same shared game code (`src/game/**` runs in Node) and accepts the catch only if the replay produces it. Scores on the board are therefore server-computed from verified catches. No trust in the client's numbers, no game server during play, no WebRTC needed for scoring. The existing P2P room engine stays for the *social* layer: seeing friends' boats, the live feed, emotes.
@@ -113,9 +115,9 @@ Because `rollCast` and `simulateFight` are the same functions the client runs, a
 | **Team** (WP-8) | sum of a room's Total Weight; 2–4 players, shared code | biggest fish |
 
 ### 2.2 Schedule (materialised by `events.ts` from a pure function `schedule(nowUtc)`)
-- **Quick**: every hour on the hour, 10 minutes, water rotates through the 15, category rotates Big Fish → Total → Sprint. `castBudget 40`, own gear.
+- **Quick**: every hour on the hour, 10 minutes, water rotates through the 15, category rotates Big Fish → Total → Sprint. `castBudget 40`, fixed gear (as built; the plan said own gear).
 - **Daily**: midnight UTC, 24 h window, **fixed gear** (everyone gets rod 6 / reel 4 / line 4, lures: one of each family), `fishingSeconds 1200` so a kid with 20 minutes competes evenly with someone who has all day. Category: Big Fish Mon/Thu, Total Tue/Fri, Sprint Wed/Sat, Value Sun.
-- **Weekly**: Monday–Sunday, Total Weight across **three waters** (one event row per water, board sums), own gear.
+- **Weekly**: Monday–Sunday, Total Weight across **three waters** (one event row per water, board sums), fixed gear as built (`castBudget 150`, `fishingSeconds 1500`).
 - **Survival daily**: `05` §5.2 seed; board is longest run.
 - **Private**: 4-letter code, host picks water/category/length/gear policy; up to 16 players; board visible to the code only.
 
@@ -137,7 +139,7 @@ A collapsible board (desktop: top-right under the HUD bar, 280 px; phone: a Boar
 On Join, the client also joins a P2P room named `t-<eventId>` (the existing engine, Neon-backed relay). Peers' boats and a live catch feed appear as today's co-op does. Cap the mesh at **8 peers**; beyond that the client stays out of the mesh and only polls the board (full mesh is O(n²)). Add **emotes**: 8 preset phrases/stickers ("Nice fish!", "Big one on!", 🎣, 🐟, 😮, 👏, 🌧️, 🏆) sent on the reliable channel, shown as a bubble over the boat for 3 s. No free-text.
 
 ### 3.4 Team events
-Private event with `rules.team:true`: the room code *is* the team; `entries` get a `team` column (migration `0003`), board groups by team. Local Co-op (J key) counts as one entry with two inputs — unchanged.
+Private event with `rules.team:true`: the room code *is* the team; `entries` get a `team` column (built in `0008_social.sql`), board groups by team. Local Co-op (J key) counts as one entry with two inputs — unchanged.
 
 ### 3.5 Results and rewards
 At `ends_at` the client shows a results card (your rank, top 3, your best fish) from `board.ts?final=1`. Rewards never add power: **trophies** (Lodge → Trophy Shelf, drawn like Aquarium pedestals), a title ("Pond Champion · Nov 2"), and a cosmetic bobber skin per medal. The Lodge **Record** view gains "Tournament history" from `entries`.

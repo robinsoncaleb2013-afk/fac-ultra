@@ -1,5 +1,7 @@
 # Test phase: every new build resets all progress
 
+> **As built (WP-13, merged; checked after WP-16).** Everything below matches the code. The switch is **on**. Every setting for the server is in the environment table in [`README.md`](README.md).
+
 Written for Caleb and Chris. While FAC Ultra is only being tested, **every new build (every update) automatically wipes all progress and saves**. Testers start fresh on each version, and an old test save can never break a new build.
 
 ## The one switch
@@ -17,7 +19,7 @@ On the server (once per new build):
 - rate-limit and strike counters, and each angler's temporary ban / "fishing now" state
 
 On each device (the first time it opens the new build):
-- every save slot (Expedition, Recreational, Survival, Co-op, Tournament) and their backup copies
+- every save slot (Expedition and Story with all three slots each, Recreational, Survival, Co-op, Tournament), their backup copies and the remembered open slot (`fac-ultra-slots`)
 - cloud sync notes and the 7-day "other copy" backups
 - tournament queues and the "Who's fishing today?" answer (it is asked again)
 
@@ -35,6 +37,8 @@ The keep lists are two plain lists in `src/lib/test-phase.ts` (`WIPE_TABLES` / `
 ## How it works (short)
 
 Each build gets an "epoch" (commit + build time) stamped by `scripts/build-epoch.mjs` during `npm run build`. The server remembers the last epoch it saw (table `app_state`); when it differs, it wipes in one step and logs `[test-phase] New build ...`. The browser does the same with `localStorage["fac-ultra-epoch"]` before it loads any save. An old tab left open learns about the new build from `GET /api/epoch` and reloads once; the cloud refuses a push from an older build. Dev servers (`npm run dev`) and tests always use the epoch `dev`, so nothing wipes on a hot reload. (`FAC_TEST_RESET_EPOCH` forces an epoch: at build time for the stamped build; on a dev server it changes the server only.)
+
+A brand-new server database (no remembered epoch) also wipes once, on the server only; a browser seeing its very first build just remembers it, silently. So the first start of a fresh install logs a `[test-phase] New build ...` line even though there was nothing to lose.
 
 If the switch is off, nothing is wiped and the remembered epoch is left alone. Switching it back on later wipes once on the next new build.
 

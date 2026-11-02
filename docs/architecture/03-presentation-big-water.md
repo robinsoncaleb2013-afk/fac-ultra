@@ -2,6 +2,8 @@
 
 Work package **WP-1**. The water fills the screen on PC, the fight happens on the water, the paintings come alive, and the game loads fast. No rule changes.
 
+> **As built (WP-1, amended by WP-10 and WP-12).** Built and merged. The ring fight, living water (ripples, glints, rays, clock tint, rain rings), the catch card and Helping Hand are as specified. What changed afterwards: the **rail and drawer of section 1.2 no longer exist**: WP-10 replaced them with the corner HUD and the Hub menus (`09` sections 2.4 and 2.5); `layout/Rail.tsx`, `Drawer.tsx` and `HudBar.tsx` were deleted. The **JPG fallback of section 6 is gone**: paintings are WebP only. The keyboard table (section 8) is superseded by the list in `09` section 2.4 (digits open menu tabs, and more keys exist). The water-line and sun tables live in `src/game/water.ts`, not `content.ts`. Balance and feel on real devices are unverified (`../KNOWN-GAPS.md`).
+
 ## 1. Layout
 
 ### 1.1 One site, two presentations
@@ -39,8 +41,8 @@ Implement as one component tree with a `useForm()` hook (`matchMedia("(pointer: 
 - **Main menu** on desktop: the current biome painting full-bleed with the water effects running, title bottom-left, mode cards as a single row of 7 at the bottom (or 2 rows of 4 on `lg`, 1 row on `2xl`). Keep the phone version as is.
 
 ### 1.3 Files
-- `src/components/game/shell.tsx` → keep as the router; move layouts into `src/components/game/layout/MobileLayout.tsx` and `layout/DesktopLayout.tsx`, plus `layout/Rail.tsx`, `layout/Drawer.tsx`, `layout/HudBar.tsx`, `layout/CastDock.tsx` (pill + button).
-- `src/components/game/panels.tsx` → split into `panels/{Cast,Bag,Gear,Lures,Waters,Dex,Lodge}Panel.tsx` + `panels/shared.tsx` (Stat, Badge, Filter, Toggle). No logic changes while splitting.
+- `src/components/game/shell.tsx` → keep as the router; move layouts into `src/components/game/layout/MobileLayout.tsx` and `layout/DesktopLayout.tsx`, plus `layout/CastDock.tsx` (pill + button). *(As built: the rail, drawer and HUD bar files of the original plan were replaced by the Hub; see the note at the top.)*
+- The old single panels file was split into `src/components/game/panels/` (`CastPanel`, `BagPanel`, `GearPanel`, `LurePanel`, `WatersPanel`, `DexPanel`, `LodgePanel`, `CampPanel`, `RecordsSection` and `shared.tsx`). Done; no logic changes while splitting.
 - `src/game/engine.ts` → delete the `hud` object and `paintHud()`; add `sim.ring` (below).
 
 ## 2. The fight on the water
@@ -69,7 +71,7 @@ Replace the horizontal bar with a **ring around the bobber**, drawn in `paint()`
 All effects are gated by `s.motion`. Quality tier `gfx: "full" | "lite" | "mobile"` is a device setting chosen by `device.ts` (`09` §1.1: desktops start at `full`, tablets `lite`, phones `mobile`); the player sees five levels on top of these tiers (`09` §1.0: Ultra and High use `full`, Medium `lite`, Low and Potato `mobile`); the fps governor steps the level down quickly and, in Auto only, up slowly (§7) and the player can pin a level in Settings. The per-tier table — strip size, particle caps, which effects are skipped — is `09` §1.2 and is the single source of truth for what each tier draws. The descriptions below are the `full` tier.
 
 ### 3.1 Water line
-Each biome gets a `waterY` (0–1, where the painting's waterline is) in a new table `WATER_LINE: number[]` in `content.ts` (eyeball from the paintings; Pond ≈ 0.52, Sky ≈ 0.6 … record all 15). Everything below `waterY·h` is "water".
+Each biome gets a `waterY` (0–1, where the painting's waterline is) in a new table `WATER_LINE: number[]` (built as `src/game/water.ts`, with `SUN_X`) (eyeball from the paintings; Pond ≈ 0.52, Sky ≈ 0.6 … record all 15). Everything below `waterY·h` is "water".
 
 ### 3.2 Ripple displacement (the big one)
 Draw the painting once per frame into an **offscreen canvas** `buf` the size of the stage (reuse; resize only when the stage resizes). Then copy the water region to the main canvas **in horizontal strips** with a sinusoidal x-offset:
@@ -138,7 +140,7 @@ Show it honestly: when `zoneBonus > 0`, the ring band gets a soft white outer gl
 
 ## 6. Assets and loading
 
-- Convert `public/art/biomes/*.jpg` to WebP at two sizes with `sharp` (dev dependency, run once via `scripts/art-build.mjs`, commit the outputs): `<id>-1600.webp` (q 78) and `<id>-800.webp` (q 72). Keep the JPGs for now as fallback via `<picture>`/`onerror`; delete them in WP-9 once nothing references them.
+- Convert `public/art/biomes/*.jpg` to WebP at two sizes with `sharp` (dev dependency, run once via `scripts/art-build.mjs`, commit the outputs): `<id>-1600.webp` (q 78) and `<id>-800.webp` (q 72). ~~Keep the JPGs for now as fallback via `<picture>`/`onerror`; delete them in WP-9 once nothing references them.~~ **Superseded:** the JPGs moved to `art-src/` in WP-9 and the loader tries WebP only (a painting that fails to load is simply not drawn). See `public/art/README.md`.
 - `art.ts` → `loadArt(biome, neighbors = true)`: load the current biome at the size matching `min(1600, stage width·DPR)`, then the previous/next **unlocked** biomes at 800, then the rest at 800 **only when idle** (`requestIdleCallback`, one at a time). Menu uses 800 everywhere. `biomeArt(i)` returns the best loaded size.
 - Fonts: keep Google Fonts but add `font-display: swap` (it's in the URL already) and a `<link rel=preload>` for the two faces used above the fold.
 - Target budget (acceptance): first paint < 1.5 s and first biome visible < 2.5 s on a throttled "Fast 3G" Playwright profile; total transfer for the first screen < 1.2 MB.
@@ -152,6 +154,8 @@ Show it honestly: when `zoneBonus > 0`, the ring band gets a soft white outer gl
 - Never allocate in the frame loop: pre-allocate particle arrays, reuse the offscreen buffer, no `.map()` in `paint()`.
 
 ## 8. Keyboard and mouse (desktop)
+
+> **Superseded as built.** Current keys: Space/Enter reel and cast (hold to reel), Esc opens or closes the menu, 1 to 9 open in-game menu tabs, hold Tab for the quick wheel, hold B for the satchel, F full screen, H hide the screen furniture, M mute, J partner (Local Co-op), `[` and `]` drag, K and R keep or release, P photo (where the mode allows it). The full list, with the menu and gamepad keys, is `09` section 2.4. The table below is the original plan.
 
 | Key | Action |
 |---|---|

@@ -1,3 +1,5 @@
+> **Note for this repository (added by the docs audit, WP-17).** This file is the Grok sandbox's own contract and is only fully true inside that sandbox: the `.grok/` folders, `/workspace` paths and `imagine_*` tools it names do not exist elsewhere. For FAC Ultra itself start at `docs/README.md` (index, how to run, test, build and self-host, the environment variables) and `docs/architecture/README.md` (rules for agents and the status of every work package). Where this file and those disagree about the game, they win.
+
 # App Builder Workspace
 
 **The single source of truth** for the App Builder sandbox contract. You are

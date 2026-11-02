@@ -2,6 +2,8 @@
 
 Source: the owner's feedback (Caleb), "Events. Not weather events." Events are rare things that only happen once a player has been fishing for a long, unbroken stretch. Each one turns some of the fish caught while it runs into a named **mutation** that gives extra XP, extra sale value, or both.
 
+> **As built (WP-15, merged; the tables below were checked against `event-data.ts` after WP-16).** Eleven events, six rarity rows, 17 entries in `MUTATIONS` (6 rolled at birth, 11 from events). Unplayed live: a mutated fish landing in a real fight, the banner at the moment an event starts, a real one-hour wait; balance of start chances (`../KNOWN-GAPS.md`). The WP-16 achievements listen through `event-hooks.ts` as section 7 says.
+
 Code: `src/game/event-data.ts` (the one table), `src/game/events.ts` (pure rules), `src/game/event-hooks.ts` (signals), `src/components/game/events.tsx` (banner, chip, Lodge list). Tests: `events.test.ts`, `events-flow.test.ts`, `save-migration.test.ts`.
 
 ## 1. The table (the only place numbers live)

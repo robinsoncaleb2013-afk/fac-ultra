@@ -1,5 +1,7 @@
 # 01 · Vision and Pillars
 
+> **As built (through WP-16).** The pillars are the rules the code was built against and they still stand. How each one landed: (1) the water is the game: the Hub menus slide over a live painting; (2) knowing fish pays: habits and the match score exist (`04`); (3) challenge that bends: Helping Hand, Kid Mode and, since WP-16, five difficulty levels chosen per save, Recreational gentle, Survival harsh, Tournaments fixed (`12`); (4) smooth on any device: five graphics levels with an fps governor (`09`), real-device speed unverified; (5) fair when it counts: tournaments are replayed on the server and versioned (`06`, `10`). The three audiences and "what the game is not" are unchanged. Open questions are in `../KNOWN-GAPS.md`.
+
 ## Who it's for
 
 FAC Ultra grows from a painted incremental into **a fishing game that fishing people recognise**, played mainly in a PC browser, often by a parent and a kid at the same screen or across two houses.
