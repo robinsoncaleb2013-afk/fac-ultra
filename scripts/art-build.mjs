@@ -2,8 +2,8 @@
 /**
  * Builds the two WebP sizes of every biome painting (docs/architecture/03 §6):
  *   <id>-1600.webp  (quality 78)   <id>-800.webp  (quality 72)
- * from the original public/art/biomes/<id>.jpg. Safe to re-run; the JPGs stay as
- * the fallback until WP-9 removes them.
+ * from the original paintings in art-src/<id>.jpg (WP-9 moved them out of public/ so they are never
+ * served). Outputs go to public/art/biomes/. Safe to re-run.
  *
  *   node scripts/art-build.mjs            # build everything
  *   node scripts/art-build.mjs --check    # list what is missing, change nothing
@@ -11,12 +11,13 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
+const src = join(process.cwd(), "art-src");
 const dir = join(process.cwd(), "public", "art", "biomes");
 const SIZES = [
   { w: 1600, q: 78 },
   { w: 800, q: 72 },
 ];
-const ids = readdirSync(dir)
+const ids = readdirSync(src)
   .filter((f) => /\.jpg$/i.test(f))
   .map((f) => f.replace(/\.jpg$/i, ""));
 
@@ -42,10 +43,10 @@ try {
 
 let total = 0;
 for (const id of ids) {
-  const src = join(dir, `${id}.jpg`);
+  const from = join(src, `${id}.jpg`);
   for (const { w, q } of SIZES) {
     const out = join(dir, `${id}-${w}.webp`);
-    await sharp(src).resize({ width: w, withoutEnlargement: true }).webp({ quality: q }).toFile(out);
+    await sharp(from).resize({ width: w, withoutEnlargement: true }).webp({ quality: q }).toFile(out);
     const kb = Math.round(statSync(out).size / 1024);
     total += statSync(out).size;
     console.log(`${id}-${w}.webp  ${kb} KB`);

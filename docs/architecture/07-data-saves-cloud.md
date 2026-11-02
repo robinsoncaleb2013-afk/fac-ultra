@@ -74,3 +74,37 @@ Delete the original `public/art/biomes/*.jpg` once every reference uses the WebP
 - Migration tests cover v3 → current with every fixture; export/import round-trips.
 - Original JPGs moved out of `public/`; first-screen transfer still < 1.2 MB.
 - **Unverified** (record in PR): magic-link email delivery in production (needs the Vercel env + email provider keys — Chris's checklist item).
+
+
+---
+
+## 7. As built (WP-9)
+
+Decisions the spec left open, and what shipped. Where this section and §3-5 differ, this section wins.
+
+**Accounts are the game's own** (`src/lib/accounts/*`, `src/routes/api/{account,profiles,save,google-start,google-callback}.ts`, `migrations/0009_accounts.sql`). The platform's Better Auth (`src/lib/auth/*`) and `VITE_AUTH_ENABLED` are untouched and `npm run check:auth` still passes. Sign-in is an emailed link (15 minutes, one use). "Sign in with Google" is an optional second door, hidden unless both Google keys are set. Both reach the same account by verified email. Sessions are a random secret in an httpOnly, SameSite=Lax cookie (Secure over https); only its SHA-256 is stored; 30 days sliding; at most 10 browsers per account. Limits: 10 links/hour per address, 5/hour per email, 30 link tries/hour per address, 60 profile/save writes/minute per account. The sign-in response never says whether an email already has an account, and never contains the link.
+
+**Profiles.** Up to 4 per account (`profiles`, slot 0-3). A profile is a nickname (run through `safeName`) and a kid flag. No email, no birthday. Only a signed-in grown-up can add one. Picking a kid's profile turns Kid Mode on for that screen and a grown-up's turns it off. With Kid Mode on, the account screens show no email box, no Google button and no sign-out/delete/add/remove controls. This is a fence for a family, not a lock.
+
+**Cloud saves.** `saves(profile_id, mode, rev, data, device, updated_at)` for `expedition`, `recreational`, `survival` and `coop`. Tournament saves stay on the tournament server. Differences from §4.2, on purpose:
+- The browser sends `baseRev` (the revision it last saw) and the server makes it `baseRev + 1` if that is still the stored revision. The browser does not invent revisions. A stale `baseRev` gets `409 conflict` with the stored save. `force: true` is only sent after the player chose "keep this device".
+- Sync state is **not** in the `Save` (the planned `cloud` field would have synced itself and bumped `SAVE_VERSION` for nothing). It lives in `localStorage["fac-cloud"]` beside a 7-day backup list in `fac-cloud-backups`. The save version stays 9.
+- "Changed since last sync" is a fingerprint of the save without the Aquarium clock (`changeKey`), not a flag, so nothing can forget to set it. A push happens 10 s after a change, when the page is hidden, when the connection returns and every 60 s while offline.
+- The decision table is `decideSync` in `src/game/cloud.ts` (pure, tested). Both sides changed and each has something the other lacks -> the chooser ("Keep this device's fish" / "Keep the cloud's fish" / "Keep the newer one"). The copy that loses is kept for 7 days in Lodge -> Settings -> Cloud save, restorable or copyable as a save code.
+- Every upload is parsed by the same `sanitize()` / `sanitizeSurvival()` the game loads with, on the server, then stored. Bodies over 256 KB are refused.
+- Profile switching on a shared device swaps the saves in the local slots (the previous profile's copy is pushed first and stashed as a backup).
+
+**Tournament identity.** Each profile can hold one `players.id` (unique). The first profile to sign in on a device keeps that device's anonymous id, so its history (`entries`, `results`, friends, trophies) carries over. On any other device the profile's own id replaces the device's (unless a tournament is running, then it applies next load). A second profile on the same device gets a fresh id. The old anonymous history of a device that adopts another id stays under the old id; it is not merged.
+
+**Account data.** "Download everything we hold" returns one JSON file (profiles, saves, tournament results, friend count). "Delete my account" (type DELETE) removes the account, profiles, saves, sessions and sign-in links, removes the linked players' friends, invites and results, and renames the players row to "Former angler" with no friend code. Scores already on other people's boards stay, with nothing pointing back to a person.
+
+**Running it on your own PC.** Everything works with no setting at all: the sign-in link is written to the server's console. To make it real, set these where the game's process starts:
+
+| Variable | What it does |
+|---|---|
+| `FAC_PUBLIC_URL` | The game's public address, e.g. `https://fac-ultra.tail41d4fa.ts.net`. Put it in the sign-in link. Strongly recommended. |
+| `RESEND_API_KEY` | An API key from resend.com. Turns on real emails. |
+| `FAC_EMAIL_FROM` | The From line, e.g. `FAC Ultra <login@yourdomain>`. Must be an address Resend has verified. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Turn on "Sign in with Google". Register `<FAC_PUBLIC_URL>/api/google-callback` as the authorised redirect URI. |
+
+**Assets.** The 15 original JPGs moved from `public/art/biomes/` to `art-src/` (not served). `scripts/art-build.mjs` rebuilds the WebP set from there; `public/art/README.md` says how. The loader and the thumbnails no longer try a JPG: a painting that fails to load is simply not drawn.

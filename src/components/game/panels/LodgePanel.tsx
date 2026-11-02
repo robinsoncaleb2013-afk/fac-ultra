@@ -22,6 +22,7 @@ import {
   xpNeed,
 } from "@/game/content";
 import { downloadSave, sim, useGame } from "@/game/engine";
+import { CloudSettings } from "@/components/game/account";
 import { MODES } from "@/game/modes";
 import { Logbook } from "@/components/game/trips";
 import { PetView, RegularsView } from "@/components/game/fun";
@@ -714,6 +715,7 @@ function Settings() {
           ))}
         </ul>
       </div>
+      <CloudSettings />
       <Button variant="ghost" onClick={downloadSave}>
         Export ledger (file)
       </Button>

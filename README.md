@@ -30,4 +30,4 @@ Design decisions and the build order live in **[`docs/architecture/`](docs/archi
 
 `docs/EXPANSION-DESIGN.md` is the historical design for the 2026-11-01 expansion; the architecture folder supersedes it where they differ.
 
-Biome paintings live in `public/art/biomes`.
+Biome paintings live in `public/art/biomes` (WebP); the full-size originals are in `art-src/`. See `public/art/README.md`.

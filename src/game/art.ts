@@ -1,23 +1,22 @@
 import { BIOMES } from "@/game/content";
 
 /* Painting loader (docs/architecture/03 §6, 09 §5).
-   Each biome has <id>-1600.webp and <id>-800.webp (scripts/art-build.mjs) and,
-   until those are generated and committed, the original <id>.jpg. The loader
-   asks for WebP first and quietly falls back to the JPG, so the game works
-   with either. While only JPGs exist (large, one size), nothing is loaded
-   ahead of time: only the water you are standing in. */
+   Each biome has <id>-1600.webp and <id>-800.webp (scripts/art-build.mjs builds them from the
+   originals in art-src/). WP-9 moved the original JPGs out of public/, so a missing painting is
+   simply "no painting yet": the stage draws its water without one and the game plays on. Nothing is
+   loaded ahead of time unless a WebP answered. */
 
 export type ArtSize = 800 | 1600;
 
-type Slot = { 800?: HTMLImageElement; 1600?: HTMLImageElement; jpg?: HTMLImageElement };
+type Slot = { 800?: HTMLImageElement; 1600?: HTMLImageElement };
 const slots: Slot[] = BIOMES.map(() => ({}));
 const pending = new Map<string, Promise<HTMLImageElement | null>>();
 
 /** null = not known yet; true once any WebP loaded; false once one 404ed. */
 let webpOk: boolean | null = null;
 
-export function artUrl(id: string, size: ArtSize | "jpg"): string {
-  return size === "jpg" ? `/art/biomes/${id}.jpg` : `/art/biomes/${id}-${size}.webp`;
+export function artUrl(id: string, size: ArtSize): string {
+  return `/art/biomes/${id}-${size}.webp`;
 }
 
 function pull(url: string): Promise<HTMLImageElement | null> {
@@ -39,17 +38,15 @@ function fetchSize(biome: number, size: ArtSize): Promise<HTMLImageElement | nul
   const job = (async () => {
     const slot = slots[biome];
     if (slot[size]) return slot[size] ?? null;
-    if (webpOk !== false) {
-      const w = await pull(artUrl(id, size));
-      if (w) {
-        webpOk = true;
-        slot[size] = w;
-        return w;
-      }
-      if (webpOk === null) webpOk = false;
+    if (webpOk === false) return null;
+    const w = await pull(artUrl(id, size));
+    if (w) {
+      webpOk = true;
+      slot[size] = w;
+      return w;
     }
-    if (!slot.jpg) slot.jpg = (await pull(artUrl(id, "jpg"))) ?? undefined;
-    return slot.jpg ?? null;
+    if (webpOk === null) webpOk = false;
+    return null;
   })();
   pending.set(key, job);
   return job;
@@ -100,10 +97,10 @@ export async function loadArt(
   whenIdle(next);
 }
 
-/** The best painting loaded so far for a biome (largest WebP, else any, else the JPG). */
+/** The best painting loaded so far for a biome (the largest WebP). */
 export function biomeArt(i: number): HTMLImageElement | undefined {
   const s = slots[i];
-  return s?.[1600] ?? s?.[800] ?? s?.jpg;
+  return s?.[1600] ?? s?.[800];
 }
 
 export function fitCanvas(canvas: HTMLCanvasElement, dprCap = 2) {

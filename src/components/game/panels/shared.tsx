@@ -46,17 +46,9 @@ export function Toggle({ on, onClick, children }: { on: boolean; onClick: () => 
   );
 }
 
-/** A biome painting thumbnail: the small WebP, falling back to the original JPG. */
+/** A biome painting thumbnail: the small WebP. If it ever fails to load the picture is simply hidden (the card still reads fine). */
 export function ArtThumb({ id, className }: { id: string; className?: string }) {
   const [bad, setBad] = useState(false);
-  return (
-    <img
-      src={artUrl(id, bad ? "jpg" : 800)}
-      alt=""
-      loading="lazy"
-      decoding="async"
-      onError={() => setBad(true)}
-      className={className}
-    />
-  );
+  if (bad) return <div aria-hidden className={className} />;
+  return <img src={artUrl(id, 800)} alt="" loading="lazy" decoding="async" onError={() => setBad(true)} className={className} />;
 }

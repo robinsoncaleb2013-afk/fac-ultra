@@ -992,6 +992,29 @@ function closeTrip(
   };
 }
 
+/* WP-9: the cloud layer listens for saves. It gets the mode and the exact text that was just written to
+   this device; it never changes the save and the game never waits for it. */
+type PersistListener = (mode: Mode, json: string) => void;
+const persistListeners = new Set<PersistListener>();
+
+/** Call `fn` after every save to this device. Returns a function that stops listening. */
+export function onPersisted(fn: PersistListener): () => void {
+  persistListeners.add(fn);
+  return () => persistListeners.delete(fn);
+}
+
+/** Write the live game to this device right now (instead of in a moment). */
+export function flushSave() {
+  window.clearTimeout(saveTimer);
+  persistNow();
+}
+
+/** Load the current mode again from this device's storage (after the cloud put a newer save there). */
+export function reloadActiveSlot() {
+  if (!useGame.getState().hydrated) return;
+  loadSlot(currentMode, useGame.getState().screen === "game");
+}
+
 function persistNow() {
   try {
     const key = modeKey();
@@ -1004,6 +1027,7 @@ function persistNow() {
     /* Device settings follow the player across modes (07 §2). */
     localStorage.setItem(DEVICE_KEY, JSON.stringify(deviceSubset(useGame.getState())));
     if (sharesCareerDex(modeRules())) shareWithCareer(useGame.getState());
+    for (const fn of persistListeners) fn(currentMode, json);
   } catch {
     /* private mode or quota */
   }

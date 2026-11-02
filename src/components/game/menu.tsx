@@ -7,6 +7,7 @@ import { MENU_CARDS, orderCards, type MenuCard } from "@/game/modes";
 import { Button } from "@/components/ui/button";
 import { Stage } from "@/components/game/stage";
 import { FotdLine } from "@/components/game/fun";
+import { CloudButton } from "@/components/game/account";
 import { cn } from "@/lib/cn";
 
 type G = ReturnType<typeof useGame.getState>;
@@ -152,7 +153,10 @@ export function MainMenu({ plan }: { plan: LayoutPlan }) {
               {rankName(lv)} · Lv {lv} · {dex}/{TOTAL_SPECIES} species
             </p>
             <p className="text-xs text-fg/60">{BIOMES[shown].name} · swipe to look at other waters</p>
-            <div className="mt-2">{kidChip}</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {kidChip}
+              <CloudButton />
+            </div>
             <p className="mt-2 text-xs text-fg/80">
               <FotdLine />
             </p>
@@ -172,14 +176,17 @@ export function MainMenu({ plan }: { plan: LayoutPlan }) {
                 <FotdLine />
               </p>
             </div>
-            {kidChip}
+            <div className="flex flex-wrap gap-2">
+              {kidChip}
+              <CloudButton />
+            </div>
           </div>
           <div className={cn(plan.railCollapsed ? "flex gap-2 overflow-x-auto pb-1" : "grid grid-cols-4 gap-2 min-[1700px]:grid-cols-9")}>
             {cards.map(card)}
           </div>
           <p className="text-xs text-muted">
-            Progress saves in this browser, one ledger per mode. Export a save code from Lodge → Settings to carry it
-            anywhere.
+            Progress saves on this device, one ledger per mode. Want it on every device? Use Save to the cloud, or make a save code in
+            Lodge → Settings.
           </p>
         </div>
       )}

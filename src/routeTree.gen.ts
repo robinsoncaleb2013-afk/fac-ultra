@@ -10,18 +10,28 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiAccountRouteImport } from './routes/api/account'
 import { Route as ApiBoardRouteImport } from './routes/api/board'
 import { Route as ApiCatchRouteImport } from './routes/api/catch'
 import { Route as ApiEntryRouteImport } from './routes/api/entry'
 import { Route as ApiEventsRouteImport } from './routes/api/events'
 import { Route as ApiFriendsRouteImport } from './routes/api/friends'
+import { Route as ApiGoogleCallbackRouteImport } from './routes/api/google-callback'
+import { Route as ApiGoogleStartRouteImport } from './routes/api/google-start'
+import { Route as ApiProfilesRouteImport } from './routes/api/profiles'
 import { Route as ApiRtcRouteImport } from './routes/api/rtc'
+import { Route as ApiSaveRouteImport } from './routes/api/save'
 import { Route as ApiSurvivalBoardRouteImport } from './routes/api/survival-board'
 import { Route as ApiTrophiesRouteImport } from './routes/api/trophies'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAccountRoute = ApiAccountRouteImport.update({
+  id: '/api/account',
+  path: '/api/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiBoardRoute = ApiBoardRouteImport.update({
@@ -49,9 +59,29 @@ const ApiFriendsRoute = ApiFriendsRouteImport.update({
   path: '/api/friends',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGoogleCallbackRoute = ApiGoogleCallbackRouteImport.update({
+  id: '/api/google-callback',
+  path: '/api/google-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGoogleStartRoute = ApiGoogleStartRouteImport.update({
+  id: '/api/google-start',
+  path: '/api/google-start',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiProfilesRoute = ApiProfilesRouteImport.update({
+  id: '/api/profiles',
+  path: '/api/profiles',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiRtcRoute = ApiRtcRouteImport.update({
   id: '/api/rtc',
   path: '/api/rtc',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSaveRoute = ApiSaveRouteImport.update({
+  id: '/api/save',
+  path: '/api/save',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSurvivalBoardRoute = ApiSurvivalBoardRouteImport.update({
@@ -67,35 +97,50 @@ const ApiTrophiesRoute = ApiTrophiesRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/account': typeof ApiAccountRoute
   '/api/board': typeof ApiBoardRoute
   '/api/catch': typeof ApiCatchRoute
   '/api/entry': typeof ApiEntryRoute
   '/api/events': typeof ApiEventsRoute
   '/api/friends': typeof ApiFriendsRoute
+  '/api/google-callback': typeof ApiGoogleCallbackRoute
+  '/api/google-start': typeof ApiGoogleStartRoute
+  '/api/profiles': typeof ApiProfilesRoute
   '/api/rtc': typeof ApiRtcRoute
+  '/api/save': typeof ApiSaveRoute
   '/api/survival-board': typeof ApiSurvivalBoardRoute
   '/api/trophies': typeof ApiTrophiesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/account': typeof ApiAccountRoute
   '/api/board': typeof ApiBoardRoute
   '/api/catch': typeof ApiCatchRoute
   '/api/entry': typeof ApiEntryRoute
   '/api/events': typeof ApiEventsRoute
   '/api/friends': typeof ApiFriendsRoute
+  '/api/google-callback': typeof ApiGoogleCallbackRoute
+  '/api/google-start': typeof ApiGoogleStartRoute
+  '/api/profiles': typeof ApiProfilesRoute
   '/api/rtc': typeof ApiRtcRoute
+  '/api/save': typeof ApiSaveRoute
   '/api/survival-board': typeof ApiSurvivalBoardRoute
   '/api/trophies': typeof ApiTrophiesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/account': typeof ApiAccountRoute
   '/api/board': typeof ApiBoardRoute
   '/api/catch': typeof ApiCatchRoute
   '/api/entry': typeof ApiEntryRoute
   '/api/events': typeof ApiEventsRoute
   '/api/friends': typeof ApiFriendsRoute
+  '/api/google-callback': typeof ApiGoogleCallbackRoute
+  '/api/google-start': typeof ApiGoogleStartRoute
+  '/api/profiles': typeof ApiProfilesRoute
   '/api/rtc': typeof ApiRtcRoute
+  '/api/save': typeof ApiSaveRoute
   '/api/survival-board': typeof ApiSurvivalBoardRoute
   '/api/trophies': typeof ApiTrophiesRoute
 }
@@ -103,46 +148,66 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/api/account'
     | '/api/board'
     | '/api/catch'
     | '/api/entry'
     | '/api/events'
     | '/api/friends'
+    | '/api/google-callback'
+    | '/api/google-start'
+    | '/api/profiles'
     | '/api/rtc'
+    | '/api/save'
     | '/api/survival-board'
     | '/api/trophies'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/api/account'
     | '/api/board'
     | '/api/catch'
     | '/api/entry'
     | '/api/events'
     | '/api/friends'
+    | '/api/google-callback'
+    | '/api/google-start'
+    | '/api/profiles'
     | '/api/rtc'
+    | '/api/save'
     | '/api/survival-board'
     | '/api/trophies'
   id:
     | '__root__'
     | '/'
+    | '/api/account'
     | '/api/board'
     | '/api/catch'
     | '/api/entry'
     | '/api/events'
     | '/api/friends'
+    | '/api/google-callback'
+    | '/api/google-start'
+    | '/api/profiles'
     | '/api/rtc'
+    | '/api/save'
     | '/api/survival-board'
     | '/api/trophies'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiAccountRoute: typeof ApiAccountRoute
   ApiBoardRoute: typeof ApiBoardRoute
   ApiCatchRoute: typeof ApiCatchRoute
   ApiEntryRoute: typeof ApiEntryRoute
   ApiEventsRoute: typeof ApiEventsRoute
   ApiFriendsRoute: typeof ApiFriendsRoute
+  ApiGoogleCallbackRoute: typeof ApiGoogleCallbackRoute
+  ApiGoogleStartRoute: typeof ApiGoogleStartRoute
+  ApiProfilesRoute: typeof ApiProfilesRoute
   ApiRtcRoute: typeof ApiRtcRoute
+  ApiSaveRoute: typeof ApiSaveRoute
   ApiSurvivalBoardRoute: typeof ApiSurvivalBoardRoute
   ApiTrophiesRoute: typeof ApiTrophiesRoute
 }
@@ -154,6 +219,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/account': {
+      id: '/api/account'
+      path: '/api/account'
+      fullPath: '/api/account'
+      preLoaderRoute: typeof ApiAccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/board': {
@@ -191,11 +263,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiFriendsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/google-callback': {
+      id: '/api/google-callback'
+      path: '/api/google-callback'
+      fullPath: '/api/google-callback'
+      preLoaderRoute: typeof ApiGoogleCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/google-start': {
+      id: '/api/google-start'
+      path: '/api/google-start'
+      fullPath: '/api/google-start'
+      preLoaderRoute: typeof ApiGoogleStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/profiles': {
+      id: '/api/profiles'
+      path: '/api/profiles'
+      fullPath: '/api/profiles'
+      preLoaderRoute: typeof ApiProfilesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/rtc': {
       id: '/api/rtc'
       path: '/api/rtc'
       fullPath: '/api/rtc'
       preLoaderRoute: typeof ApiRtcRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/save': {
+      id: '/api/save'
+      path: '/api/save'
+      fullPath: '/api/save'
+      preLoaderRoute: typeof ApiSaveRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/survival-board': {
@@ -217,12 +317,17 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiAccountRoute: ApiAccountRoute,
   ApiBoardRoute: ApiBoardRoute,
   ApiCatchRoute: ApiCatchRoute,
   ApiEntryRoute: ApiEntryRoute,
   ApiEventsRoute: ApiEventsRoute,
   ApiFriendsRoute: ApiFriendsRoute,
+  ApiGoogleCallbackRoute: ApiGoogleCallbackRoute,
+  ApiGoogleStartRoute: ApiGoogleStartRoute,
+  ApiProfilesRoute: ApiProfilesRoute,
   ApiRtcRoute: ApiRtcRoute,
+  ApiSaveRoute: ApiSaveRoute,
   ApiSurvivalBoardRoute: ApiSurvivalBoardRoute,
   ApiTrophiesRoute: ApiTrophiesRoute,
 }

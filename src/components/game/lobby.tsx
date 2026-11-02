@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Copy, Trophy, X } from "lucide-react";
+import { CloudHint } from "@/components/game/account";
 import { BIOMES } from "@/game/content";
 import { useGame } from "@/game/engine";
 import { CATEGORY_INFO, scoreLabel, type Category } from "@/game/scoring";
@@ -177,8 +178,9 @@ export function TournamentLobby() {
             className="mt-1 min-h-11 w-full rounded-xl border border-line bg-surface-2 px-3 text-fg"
           />
           <p className={cn("mt-1 text-xs", nameIssue ? "text-[#e4572e]" : "text-muted")} role={nameIssue ? "alert" : undefined}>
-            {nameIssue ?? "No sign-in yet, so anyone can pick any name. Keep it friendly."}
+            {nameIssue ?? "Anyone can pick any name, so keep it friendly."}
           </p>
+          <CloudHint />
         </div>
 
         {invites.length ? <Invites invites={invites} busy={busy} onJoin={(i) => join(i.event.id, i.event.title)} onDismiss={async (i) => setSocial((await api.friendOp("dismiss", playerId(), { inviteId: i.id })).body)} /> : null}

@@ -130,3 +130,9 @@ It is simple and already respects `motion` (reduced-motion) and `flash` settings
 ## WP-8 additions
 - `src/game/{safe,social,fill}.ts` (pure), `src/game/eventroom.ts` (P2P room store), `src/components/game/{lobby,lobby-text,board,board-state,event-social,trophies,use-tick}`, `src/lib/tournaments/{friends,awards}.server.ts` (never import from client code), `src/routes/api/{friends,trophies}.ts`, `migrations/0008_social.sql`, `src/game/__fixtures__/save-v8.json`.
 - `tournament.tsx` now holds the ticker, panel and results; the lobby moved to `lobby.tsx`.
+
+## WP-9 additions
+- `src/game/cloud.ts` (pure: sync modes, `decideSync`, `summarize`, fingerprints; shared by server and browser), `src/lib/accounts/*.server.ts` (accounts, sessions, profiles, saves, Google, mail; never import from client code), `src/lib/accounts/client.ts` (the browser's sign-in and sync engine, no React), `src/components/game/account.tsx` (menu chip, sign-in sheet, profile picker, conflict chooser, Settings section), `src/routes/api/{account,profiles,save,google-start,google-callback}.ts`, `migrations/0009_accounts.sql`, `src/game/__fixtures__/save-v9.json`.
+- `engine.ts` gained three small exports for the cloud layer: `onPersisted(fn)`, `flushSave()` and `reloadActiveSlot()`. The save format is unchanged (version 9). Sync state lives in `localStorage["fac-cloud"]`, not in the `Save`.
+- `src/lib/auth/*` and `src/lib/app-data/*` are untouched. The game's accounts are separate from the platform's Better Auth.
+- The original biome JPGs live in `art-src/`; `public/art/biomes/` holds only the WebP set.

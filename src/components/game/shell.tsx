@@ -14,6 +14,7 @@ import { TripCard, TripStart } from "@/components/game/trips";
 import { SurvivalEnd, SurvivalStart } from "@/components/game/survival";
 import { TournamentTicker } from "@/components/game/tournament";
 import { TournamentLobby } from "@/components/game/lobby";
+import { CloudHost } from "@/components/game/account";
 
 /** The screen router: menu or game, in the layout this device gets (docs/architecture/03 §1, 09 §2). */
 export function Game() {
@@ -43,6 +44,7 @@ export function Game() {
       <Ambience />
       <TournamentTicker />
       <TournamentLobby />
+      <CloudHost />
       <WelcomeBack />
       <TripCard />
       <TripStart />
