@@ -21,19 +21,17 @@ describe("previewPathPrefix", () => {
 });
 
 describe("prefixRewrite", () => {
+  const rewrite = prefixRewrite(PORT);
+  const run = (fn: typeof rewrite.input, href: string) =>
+    String(fn?.({ url: new URL(href, "https://preview.grokgsac.com") }));
+
   it("strips the prefix on input", () => {
-    const rewrite = prefixRewrite(PORT);
-    const run = (fn: typeof rewrite.input, href: string) =>
-      String(fn?.({ url: new URL(href, "https://preview.grokgsac.com") }));
     assert.equal(run(rewrite.input, PORT), "https://preview.grokgsac.com/");
     assert.equal(run(rewrite.input, `${PORT}/a?b=1#c`), "https://preview.grokgsac.com/a?b=1#c");
     assert.equal(run(rewrite.input, "/other"), "https://preview.grokgsac.com/other");
   });
 
   it("adds the prefix on output", () => {
-    const rewrite = prefixRewrite(PORT);
-    const run = (fn: typeof rewrite.input, href: string) =>
-      String(fn?.({ url: new URL(href, "https://preview.grokgsac.com") }));
     assert.equal(run(rewrite.output, "/a?b=1"), `https://preview.grokgsac.com${PORT}/a?b=1`);
     assert.equal(run(rewrite.output, "/"), `https://preview.grokgsac.com${PORT}/`);
   });
