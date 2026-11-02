@@ -17,7 +17,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { Filter } from "@/components/game/panels/shared";
 
-export function BagPanel() {
+/** The catch. `sell` is on where selling belongs (the Shop & Sell tab and the in-game satchel of an economy mode); the Tackle tab and
+    the Larder look at the same fish with selling switched off. */
+export function BagPanel({ sell = true }: { sell?: boolean }) {
   const inv = useGame((s) => s.inv);
   const mult = useGame((s) => multOf(s.dex, s.rb));
   const sellOne = useGame((s) => s.sellOne);
@@ -26,6 +28,7 @@ export function BagPanel() {
   const armSell = useGame((s) => s.armSell);
   const kid = useKidOn();
   const economy = MODES[mode].economy;
+  const canSell = economy && sell;
   const [filter, setFilter] = useState<number | "all">("all");
   const worth = inv.reduce((sum, fish) => sum + fish.v, 0);
   const rows = inv
@@ -51,9 +54,12 @@ export function BagPanel() {
         )}
         {!economy ? (
           <p className="mt-2 text-sm text-muted">
-            {MODES[mode].title}: fish are kept in the creel, never sold. It empties when you end the trip or change
-            water.
+            {MODES[mode].survival
+              ? "Fish you keep stay here until you eat them at camp. Nothing is ever sold."
+              : `${MODES[mode].title}: fish are kept in the creel, never sold. It empties when you end the trip or change water.`}
           </p>
+        ) : !sell ? (
+          <p className="mt-2 text-sm text-muted">To sell your fish, open Shop &amp; Sell.</p>
         ) : (
           <div className="mt-2 flex flex-wrap gap-2">
             <Button onClick={() => sellUpTo(9)}>Sell all</Button>
@@ -79,7 +85,7 @@ export function BagPanel() {
           <li key={`${index}-${fish.name}`}>
             <button
               type="button"
-              disabled={!economy}
+              disabled={!canSell}
               onClick={() => sellOne(index)}
               className={cn(
                 "flex w-full items-center gap-3 border-b border-line py-2 text-left disabled:cursor-default",
@@ -112,7 +118,7 @@ export function BagPanel() {
         ))}
       </ul>
       <p className="text-xs text-muted">
-        {economy ? "Tap a fish to sell it. " : ""}The newest 60 of this filter are listed.
+        {canSell ? "Tap a fish to sell it. " : ""}The newest 60 of this filter are listed.
       </p>
     </div>
   );

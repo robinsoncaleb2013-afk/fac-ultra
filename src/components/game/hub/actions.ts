@@ -1,14 +1,18 @@
 /* What the arrow keys, the Enter key and a gamepad do inside the Hub. One place, so a keyboard and a gamepad behave alike. */
 
-import { useGame } from "@/game/engine";
-import { stepIndex, tabsForMode, type HubTab } from "@/game/hubnav";
+import { currentLeaveFacts, useGame } from "@/game/engine";
+import { needsLeaveConfirm } from "@/game/leave";
+import { stepIndex, tabsFor, type HubTab } from "@/game/hubnav";
 import { useHubUi } from "@/game/hubstate";
 import { pickNeighbor, type Dir, type Rect } from "@/game/spatial";
 
 const root = () => document.querySelector<HTMLElement>("[data-hub-root]");
 
+/** While a question ("Leave?") is showing, the keys only move inside it. */
+const scope = () => document.querySelector<HTMLElement>("[data-hub-dialog]") ?? root();
+
 function focusables(): HTMLElement[] {
-  const r = root();
+  const r = scope();
   if (!r) return [];
   return [...r.querySelectorAll<HTMLElement>("[data-nav]")].filter((el) => {
     if ((el as HTMLButtonElement).disabled) return false;
@@ -22,8 +26,11 @@ const rectOf = (el: HTMLElement): Rect => {
   return { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
 };
 
-/** The tabs this mode shows, in order. */
-export const currentTabs = (): HubTab[] => tabsForMode(useGame.getState().mode);
+/** The tabs showing now, in order: the main menu's outside a game, the mode's own inside one. */
+export const currentTabs = (): HubTab[] => {
+  const g = useGame.getState();
+  return tabsFor(g.screen, g.mode);
+};
 
 /** Move to the next or previous tab. Returns false at either end. */
 export function hubTab(delta: -1 | 1): boolean {
@@ -38,7 +45,7 @@ export function hubTab(delta: -1 | 1): boolean {
 
 /** Focus the first thing in the body (or the selected item), so the keys have somewhere to start. */
 export function hubFocusFirst() {
-  const r = root();
+  const r = scope();
   if (!r) return;
   const sel = r.querySelector<HTMLElement>('[data-nav][aria-selected="true"]');
   const first = sel ?? focusables().find((el) => el.dataset.nav !== "tab") ?? focusables()[0];
@@ -65,13 +72,17 @@ export function hubMove(dir: Dir) {
 /** Enter or A: press whatever has focus. */
 export function hubSelect() {
   const active = document.activeElement as HTMLElement | null;
-  if (active && root()?.contains(active) && active !== document.body) return void active.click();
+  if (active && scope()?.contains(active) && active !== document.body) return void active.click();
   hubFocusFirst();
 }
 
 /** Esc or B: leave a full-screen detail first; otherwise close the menu. Returns true if the menu closed. */
 export function hubBack(): boolean {
   const hub = useHubUi.getState();
+  if (hub.leaveAsk) {
+    hub.askLeave(false);
+    return false;
+  }
   if (hub.detail) {
     hub.setDetail(false);
     window.setTimeout(hubFocusFirst, 30);
@@ -79,6 +90,13 @@ export function hubBack(): boolean {
   }
   closeHub();
   return true;
+}
+
+/** Leave the game for the main menu. If something is in progress, ask first (the question lives in Hub.tsx). */
+export function hubLeave() {
+  const hub = useHubUi.getState();
+  if (needsLeaveConfirm(currentLeaveFacts())) return void hub.askLeave(true);
+  useGame.getState().leaveToMenu();
 }
 
 /** Close the menu and return to the water (or the title screen). */

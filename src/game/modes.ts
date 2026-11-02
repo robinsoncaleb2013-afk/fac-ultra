@@ -12,6 +12,24 @@ export type HudItem = "money" | "level" | "weather" | "window" | "hunger" | "war
 
 export type KeepRelease = "both" | "keepOnly" | "releaseOnly" | "eat";
 
+/** The tabs of the in-game menu (WP-12). Each mode lists the ones it shows, in order, so a new mode is data:
+    tackle (what you carry), shop (buy gear and SELL fish: economy modes only), lodge (records, trophies, book),
+    waters (the map), players (friends and events), settings (the same panel as the main menu's), camp and larder
+    (Survival), log (Survival records and runs), logbook and collection (Recreational), event (a tournament's board). */
+export type MenuTabId =
+  | "tackle"
+  | "shop"
+  | "lodge"
+  | "waters"
+  | "players"
+  | "settings"
+  | "camp"
+  | "larder"
+  | "log"
+  | "logbook"
+  | "collection"
+  | "event";
+
 export type ModeRules = {
   id: Mode;
   title: string;
@@ -47,6 +65,8 @@ export type ModeRules = {
   photo: boolean;
   /** A second angler shares the screen (J holds the reel). */
   twoPlayer: boolean;
+  /** WP-12: the tabs of this mode's in-game menu, in order. Selling and shopping live in "shop" only. */
+  menuTabs: MenuTabId[];
   /** Survival (WP-5): hunger, warmth, a camp and a run with its own save. Only that row sets it. */
   survival?: true;
 };
@@ -75,6 +95,7 @@ export const MODES: Record<Mode, ModeRules> = {
     trips: false,
     photo: true,
     twoPlayer: false,
+    menuTabs: ["tackle", "shop", "lodge", "waters", "players", "settings"],
   },
   recreational: {
     id: "recreational",
@@ -98,6 +119,7 @@ export const MODES: Record<Mode, ModeRules> = {
     trips: true,
     photo: true,
     twoPlayer: false,
+    menuTabs: ["tackle", "waters", "logbook", "collection", "settings"],
   },
   survival: {
     id: "survival",
@@ -121,6 +143,7 @@ export const MODES: Record<Mode, ModeRules> = {
     trips: false,
     photo: true,
     twoPlayer: false,
+    menuTabs: ["camp", "larder", "waters", "log", "settings"],
     survival: true,
   },
   coop: {
@@ -144,6 +167,7 @@ export const MODES: Record<Mode, ModeRules> = {
     trips: false,
     photo: true,
     twoPlayer: true,
+    menuTabs: ["tackle", "shop", "lodge", "waters", "players", "settings"],
   },
   /* WP-7 (06 §1.4, 05 §1): a server-scored event. Helping Hand is off and Kid Mode's play help with it (the
      reading and text features still work), the tackle is the same for everyone, the sky and the fish come from
@@ -169,6 +193,7 @@ export const MODES: Record<Mode, ModeRules> = {
     trips: false,
     photo: false,
     twoPlayer: false,
+    menuTabs: ["event", "lodge", "players", "settings"],
   },
 };
 
@@ -212,6 +237,9 @@ export const canRelease = (r: ModeRules) => r.keepRelease === "both" || r.keepRe
 
 /** What something costs in this mode: nothing where there is no economy. */
 export const priceIn = (r: ModeRules, price: number) => (r.economy ? price : 0);
+
+/** Does this mode have a shop (and so selling)? Only where the economy is on. */
+export const hasShop = (r: ModeRules) => r.menuTabs.includes("shop");
 
 export const showsMoney = (r: ModeRules) => r.hud.includes("money");
 
@@ -281,6 +309,12 @@ export const MENU_CARDS: MenuCard[] = [
     needsBosses: 3,
   },
 ];
+
+/** The mode-select screen (WP-12): the five modes, in order. Kid-friendly play is a switch beside them, not a card. */
+export const MODE_SELECT_IDS: readonly string[] = ["expedition", "recreational", "survival", "tournaments", "local"];
+
+/** Things you do inside the Expedition career. They are not modes, so they sit under the mode cards as shortcuts. */
+export const EXPEDITION_EXTRA_IDS: readonly string[] = ["online", "aquarium", "derby", "rush"];
 
 /** The card you played last goes first (phone menu). Unknown or old ids are ignored. */
 export function orderCards(cards: readonly MenuCard[], last: string | null): MenuCard[] {

@@ -327,30 +327,29 @@ function Events() {
   );
 }
 
-export function PlayersTab({ split }: { split: boolean }) {
-  const saved = useHubUi((s) => s.item.players);
+/* Friends live in two places (WP-12). The MAIN menu has all of it: your name and code, add by name, email or code, accept,
+   remove and block. The IN-GAME menu keeps a compact version: your friends, who is asking, and the events (join, emotes). */
+function Friends({ split, scope }: { split: boolean; scope: "main" | "game" }) {
+  const tabId = scope === "main" ? "friends" : "players";
+  const saved = useHubUi((s) => s.item[tabId]);
   const f = useFriends(true);
   const inc = f.data?.requests?.incoming.length ?? 0;
-  const items: HubItem[] = [
-    { id: "friends", title: "Friends", sub: f.data ? `${f.data.friends.length} ${f.data.friends.length === 1 ? "friend" : "friends"}` : "Your fishing friends", icon: <Icon name="players" className="size-5" /> },
-    { id: "requests", title: "Requests", sub: inc ? `${inc} waiting for you` : "People asking to be friends", icon: <Icon name="flag" className="size-5" />, badge: inc ? String(inc) : undefined },
-    { id: "add", title: "Add a friend", sub: "By name, email or code", icon: <Icon name="hook" className="size-5" /> },
-    { id: "blocked", title: "Blocked", sub: "Players you don't want to see", icon: <Icon name="lock" className="size-5" /> },
-    { id: "events", title: "Events", sub: "Tournaments to join", icon: <Icon name="waters" className="size-5" /> },
+  const all: (HubItem & { body: ReactNode; title2: string; main?: boolean; game?: boolean })[] = [
+    { id: "friends", title: "Friends", sub: f.data ? `${f.data.friends.length} ${f.data.friends.length === 1 ? "friend" : "friends"}` : "Your fishing friends", icon: <Icon name="players" className="size-5" />, title2: "Friends", body: <FriendsList key="f" f={f} />, main: true, game: true },
+    { id: "requests", title: "Requests", sub: inc ? `${inc} waiting for you` : "People asking to be friends", icon: <Icon name="flag" className="size-5" />, badge: inc ? String(inc) : undefined, title2: "Requests", body: <Requests key="r" f={f} />, main: true, game: true },
+    { id: "add", title: "Add a friend", sub: "By name, email or code", icon: <Icon name="hook" className="size-5" />, title2: "Add a friend", body: <AddFriend key="a" f={f} />, main: true },
+    { id: "blocked", title: "Blocked", sub: "Players you don't want to see", icon: <Icon name="lock" className="size-5" />, title2: "Blocked players", body: <BlockedList key="b" f={f} />, main: true },
+    { id: "events", title: "Events", sub: "Tournaments to join", icon: <Icon name="waters" className="size-5" />, title2: "Events", body: <Events key="e" />, game: true },
   ];
-  const view: Record<string, [string, ReactNode]> = {
-    friends: ["Friends", <FriendsList key="f" f={f} />],
-    requests: ["Requests", <Requests key="r" f={f} />],
-    add: ["Add a friend", <AddFriend key="a" f={f} />],
-    blocked: ["Blocked players", <BlockedList key="b" f={f} />],
-    events: ["Events", <Events key="e" />],
-  };
+  const here = all.filter((x) => (scope === "main" ? x.main : x.game));
+  const items: HubItem[] = here.map(({ body: _b, title2: _t, main: _m, game: _g, ...item }) => item);
+  const view: Record<string, [string, ReactNode]> = Object.fromEntries(here.map((x) => [x.id, [x.title2, x.body]]));
   return (
     <MasterDetail
-      tab="players"
+      tab={tabId}
       items={items}
       selectedId={saved && view[saved] ? saved : null}
-      listLabel="Players"
+      listLabel={scope === "main" ? "Friends" : "Players"}
       split={split}
       detailLabel="Players"
       bare
@@ -366,3 +365,8 @@ export function PlayersTab({ split }: { split: boolean }) {
     />
   );
 }
+
+/** The main menu's Friends tab: everything about who you fish with, and nothing about a game. */
+export const FriendsTab = ({ split }: { split: boolean }) => <Friends split={split} scope="main" />;
+/** The in-game Players tab: friends, requests and events. */
+export const PlayersTab = ({ split }: { split: boolean }) => <Friends split={split} scope="game" />;

@@ -1,9 +1,8 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { BAITS, BOSS_CHUM_INDEX, bossChumPrice, compact, GEAR, LURES, money, PACKS, SIG_LURES, type GearKind } from "@/game/content";
 import { useGame } from "@/game/engine";
 import { GEAR_TEXT, gearFacts } from "@/game/hubcopy";
 import { useHubUi } from "@/game/hubstate";
-import { MODES } from "@/game/modes";
 import { FAMILY_INFO } from "@/game/presentation";
 import { BagPanel } from "@/components/game/panels/BagPanel";
 import { RigPicker } from "@/components/game/layout/RigControl";
@@ -13,13 +12,17 @@ import { DarkPanel } from "@/components/game/hub/panel-shell";
 import { DetailPaper, Facts, ListColumn, PaperButton, Title, type HubItem } from "@/components/game/hub/parts";
 import { cn } from "@/lib/cn";
 
-const CampPanel = lazy(() => import("@/components/game/panels/CampPanel").then((m) => ({ default: m.CampPanel })));
+/* Two views of the same gear (WP-12). TACKLE is what you carry and use: look at your catch, set up how you fish, pick the rod
+   you hold, the lure and the bait. SHOP & SELL is where money changes hands: sell fish, buy gear, lures, bait and packs. The
+   second one is a tab only for modes with an economy (modes.ts menuTabs), so Recreational, Survival and Tournaments have no
+   way to sell or buy anything. */
+export type TackleView = "tackle" | "shop";
 
-type CatId = "satchel" | "camp" | "rig" | "rod" | "reel" | "line" | "boat" | "box" | "sig" | "bait" | "pack";
+type CatId = "sell" | "satchel" | "rig" | "rod" | "reel" | "line" | "boat" | "box" | "sig" | "bait" | "pack";
 
 const CATS: Record<CatId, { title: string; sub: string; icon: IconName; group: string }> = {
-  satchel: { title: "Satchel", sub: "Your catch and what it is worth", icon: "satchel", group: "Your bag" },
-  camp: { title: "Camp", sub: "Eat, rest and get ready", icon: "flag", group: "Your bag" },
+  sell: { title: "Sell your catch", sub: "Turn your fish into coins", icon: "coin", group: "Your catch" },
+  satchel: { title: "Satchel", sub: "Your catch", icon: "satchel", group: "Your bag" },
   rig: { title: "How to fish", sub: "Depth and how fast you reel", icon: "hook", group: "Your bag" },
   rod: { title: "Rods", sub: "Wider green, more luck", icon: "tackle", group: "Gear" },
   reel: { title: "Reels", sub: "Quicker bites, steadier reeling", icon: "wheel", group: "Gear" },
@@ -31,10 +34,10 @@ const CATS: Record<CatId, { title: string; sub: string; icon: IconName; group: s
   pack: { title: "Lure packs", sub: "Three surprise lures", icon: "satchel", group: "Lures and bait" },
 };
 
-/** Which categories a mode shows. Survival has a camp and no shop; the rest have everything but the camp. */
-export function catsFor(mode: ReturnType<typeof useGame.getState>["mode"]): CatId[] {
-  if (MODES[mode].survival) return ["camp", "satchel"];
-  return ["satchel", "rig", "rod", "reel", "line", "boat", "box", "sig", "bait", "pack"];
+/** Which categories each view shows. Tackle: your catch, how you fish, and what you own. Shop: selling, then everything for sale. */
+export function catsFor(view: TackleView): CatId[] {
+  if (view === "shop") return ["sell", "rod", "reel", "line", "boat", "sig", "bait", "pack"];
+  return ["satchel", "rig", "rod", "reel", "line", "boat", "box", "sig", "bait"];
 }
 
 type TItem = {
@@ -46,11 +49,16 @@ type TItem = {
   kind: "rod" | "reel" | "line" | "boat" | "lure" | "bait" | "sig" | "pack" | "bag" | "camp";
   summary: string;
   facts: string[];
-  actions: { label: string; run: () => void; disabled?: boolean; quiet?: boolean }[];
+  /** "buy" actions are for the shop, "use" actions are for the tackle tab. */
+  actions: { label: string; run: () => void; disabled?: boolean; quiet?: boolean; t?: "buy" | "use" }[];
   current?: boolean;
+  /** You have it (or it is a "none" choice). The tackle tab lists only these. */
+  owned: boolean;
+  /** A "none" choice (bare hook, no bait): never for sale. */
+  none?: boolean;
 };
 
-function useItems(cat: CatId): TItem[] {
+function useAllItems(cat: CatId): TItem[] {
   const s = useGame();
   if (cat === "rod" || cat === "reel" || cat === "line" || cat === "boat") {
     const kind: GearKind = cat;
@@ -69,11 +77,12 @@ function useItems(cat: CatId): TItem[] {
         summary: GEAR_TEXT[kind].one,
         facts: gearFacts(kind, i),
         current: equipped,
+        owned: owned >= i,
         actions: equipped
           ? [{ label: "In use", run: () => undefined, disabled: true }]
           : have
             ? [{ label: "You have a better one", run: () => undefined, disabled: true }]
-            : [{ label: afford ? `Buy for ${money(g.price)}` : `Needs ${money(g.price)}`, run: () => s.buyGear(kind, i), disabled: !afford }],
+            : [{ label: afford ? `Buy for ${money(g.price)}` : `Needs ${money(g.price)}`, run: () => s.buyGear(kind, i), disabled: !afford, t: "buy" }],
       };
     });
   }
@@ -89,7 +98,9 @@ function useItems(cat: CatId): TItem[] {
       summary: "No lure at all. Fish still bite, just not as well.",
       facts: ["Never runs out"],
       current: s.lure < 0,
-      actions: [{ label: s.lure < 0 ? "In use" : "Use the bare hook", run: () => s.equipLure(-1), disabled: s.lure < 0 }],
+      owned: true,
+      none: true,
+      actions: [{ label: s.lure < 0 ? "In use" : "Use the bare hook", run: () => s.equipLure(-1), disabled: s.lure < 0, t: "use" }],
     };
     return [
       bare,
@@ -103,7 +114,8 @@ function useItems(cat: CatId): TItem[] {
         summary: `${FAMILY_INFO[LURES[i].family].label} lure. Bigger numbers mean better luck and quicker bites.`,
         facts: [`Luck ${compact(LURES[i].luck)}`, `Bites ${compact(LURES[i].speed)} quicker`, `You have ${s.box[String(i)]}`],
         current: s.lure === i,
-        actions: [{ label: s.lure === i ? "In use" : "Use this lure", run: () => s.equipLure(i), disabled: s.lure === i }],
+        owned: true,
+        actions: [{ label: s.lure === i ? "In use" : "Use this lure", run: () => s.equipLure(i), disabled: s.lure === i, t: "use" }],
       })),
     ];
   }
@@ -119,7 +131,9 @@ function useItems(cat: CatId): TItem[] {
         summary: "A special lure rides along with your tackle-box lure. Pick one below.",
         facts: [],
         current: s.sig < 0,
-        actions: [{ label: s.sig < 0 ? "In use" : "Put it away", run: () => s.equipSig(-1), disabled: s.sig < 0 }],
+        owned: true,
+        none: true,
+        actions: [{ label: s.sig < 0 ? "In use" : "Put it away", run: () => s.equipSig(-1), disabled: s.sig < 0, t: "use" }],
       },
       ...SIG_LURES.map<TItem>((g, i) => {
         const have = s.sigBox.includes(i);
@@ -135,9 +149,10 @@ function useItems(cat: CatId): TItem[] {
           summary: g.desc,
           facts: [`${FAMILY_INFO[g.family].label} style`, "Yours for good once bought"],
           current: equipped,
+          owned: have,
           actions: have
-            ? [{ label: equipped ? "In use" : "Use this lure", run: () => s.equipSig(i), disabled: equipped }]
-            : [{ label: afford ? `Buy for ${money(g.price)}` : `Needs ${money(g.price)}`, run: () => s.buySig(i), disabled: !afford }],
+            ? [{ label: equipped ? "In use" : "Use this lure", run: () => s.equipSig(i), disabled: equipped, t: "use" }]
+            : [{ label: afford ? `Buy for ${money(g.price)}` : `Needs ${money(g.price)}`, run: () => s.buySig(i), disabled: !afford, t: "buy" }],
         };
       }),
     ];
@@ -154,7 +169,9 @@ function useItems(cat: CatId): TItem[] {
         summary: "Bait is used up one cast at a time.",
         facts: [],
         current: s.bait < 0,
-        actions: [{ label: s.bait < 0 ? "In use" : "Use no bait", run: () => s.equipBait(-1), disabled: s.bait < 0 }],
+        owned: true,
+        none: true,
+        actions: [{ label: s.bait < 0 ? "In use" : "Use no bait", run: () => s.equipBait(-1), disabled: s.bait < 0, t: "use" }],
       },
       ...BAITS.map<TItem>((g, i) => {
         const count = s.baitBox[String(i)] || 0;
@@ -169,9 +186,10 @@ function useItems(cat: CatId): TItem[] {
           summary: g.desc,
           facts: [`${FAMILY_INFO[g.family].label}`, `You have ${count}`],
           current: s.bait === i,
+          owned: count > 0 || s.bait === i,
           actions: [
-            { label: s.c >= price ? `Buy one for ${money(price)}` : `Needs ${money(price)}`, run: () => s.buyBait(i), disabled: s.c < price },
-            { label: s.bait === i ? "In use" : "Use it", run: () => s.equipBait(i), disabled: count <= 0 || s.bait === i, quiet: true },
+            { label: s.c >= price ? `Buy one for ${money(price)}` : `Needs ${money(price)}`, run: () => s.buyBait(i), disabled: s.c < price, t: "buy" },
+            { label: s.bait === i ? "In use" : "Use it", run: () => s.equipBait(i), disabled: count <= 0 || s.bait === i, quiet: true, t: "use" },
           ],
         };
       }),
@@ -187,10 +205,25 @@ function useItems(cat: CatId): TItem[] {
       kind: "pack",
       summary: "Three lures picked for you, with a handful of casts each.",
       facts: s.pull ? [`Last time you pulled: ${s.pull}`] : ["A surprise every time"],
-      actions: [{ label: s.c >= p.price ? `Buy for ${money(p.price)}` : `Needs ${money(p.price)}`, run: () => s.buyPack(i), disabled: s.c < p.price }],
+      owned: false,
+      actions: [{ label: s.c >= p.price ? `Buy for ${money(p.price)}` : `Needs ${money(p.price)}`, run: () => s.buyPack(i), disabled: s.c < p.price, t: "buy" }],
     }));
   }
   return [];
+}
+
+/** The same items, cut for the view: the tackle tab lists what you own with "use" actions; the shop lists what is for sale with "buy" actions. */
+function useItems(cat: CatId, view: TackleView): TItem[] {
+  const all = useAllItems(cat);
+  if (view === "shop") {
+    return all
+      .filter((i) => !i.none)
+      .map((i) => {
+        const buy = i.actions.filter((a) => a.t === "buy");
+        return { ...i, actions: buy.length ? buy : [{ label: i.current ? "In use" : "You have this", run: () => undefined, disabled: true }] };
+      });
+  }
+  return all.filter((i) => i.owned).map((i) => ({ ...i, actions: i.actions.filter((a) => a.t !== "buy") }));
 }
 
 function Grid({ items, selected, onSelect, wide }: { items: TItem[]; selected: string; onSelect: (id: string) => void; wide: boolean }) {
@@ -241,17 +274,17 @@ function ItemDetail({ item }: { item: TItem }) {
   );
 }
 
-export function TackleTab({ split }: { split: boolean }) {
-  const mode = useGame((s) => s.mode);
-  const cats = catsFor(mode);
-  const saved = useHubUi((s) => s.item.tackle) as CatId | undefined;
+export function TackleTab({ split, view = "tackle" }: { split: boolean; view?: TackleView }) {
+  const cats = catsFor(view);
+  const label = view === "shop" ? "Shop & Sell" : "Tackle";
+  const saved = useHubUi((s) => s.item[view]) as CatId | undefined;
   const cat: CatId = saved && cats.includes(saved) ? saved : cats[0];
   const select = useHubUi((s) => s.selectItem);
   const detail = useHubUi((s) => s.detail);
   const setDetail = useHubUi((s) => s.setDetail);
   const [sel, setSel] = useState<string>("");
-  const items = useItems(cat);
-  const isPanel = cat === "satchel" || cat === "camp" || cat === "rig";
+  const items = useItems(cat, view);
+  const isPanel = cat === "satchel" || cat === "sell" || cat === "rig";
   useEffect(() => setSel(""), [cat]);
   const chosen = items.find((i) => i.id === sel) ?? items.find((i) => i.current) ?? items.find((i) => i.actions.some((a) => !a.disabled)) ?? items[0];
 
@@ -266,8 +299,8 @@ export function TackleTab({ split }: { split: boolean }) {
   const panel = (
     <DarkPanel label={CATS[cat].title} className="h-full">
       <Suspense fallback={<p className="text-muted">Opening…</p>}>
-        {cat === "satchel" ? <BagPanel /> : null}
-        {cat === "camp" ? <CampPanel /> : null}
+        {cat === "satchel" ? <BagPanel sell={false} /> : null}
+        {cat === "sell" ? <BagPanel /> : null}
         {cat === "rig" ? (
           <div>
             <h3 className="font-serif text-xl">How to fish</h3>
@@ -282,11 +315,11 @@ export function TackleTab({ split }: { split: boolean }) {
   if (!split && !detail) {
     return (
       <ListColumn
-        label="Tackle"
+        label={label}
         items={catItems}
         selected={null}
         onPick={(id) => {
-          select("tackle", id);
+          select(view, id);
           setDetail(true);
         }}
         onHighlight={() => undefined}
@@ -313,7 +346,7 @@ export function TackleTab({ split }: { split: boolean }) {
   }
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(230px,290px)_minmax(0,1fr)] gap-4">
-      <ListColumn label="Tackle" items={catItems} selected={cat} onPick={(id) => select("tackle", id)} onHighlight={(id) => select("tackle", id)} className="min-h-0" />
+      <ListColumn label={label} items={catItems} selected={cat} onPick={(id) => select(view, id)} onHighlight={(id) => select(view, id)} className="min-h-0" />
       {isPanel ? (
         panel
       ) : (
@@ -324,4 +357,9 @@ export function TackleTab({ split }: { split: boolean }) {
       )}
     </div>
   );
+}
+
+/** Shop & Sell: the only place in a game where fish are sold and gear is bought. Only modes with an economy have this tab. */
+export function ShopTab({ split }: { split: boolean }) {
+  return <TackleTab split={split} view="shop" />;
 }

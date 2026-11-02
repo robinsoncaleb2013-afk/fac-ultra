@@ -6,7 +6,7 @@ import { useHubUi } from "@/game/hubstate";
 import { tabsForMode } from "@/game/hubnav";
 import { act, nudgeDrag, partnerDown, partnerUp, reelDown, reelUp, sim, useGame } from "@/game/engine";
 
-/** Desktop keyboard (03 §8, 04 §5.2, WP-10): Space/Enter act (hold to reel), 1–6 open the menu at a tab, Esc opens or closes the
+/** Desktop keyboard (03 §8, 04 §5.2, WP-10): Space/Enter act (hold to reel), 1–9 open the menu at a tab, Esc opens or closes the
     menu, F full screen, H, M, J (partner), [ and ] for drag during a fight, K and R to keep or release the fish just landed,
     P to take a picture. Hold Tab for the quick wheel (lures and emotes) and hold B for the satchel (catch and tackle). While the
     menu is open it reads the keys itself (Hub.tsx), so nothing here fires underneath it. */
@@ -65,7 +65,7 @@ export function useKeys() {
       if (event.code === "KeyH") return void useGame.setState({ photo: true });
       if (event.code === "KeyP" && MODES[state.mode].photo) return void takePhoto();
       if (event.code === "KeyM") return void state.toggleSetting("sound");
-      const digit = /^Digit([1-6])$/.exec(event.code);
+      const digit = /^Digit([1-9])$/.exec(event.code);
       if (digit) {
         const id = tabsForMode(state.mode)[Number(digit[1]) - 1];
         if (id) hub.openHub(id);

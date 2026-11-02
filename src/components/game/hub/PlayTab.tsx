@@ -3,7 +3,7 @@ import { dexCount, rankName, TOTAL_SPECIES } from "@/game/content";
 import { useGame } from "@/game/engine";
 import { playMeta } from "@/game/hubcopy";
 import { useHubUi } from "@/game/hubstate";
-import { MENU_CARDS, type MenuCard } from "@/game/modes";
+import { EXPEDITION_EXTRA_IDS, MENU_CARDS, MODE_SELECT_IDS, type MenuCard } from "@/game/modes";
 import { closeHub } from "@/components/game/hub/actions";
 import { Framed, Painting } from "@/components/game/hub/art";
 import { Icon } from "@/components/game/hub/icons";
@@ -12,13 +12,14 @@ import { cn } from "@/lib/cn";
 
 type G = ReturnType<typeof useGame.getState>;
 
-/** The cards: every mode card from modes.ts, plus Kid-Friendly Play, which turns Kid Mode on and opens Relaxed Fishing. */
+/** The mode-select cards (WP-12): the five modes from modes.ts. Kid-friendly play is a switch under them, and the Expedition
+    extras (online, aquarium, derby, boss rush) are shortcuts that start Expedition and open that room. */
 type Card = { id: string; card?: MenuCard };
-const CARDS: Card[] = [
-  ...MENU_CARDS.slice(0, 4).map((card) => ({ id: card.id, card })),
-  { id: "kid" },
-  ...MENU_CARDS.slice(4).map((card) => ({ id: card.id, card })),
-];
+const cardOf = (id: string): Card => ({ id, card: MENU_CARDS.find((m) => m.id === id) });
+const CARDS: Card[] = MODE_SELECT_IDS.map(cardOf);
+const EXTRAS: Card[] = EXPEDITION_EXTRA_IDS.map(cardOf);
+/** Every id the Play tab can highlight (the detail panel knows all of them). */
+const ALL: Card[] = [...CARDS, ...EXTRAS];
 
 /** Why a card cannot be opened right now, in plain English, or null. */
 export function lockOf(c: MenuCard | undefined, g: G): string | null {
@@ -46,6 +47,7 @@ export function openCard(id: string) {
     /* private mode: it just will not be remembered */
   }
   closeHub();
+  /* The old Kid-Friendly Play card: Kid Mode on, and the calm mode. (The cards are now a switch beside the modes.) */
   if (id === "kid") {
     if (!g.kid) g.setKid(true);
     return void useGame.getState().switchMode("recreational");
@@ -59,7 +61,7 @@ export function openCard(id: string) {
 
 function CardView({ id, selected, onHighlight, stack }: { id: string; selected: boolean; onHighlight: () => void; stack: boolean }) {
   const meta = playMeta(id)!;
-  const c = CARDS.find((x) => x.id === id)?.card;
+  const c = ALL.find((x) => x.id === id)?.card;
   const locked = useGame((g) => (g.hydrated ? lockOf(c, g) : null));
   return (
     <button
@@ -92,7 +94,7 @@ function CardView({ id, selected, onHighlight, stack }: { id: string; selected: 
 
 function Detail({ id }: { id: string }) {
   const meta = playMeta(id)!;
-  const c = CARDS.find((x) => x.id === id)?.card;
+  const c = ALL.find((x) => x.id === id)?.card;
   const locked = useGame((g) => (g.hydrated ? lockOf(c, g) : null));
   const hydrated = useGame((g) => g.hydrated);
   const lv = useGame((g) => g.lv);
@@ -128,14 +130,34 @@ function Detail({ id }: { id: string }) {
   );
 }
 
-/** The Play tab: tall painted cards you scroll sideways, and (on a PC) a big panel about the one you point at. */
+/** Kid-friendly play: a switch, not a mode. It goes with you into whichever mode you pick. */
+function KidSwitch() {
+  const kid = useGame((s) => s.kid);
+  const setKid = useGame((s) => s.setKid);
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={kid}
+      data-nav="act"
+      data-testid="kid-switch"
+      onClick={() => setKid(!kid)}
+      className="hub-btn hub-btn-quiet text-[#f1e5c9]"
+      title="Bigger words, a helping hand and friendlier fishing"
+    >
+      <Icon name={kid ? "check" : "players"} className="size-5" />
+      Kid-friendly play: {kid ? "On" : "Off"}
+    </button>
+  );
+}
+
+/** Mode select: tall painted cards you scroll sideways, and (on a PC) a big panel about the one you point at.
+    Choosing one loads that mode's own save and takes you into it. */
 export function PlayTab({ split }: { split: boolean }) {
   const last = lastPlayed();
-  const selected = useHubUi((s) => s.item.play) ?? (CARDS.some((c) => c.id === last) ? last : CARDS[0].id)!;
+  const selected = useHubUi((s) => s.item.play) ?? (ALL.some((c) => c.id === last) ? last : CARDS[0].id)!;
   const select = useHubUi((s) => s.selectItem);
-  const screen = useGame((s) => s.screen);
   const scroller = useRef<HTMLDivElement>(null);
-  const setScreen = useGame((s) => s.setScreen);
   useEffect(() => {
     scroller.current?.querySelector<HTMLElement>(`[data-item="${selected}"]`)?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
   }, [selected]);
@@ -152,29 +174,39 @@ export function PlayTab({ split }: { split: boolean }) {
             <CardView key={c.id} id={c.id} selected={selected === c.id} onHighlight={() => select("play", c.id)} stack={!split} />
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-3 px-1">
-          {screen === "game" ? (
-            <button type="button" data-nav="act" className="hub-btn" onClick={closeHub}>
-              <Icon name="hook" className="size-5" /> Back to the water
-            </button>
-          ) : null}
-          {screen === "game" ? (
-            <button
-              type="button"
-              data-nav="act"
-              className="hub-btn hub-btn-quiet text-[#f1e5c9]"
-              onClick={() => {
-                closeHub();
-                setScreen("menu");
-              }}
-            >
-              Title screen
-            </button>
-          ) : null}
-          <p className="text-[13px] text-[#c9b890]">Your fish are saved on this device. Sign in under Settings to keep them safe in the cloud.</p>
+        <div className="flex flex-wrap items-center gap-3 px-1" role="group" aria-label="Extras for Expedition">
+          <KidSwitch />
+          <span className="text-[13px] text-[#c9b890]">Expedition extras:</span>
+          {EXTRAS.map((c) => (
+            <ExtraChip key={c.id} id={c.id} onHighlight={() => select("play", c.id)} />
+          ))}
         </div>
+        <p className="px-1 text-[13px] text-[#c9b890]">Your fish are saved on this device. Open Account to keep them safe in the cloud.</p>
       </div>
       {split ? <Detail id={selected} /> : null}
     </div>
+  );
+}
+
+/** A small shortcut: start Expedition and open this room. */
+function ExtraChip({ id, onHighlight }: { id: string; onHighlight: () => void }) {
+  const meta = playMeta(id)!;
+  const c = ALL.find((x) => x.id === id)?.card;
+  const locked = useGame((g) => (g.hydrated ? lockOf(c, g) : null));
+  return (
+    <button
+      type="button"
+      data-nav="act"
+      data-item={id}
+      aria-disabled={!!locked}
+      title={locked ?? meta.summary}
+      onPointerEnter={(e) => e.pointerType === "mouse" && onHighlight()}
+      onFocus={onHighlight}
+      onClick={() => !locked && openCard(id)}
+      className={cn("hub-btn hub-btn-quiet text-[#f1e5c9]", locked && "opacity-60")}
+    >
+      {locked ? <Icon name="lock" className="size-4" /> : null}
+      {meta.title}
+    </button>
   );
 }

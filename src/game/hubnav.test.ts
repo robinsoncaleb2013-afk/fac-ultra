@@ -50,12 +50,12 @@ test("stepIndex stops at the ends, or wraps", () => {
   assert.equal(stepIndex(0, 1, 0), 0);
 });
 
-test("modes show the right tabs", () => {
-  assert.deepEqual(tabsForMode("expedition"), ["play", "tackle", "lodge", "waters", "players", "settings"]);
-  assert.ok(!tabsForMode("tournament").includes("tackle"), "event gear is fixed");
-  assert.ok(!tabsForMode("tournament").includes("waters"));
-  assert.ok(!tabsForMode("survival").includes("waters"), "no travel in Survival");
-  assert.ok(tabsForMode("survival").includes("tackle"), "the camp lives there");
+test("modes show the right tabs (WP-12): the in-game list is the mode's own rule", () => {
+  assert.deepEqual(tabsForMode("expedition"), ["tackle", "shop", "lodge", "waters", "players", "settings"]);
+  assert.deepEqual(tabsForMode("recreational"), ["tackle", "waters", "logbook", "collection", "settings"]);
+  assert.deepEqual(tabsForMode("survival"), ["camp", "larder", "waters", "log", "settings"]);
+  assert.deepEqual(tabsForMode("tournament"), ["event", "lodge", "players", "settings"]);
+  assert.deepEqual(tabsForMode("coop"), tabsForMode("expedition"));
 });
 
 test("every old panel name lands somewhere in the Hub", () => {
@@ -63,7 +63,7 @@ test("every old panel name lands somewhere in the Hub", () => {
   assert.deepEqual(hubTargetFor("gear", "record"), { tab: "tackle", item: "rod" });
   assert.deepEqual(hubTargetFor("lures", "record"), { tab: "tackle", item: "box" });
   assert.deepEqual(hubTargetFor("bag", "record"), { tab: "tackle", item: "satchel" });
-  assert.deepEqual(hubTargetFor("camp", "record"), { tab: "tackle", item: "camp" });
+  assert.deepEqual(hubTargetFor("camp", "record"), { tab: "camp" });
   assert.deepEqual(hubTargetFor("waters", "record"), { tab: "waters" });
   assert.deepEqual(hubTargetFor("dex", "record"), { tab: "lodge", item: "book" });
   assert.deepEqual(hubTargetFor("lodge", "tank"), { tab: "lodge", item: "tank" });

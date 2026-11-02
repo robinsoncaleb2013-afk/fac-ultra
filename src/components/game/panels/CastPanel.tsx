@@ -79,7 +79,7 @@ export function BountyChips() {
               onClick={() => claim(c.id)}
               title={`${c.label} — ${money(c.reward)}`}
               className={cn(
-                "pointer-events-auto min-h-8 rounded-full border px-3 py-1 text-xs backdrop-blur-sm",
+                "pointer-events-auto min-h-8 rounded-full border px-3 py-1 text-xs backdrop-blur-sm pointer-coarse:min-h-11",
                 ready ? "border-brass bg-brass text-brass-ink" : "border-line bg-bg/70 text-fg",
               )}
             >
