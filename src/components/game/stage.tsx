@@ -78,6 +78,12 @@ function Chip({ children, brass }: { children: ReactNode; brass?: boolean }) {
   );
 }
 
+/* 0 while the reel cursor sits in the zone, growing as it strays outside. */
+function reelStrain() {
+  const half = Math.max(1, sim.zone / 2);
+  return Math.min(1.5, Math.max(0, (Math.abs(sim.cp - sim.zc) - half) / half));
+}
+
 function paint(canvas: HTMLCanvasElement) {
   const box = fitCanvas(canvas);
   if (!box) return;
@@ -111,6 +117,34 @@ function paint(canvas: HTMLCanvasElement) {
   } else if (s.weather === 3) {
     ctx.fillStyle = "rgba(210, 220, 224, 0.2)";
     ctx.fillRect(-20, -20, w + 40, h + 40);
+  }
+
+  /* Animated air, motion permitting: fog banks drift through, and cold
+     night waters (Arctic, Sky, Astral Sea) get a slow aurora shimmer. */
+  if (s.motion && s.weather === 3) {
+    ctx.fillStyle = "rgba(216,226,228,0.10)";
+    for (let i = 0; i < 3; i++) {
+      const fx = (((sim.t * (0.008 + i * 0.004) + i * 0.37) % 1.3) - 0.15) * w;
+      ctx.beginPath();
+      ctx.ellipse(fx, h * (0.3 + i * 0.16), w * 0.34, h * 0.075, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  if (s.motion && s.weather === 4 && (s.biome === 9 || s.biome === 13 || s.biome === 14)) {
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    for (let i = 0; i < 3; i++) {
+      ctx.strokeStyle = "hsla(" + [152, 190, 268][i] + " 85% 68% / 0.13)";
+      ctx.lineWidth = 9 - i * 2.5;
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 16) {
+        const y = h * (0.1 + i * 0.07) + Math.sin(x * 0.012 + sim.t * (0.5 + i * 0.13) + i * 2.1) * h * 0.035;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   ctx.save();
@@ -199,7 +233,14 @@ function paint(canvas: HTMLCanvasElement) {
   const boby = sim.bny * h;
   if ((sim.phase === "bite" || sim.phase === "reel") && sim.fish) {
     const f = sim.fish;
-    drawFish(ctx, bobx - 10, boby + 8, 48 + f.t * 8, Math.sign(sim.cd) || -1, {
+    /* A hooked fish fights: it darts and dives against the bobber, harder
+       the further the cursor strays from the zone and the bigger it is. */
+    const strain = sim.phase === "reel" ? reelStrain() : 0;
+    const fight = s.motion ? strain * (0.6 + f.t * 0.2 + (f.boss ? 0.4 : 0)) : 0;
+    const sph = (f.b * 37 + f.i * 13) % 6.28;
+    const dart = Math.sin(sim.t * 11 + sph) * fight * w * 0.02;
+    const dive = Math.max(0, Math.sin(sim.t * 5.7 + sph * 2)) * fight * h * 0.05;
+    drawFish(ctx, bobx - 10 + dart, boby + 8 + dive, 48 + f.t * 8, Math.sign(sim.cd) || -1, {
       biome: f.b,
       species: f.i,
       rarity: f.t,
@@ -233,11 +274,17 @@ function paint(canvas: HTMLCanvasElement) {
   ctx.moveTo(w + 10, h * 0.16);
   ctx.quadraticCurveTo(w * 0.94, h * 0.12, tipx, tipy);
   ctx.stroke();
-  ctx.strokeStyle = "rgba(231,243,241,0.8)";
-  ctx.lineWidth = 1.25;
+  /* The line tells the truth about tension: pale and slack in the zone,
+     amber then red and thrumming as the cursor strays and the line strains. */
+  const strainNow = sim.phase === "reel" ? reelStrain() : 0;
+  ctx.strokeStyle =
+    strainNow <= 0 ? "rgba(231,243,241,0.8)" : strainNow < 0.75 ? "rgba(226,162,58,0.9)" : "rgba(228,87,46,0.95)";
+  ctx.lineWidth = 1.25 + strainNow * 0.8;
   ctx.beginPath();
   ctx.moveTo(tipx, tipy);
-  ctx.lineTo(bobx, boby);
+  if (strainNow > 0.05 && s.motion) {
+    ctx.quadraticCurveTo((tipx + bobx) / 2, (tipy + boby) / 2 + Math.sin(sim.t * 47) * 2.2 * strainNow, bobx, boby);
+  } else ctx.lineTo(bobx, boby);
   ctx.stroke();
 
   ctx.strokeStyle = "rgba(231,243,241,0.4)";

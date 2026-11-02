@@ -880,6 +880,7 @@ function Aquarium() {
   const biome = useGame((s) => s.biome);
   const coins = useGame((s) => s.c);
   const mode = useGame((s) => s.mode);
+  const motion = useGame((s) => s.motion);
   const addExhibit = useGame((s) => s.addExhibit);
   const removeExhibit = useGame((s) => s.removeExhibit);
   const togglePed = useGame((s) => s.togglePed);
@@ -939,25 +940,28 @@ function Aquarium() {
           ctx.fillRect(0, 0, w, h);
         }
         for (const one of fish) {
-          one.x += one.v * one.dir * dt;
-          one.phase += dt;
+          if (motion) {
+            one.x += one.v * one.dir * dt;
+            one.phase += dt;
+          }
           if (one.x > 1.1) one.dir = -1;
           if (one.x < -0.1) one.dir = 1;
-          drawFish(ctx, one.x * w, one.y * h, Math.min(w, h) * 0.26, one.dir, {
+          drawFish(ctx, one.x * w, one.y * h + (motion ? Math.sin(one.phase * 2.2 + one.x * 4) * 3 : 0), Math.min(w, h) * 0.26, one.dir, {
             biome: one.b,
             species: one.i,
             rarity: one.rarity,
             mutation: one.m,
-            wag: Math.sin(one.phase * 6) * 0.35,
+            wag: motion ? Math.sin(one.phase * 6) * 0.35 : 0,
           });
         }
       }
-      raf = requestAnimationFrame(loop);
+      /* Motion off: the loop paints one still frame and stops. */
+      if (motion) raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tank.exhibits.join(","), biome]);
+  }, [tank.exhibits.join(","), biome, motion]);
 
   const candidates = Object.keys(dex)
     .filter((k) => dex[k]?.c && !tank.exhibits.includes(k))
