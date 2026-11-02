@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Cloud, CloudOff, X } from "lucide-react";
 import { money } from "@/game/content";
 import { describe, newerOf, type SyncMode } from "@/game/cloud";
+import { parseSyncId } from "@/game/slots";
 import { useGame } from "@/game/engine";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -32,7 +33,12 @@ import {
    and pick who is fishing, and the chooser that appears only when two saves each have something the other lacks.
    The game is fully playable without any of this. Words are short and kind: kids read them. */
 
-const MODE_NAME: Record<SyncMode, string> = { expedition: "Expedition", recreational: "Relaxed Fishing", survival: "Survival", coop: "Co-op" };
+const BASE_NAME: Record<string, string> = { expedition: "Expedition", story: "Story", recreational: "Relaxed Fishing", survival: "Survival", coop: "Co-op" };
+/** "Expedition", or "Expedition, slot 2" for the numbered save slots (WP-16). */
+const modeName = (id: SyncMode): string => {
+  const p = parseSyncId(id);
+  return p ? `${BASE_NAME[p.mode] ?? p.mode}${p.slot ? `, slot ${p.slot + 1}` : ""}` : id;
+};
 
 function ago(ms: number, now = Date.now()): string {
   if (!ms) return "a while ago";
@@ -437,8 +443,8 @@ function ConflictCard({ c, onPick, busy }: { c: Conflict; onPick: (choice: Choic
   const dev = c.device ? ` from your ${c.device.toLowerCase()}` : "";
   const newer = newerOf(c.localAt, c.cloudAt);
   return (
-    <section className="mt-3 rounded-2xl border border-line p-3" aria-label={`${MODE_NAME[c.mode]} saves`}>
-      <h3 className="font-serif text-lg">{MODE_NAME[c.mode]}</h3>
+    <section className="mt-3 rounded-2xl border border-line p-3" aria-label={`${modeName(c.mode)} saves`}>
+      <h3 className="font-serif text-lg">{modeName(c.mode)}</h3>
       <dl className="mt-1 grid gap-2 text-sm">
         <div className="rounded-xl bg-surface-2 p-2">
           <dt className="text-muted">This device</dt>
@@ -512,7 +518,7 @@ export function CloudSettings() {
           {backups.map((b) => (
             <div key={b.mode} className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <span className="min-w-0 flex-1">
-                {MODE_NAME[b.mode]}, saved {ago(b.at)}
+                {modeName(b.mode)}, saved {ago(b.at)}
               </span>
               <Button
                 variant="ghost"

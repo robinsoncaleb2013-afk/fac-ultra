@@ -21,8 +21,15 @@ export const PLAY_META: readonly PlayMeta[] = [
     id: "expedition",
     title: "Expedition",
     summary: "Your big adventure: travel to fifteen waters, fill your fish book and beat every boss.",
-    facts: ["Earn coins and buy better gear", "Fifteen waters, fifteen bosses", "Saves on this device"],
+    facts: ["Pick how hard it is, from Super Easy to Legend", "Three save slots", "Earn coins and buy better gear"],
     art: "river",
+  },
+  {
+    id: "story",
+    title: "Story",
+    summary: "A guided adventure through the fifteen waters, with goals and a boss to beat in each one.",
+    facts: ["Goals like catch three fish at the pond", "A boss at the end of every water", "Three save slots of its own"],
+    art: "swamp",
   },
   {
     id: "recreational",
@@ -49,7 +56,7 @@ export const PLAY_META: readonly PlayMeta[] = [
     id: "kid",
     title: "Kid-Friendly Play",
     summary: "Bigger words, a helping hand and friendlier fishing for younger anglers.",
-    facts: ["Easier fights with a glowing green", "Messages can be read out loud", "Asks before selling a rare fish"],
+    facts: ["Easier fights with a glowing green", "Messages can be read out loud", "Fish go in their own Kids book"],
     art: "pond",
   },
   {
@@ -90,13 +97,14 @@ export const PLAY_META: readonly PlayMeta[] = [
 ];
 
 /* Which book a screen is showing. Every mode keeps its own fish book, records and stickers (WP-11). */
-export type BookMode = "expedition" | "recreational" | "survival" | "coop" | "tournament";
+export type BookMode = "expedition" | "recreational" | "survival" | "coop" | "tournament" | "story";
 export const BOOK_TEXT: Record<BookMode, { name: string; line: string }> = {
   expedition: { name: "Expedition", line: "This is your Expedition book. Relaxed Fishing keeps a separate one." },
   recreational: { name: "Relaxed Fishing", line: "This is your Relaxed Fishing book. It is kept apart, so nothing here changes your Expedition." },
   survival: { name: "Survival", line: "This is your Survival book. It is kept on its own." },
   coop: { name: "Local Co-op", line: "This is your Co-op book. It is kept on its own." },
   tournament: { name: "Tournaments", line: "Events keep their own results." },
+  story: { name: "Story", line: "This is your Story book. It is kept apart from Expedition." },
 };
 export const bookOf = (mode: BookMode) => BOOK_TEXT[mode];
 

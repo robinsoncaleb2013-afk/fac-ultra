@@ -47,3 +47,7 @@ Docs-only PRs #7 (self-hosting plan) and #10 (project page record) were merged t
 ## How to undo any part
 
 Most additions are separate screens or settings. The work is in one merge (PR #15), so the cleanest undo is reverting that merge; individual parts can be backed out by hand, newest first.
+
+## WP-16 (difficulty, Story, slots, achievements)
+
+Caleb's list is built as written, with these decisions: difficulty is fixed per save slot; Story always plays on Easy; the Kid lens sends catches to a separate Kids book in any mode (Super Easy does too); Hard has a small taste of the Legend dangers; hazards only run in Expedition; only Expedition and Story have three slots; cloud slots reuse the existing `mode` column as a sync id, so no database migration. See `docs/architecture/12-difficulty-slots-achievements.md`.

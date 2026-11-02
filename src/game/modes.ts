@@ -5,8 +5,8 @@
 
 import { stageOf } from "./content.ts";
 
-/** WP-5 added "survival", WP-7 added "tournament". */
-export type Mode = "expedition" | "recreational" | "survival" | "coop" | "tournament";
+/** WP-5 added "survival", WP-7 added "tournament", WP-16 added "story". */
+export type Mode = "expedition" | "recreational" | "survival" | "coop" | "tournament" | "story";
 
 export type HudItem = "money" | "level" | "weather" | "window" | "hunger" | "warmth" | "day" | "timer";
 
@@ -169,6 +169,31 @@ export const MODES: Record<Mode, ModeRules> = {
     twoPlayer: true,
     menuTabs: ["tackle", "shop", "lodge", "waters", "players", "settings"],
   },
+  /* WP-16 (12 §4): a guided trip through the waters, chapter by chapter. Its own save slots (up to three), its own
+     book. Every water's Lair is open (the chapter gives you the Boss Chum), and a friendly fixed difficulty. */
+  story: {
+    id: "story",
+    title: "Story",
+    blurb: "A guided adventure: one water at a time, with goals to reach and a boss at the end of each.",
+    saveKey: "fac-ultra-story",
+    economy: true,
+    contracts: false,
+    bosses: true,
+    rebirth: false,
+    aquarium: true,
+    allUnlocked: false,
+    assistAllowed: true,
+    fightSpeed: 1,
+    biteSpeed: 1,
+    keepRelease: "both",
+    dexShared: "own",
+    stagesOpen: true,
+    hud: WILD,
+    trips: false,
+    photo: true,
+    twoPlayer: false,
+    menuTabs: ["tackle", "shop", "lodge", "waters", "players", "settings"],
+  },
   /* WP-7 (06 §1.4, 05 §1): a server-scored event. Helping Hand is off and Kid Mode's play help with it (the
      reading and text features still work), the tackle is the same for everyone, the sky and the fish come from
      the event's seed, and nothing is sold. The slot is a throwaway: events keep their own record on the server. */
@@ -197,7 +222,7 @@ export const MODES: Record<Mode, ModeRules> = {
   },
 };
 
-export const MODE_LIST: readonly Mode[] = ["expedition", "recreational", "survival", "coop", "tournament"];
+export const MODE_LIST: readonly Mode[] = ["expedition", "recreational", "survival", "coop", "tournament", "story"];
 
 /** Is this the server-scored mode? (The rules table has no flag for it; the id is the flag.) */
 export const isTournament = (r: Pick<ModeRules, "id">) => r.id === "tournament";
@@ -212,6 +237,7 @@ export const MODE_KEYS: Record<Mode, string> = {
   survival: MODES.survival.saveKey,
   coop: MODES.coop.saveKey,
   tournament: MODES.tournament.saveKey,
+  story: MODES.story.saveKey,
 };
 
 export function isMode(v: unknown): v is Mode {
@@ -231,6 +257,10 @@ export function rulesOf(mode: Mode): ModeRules {
 }
 
 /* ── Rules applied ───────────────────────────────────────────────────────── */
+
+/** WP-16 (12 §7): in modes where you can keep OR release, the choice is yours and has no time limit; casting waits for it.
+    Survival (larder) and Tournament (keep only) have no real choice and still move on by themselves. */
+export const choosesFish = (r: Pick<ModeRules, "keepRelease">) => r.keepRelease === "both";
 
 export const canKeep = (r: ModeRules) => r.keepRelease !== "releaseOnly";
 export const canRelease = (r: ModeRules) => r.keepRelease === "both" || r.keepRelease === "releaseOnly";
@@ -271,6 +301,7 @@ export const MENU_CARDS: MenuCard[] = [
   { id: "expedition", title: MODES.expedition.title, blurb: MODES.expedition.blurb, mode: "expedition" },
   { id: "recreational", title: MODES.recreational.title, blurb: MODES.recreational.blurb, mode: "recreational" },
   { id: "survival", title: MODES.survival.title, blurb: MODES.survival.blurb, mode: "survival" },
+  { id: "story", title: MODES.story.title, blurb: MODES.story.blurb, mode: "story" },
   {
     id: "tournaments",
     title: MODES.tournament.title,
@@ -311,7 +342,7 @@ export const MENU_CARDS: MenuCard[] = [
 ];
 
 /** The mode-select screen (WP-12): the five modes, in order. Kid-friendly play is a switch beside them, not a card. */
-export const MODE_SELECT_IDS: readonly string[] = ["expedition", "recreational", "survival", "tournaments", "local"];
+export const MODE_SELECT_IDS: readonly string[] = ["expedition", "story", "recreational", "survival", "tournaments", "local"];
 
 /** Things you do inside the Expedition career. They are not modes, so they sit under the mode cards as shortcuts. */
 export const EXPEDITION_EXTRA_IDS: readonly string[] = ["online", "aquarium", "derby", "rush"];

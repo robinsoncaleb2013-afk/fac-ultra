@@ -6,7 +6,7 @@ import { STEWARD_SPECIES } from "@/game/keep";
 import { recordLine } from "@/game/records";
 import { useGame } from "@/game/engine";
 import { moneyWords } from "@/game/kid";
-import { canKeep, canRelease, MODES } from "@/game/modes";
+import { canKeep, canRelease, choosesFish, MODES } from "@/game/modes";
 import { SpeakButton } from "@/components/game/kid";
 import { useKidOn } from "@/components/game/use-kid";
 import { confettiFor } from "@/game/graphics";
@@ -66,8 +66,9 @@ function Confetti({ count, color }: { count: number; color: string }) {
 
 /**
  * Desktop: a card that rises bottom-right. Phone: a bottom sheet, 55 % high.
- * Keep or Release (K / R). Nothing stalls: after 6 s it keeps the fish by itself, and a click,
- * Space, Esc or a swipe down also keeps it (04 §6).
+ * Keep or Release (K / R). Where the choice is yours (Expedition, Story, Relaxed Fishing) there is no time limit: the
+ * card stays until you choose, and casting waits for it (12 §7). Survival and Tournament still move on by themselves
+ * after 6 s, as does anyone who switched on "Keep every fish" in Settings.
  */
 export function Celebration({ mobile }: { mobile?: boolean }) {
   const cel = useGame((s) => s.celebration);
@@ -84,16 +85,19 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
   const cb = useGame((s) => s.cb);
   const mult = useGame((s) => multOf(s.dex, s.rb));
   const rules = useGame((s) => MODES[s.mode]);
+  const autoKeep = useGame((s) => s.autoKeep);
   const kid = useKidOn();
   const at = cel?.at;
   const startY = useRef(0);
+  /* WP-16: you decide, and there is no hurry. */
+  const must = choosesFish(rules) && !autoKeep;
 
   /* Auto-Keep: the fish is already in the bag, so letting the card go is the Keep. */
   useEffect(() => {
-    if (at === undefined) return;
+    if (at === undefined || must) return;
     const timer = window.setTimeout(keep, HOLD_MS);
     return () => window.clearTimeout(timer);
-  }, [at, keep]);
+  }, [at, keep, must]);
 
   if (!cel) return null;
   const c = cel.catch;
@@ -109,12 +113,13 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
     <div
       role="status"
       aria-live="polite"
-      onClick={keep}
+      data-testid="celebration"
+      onClick={must ? undefined : keep}
       onTouchStart={(e) => {
         startY.current = e.touches[0].clientY;
       }}
       onTouchEnd={(e) => {
-        if (e.changedTouches[0].clientY - startY.current > 60) keep();
+        if (!must && e.changedTouches[0].clientY - startY.current > 60) keep();
       }}
       className={cn(
         "safe-x absolute z-40 overflow-hidden border border-line bg-surface shadow-2xl",
@@ -182,6 +187,7 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
           {c.shiny ? <Badge>Shiny</Badge> : null}
           {c.fotd ? <Badge>Fish of the Day: double XP</Badge> : null}
           {c.page ? <Badge>Page sticker</Badge> : null}
+          {c.book === "kids" ? <Badge>Kids book</Badge> : null}
         </div>
         {newBest ? (
           <p className="text-xs leading-snug text-lagoon">New best · {recordLine(newBest, c.biome)}</p>
@@ -219,13 +225,15 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
           ) : null}
         </div>
         <p className="text-center text-xs text-muted">
-          {rules.survival
+          {must
+            ? "Keep it or let it go. Take your time: you can cast once you choose."
+            : rules.survival
             ? "It is in your larder. Cook it at camp, or eat it raw (sometimes it is bad)."
             : isSteward
             ? `Release for 20% more XP. You are this fish's Steward.`
             : `Release for 20% more XP · ${toSteward} more to be its Steward`}
         </p>
-        {motion ? <span aria-hidden className="fac-drain absolute inset-x-0 bottom-0 h-1 bg-brass/60" /> : null}
+        {motion && !must ? <span aria-hidden className="fac-drain absolute inset-x-0 bottom-0 h-1 bg-brass/60" /> : null}
       </div>
     </div>
   );

@@ -127,7 +127,8 @@ test("every mode keeps its own collection: nothing is shared with the career (WP
 
 test("Recreational opens every stage and Lair from the first cast; the others earn them from their own book", () => {
   assert.equal(MODES.recreational.stagesOpen, true);
-  for (const id of MODE_LIST) if (id !== "recreational") assert.equal(MODES[id].stagesOpen, false, id);
+  for (const id of MODE_LIST) if (id !== "recreational" && id !== "story") assert.equal(MODES[id].stagesOpen, false, id);
+  assert.equal(MODES.story.stagesOpen, true, "Story: the chapter gives the Boss Chum, so every Lair is open");
   assert.equal(stageIn(MODES.recreational, {}, 4), 3, "an empty book still has the whole water");
   assert.equal(stageIn(MODES.expedition, {}, 4), 0, "the career earns its stages");
 });

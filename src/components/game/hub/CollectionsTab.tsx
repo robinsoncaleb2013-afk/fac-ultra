@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { BIOMES, SPECIES_PER_BIOME } from "@/game/content";
 import { useHubUi } from "@/game/hubstate";
 import { MODES } from "@/game/modes";
-import { COLLECTION_MODES, peekMode, type Peek } from "@/game/peek";
+import { collectionEntries, type CollectionEntry } from "@/game/peek";
 import { Icon } from "@/components/game/hub/icons";
 import { DarkPanel } from "@/components/game/hub/panel-shell";
 import { MasterDetail, type HubItem } from "@/components/game/hub/parts";
@@ -12,8 +12,9 @@ import { MasterDetail, type HubItem } from "@/components/game/hub/parts";
 
 const kinds = (n: number) => `${n} ${n === 1 ? "kind" : "kinds"} of fish`;
 
-function Detail({ p }: { p: Peek }) {
-  const rules = MODES[p.mode];
+function Detail({ e }: { e: CollectionEntry }) {
+  const p = e.peek;
+  const rules = { ...MODES[p.mode], title: e.title };
   if (!p.saved)
     return (
       <DarkPanel label={rules.title} className="h-full">
@@ -25,11 +26,12 @@ function Detail({ p }: { p: Peek }) {
     <DarkPanel label={rules.title} className="h-full" >
       <h2 className="font-serif text-2xl">{rules.title}</h2>
       <p className="mt-1 text-muted">
-        {kinds(p.found)} found out of {p.total}.{p.level > 1 && !rules.survival ? ` You are level ${p.level}.` : ""}
+        {kinds(p.found)} found out of {p.total}.{p.level > 1 && !e.kids && !MODES[p.mode].survival ? ` You are level ${p.level}.` : ""}
         {p.trophies ? ` ${p.trophies} ${p.trophies === 1 ? "medal" : "medals"} in the trophy cabinet.` : ""}
       </p>
-      <h3 className="mt-4 font-serif text-lg">Your five heaviest</h3>
-      {p.best.length ? (
+      {e.kids ? <p className="mt-1 text-sm text-muted">Fish caught in Kid Mode and on Super Easy live in their own book. They never count in the main book.</p> : null}
+      {e.kids ? null : <h3 className="mt-4 font-serif text-lg">Your five heaviest</h3>}
+      {e.kids ? null : p.best.length ? (
         <ol className="mt-1 flex flex-col" data-testid="collection-best">
           {p.best.map((b) => (
             <li key={`${b.b}-${b.i}`} className="flex items-baseline justify-between gap-2 border-t border-line py-2 first:border-0">
@@ -64,35 +66,33 @@ function Detail({ p }: { p: Peek }) {
 
 export function CollectionsTab({ split }: { split: boolean }) {
   const saved = useHubUi((s) => s.item.collections);
-  const peeks = useMemo(
+  const entries = useMemo(
     () =>
-      COLLECTION_MODES.map((m) =>
-        peekMode(m, (k) => {
-          try {
-            return localStorage.getItem(k);
-          } catch {
-            return null;
-          }
-        }),
-      ),
+      collectionEntries((k) => {
+        try {
+          return localStorage.getItem(k);
+        } catch {
+          return null;
+        }
+      }),
     [],
   );
-  const items: HubItem[] = peeks.map((p) => ({
-    id: p.mode,
-    title: MODES[p.mode].title,
-    sub: p.saved ? `${kinds(p.found)} found` : "Nothing yet",
+  const items: HubItem[] = entries.map((e) => ({
+    id: e.id,
+    title: e.title,
+    sub: e.sub,
     icon: <Icon name="lodge" className="size-5" />,
   }));
   return (
     <MasterDetail
       tab="collections"
       items={items}
-      selectedId={peeks.some((p) => p.mode === saved) ? (saved as string) : null}
+      selectedId={entries.some((e) => e.id === saved) ? (saved as string) : null}
       listLabel="Collections"
       split={split}
       detailLabel="Collection"
       bare
-      render={(id) => <Detail p={peeks.find((p) => p.mode === id) ?? peeks[0]} />}
+      render={(id) => <Detail e={entries.find((e) => e.id === id) ?? entries[0]} />}
     />
   );
 }

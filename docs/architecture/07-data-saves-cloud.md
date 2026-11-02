@@ -26,6 +26,7 @@ Field inventory planned by this chapter (so names don't collide):
 | `pet`, `stickers`, `shiny`, `fotdClaimed`, `rivalRecord` (+ device `volume`, `cb`) | WP-6 | save v8, see `05` §6 and §10 |
 | `trophies`, `titles`, `bobberSkin`, `tourneyHistory` | WP-8 | arrays |
 | `events` | WP-15 | save v10: streak clock, running event, seen events, mutated-fish counts; see `11` §8 |
+| `slotName`, `difficulty`, `sideDex`, `story`, `ach`, `hz`, `autoKeep`, `created` | WP-16 | save v12: slot name, difficulty, Kids book, Story chapter, achievements, hazard state; see `12` |
 | `cloud` | WP-9 | `{ userId, lastSync, rev }` |
 
 Save v4 is the version that ships with WP-1; each later package bumps once.
@@ -35,6 +36,10 @@ Save v4 is the version that ships with WP-1; each later package bumps once.
 ## 2. Save slots
 
 One `localStorage` key per mode (`modes.ts` `saveKey`): `fac-ultra` (Expedition), `fac-ultra-sandbox` (Recreational), `fac-ultra-survival`, `fac-ultra-coop`, `fac-ultra-tourney`. **Slots never share data** (WP-11): a mode reads and writes only its own key, including its dex, records, stickers, shinies, Fish of the Day claim, pet and Regulars record. Settings that are about the *device* (gfx, sound, motion, flash, kid, followClock) are **also** mirrored to a shared key `fac-ultra-device` so they apply across modes; `hydrate()` overlays them.
+
+### 2.1 Slots and cloud ids (WP-16)
+
+Expedition and Story have up to three slots (`MAX_SLOTS` in `slots.ts`): slot 0 keeps the old key, slots 1 and 2 add `-s1` / `-s2`. The cloud `mode` column is a sync id (`expedition`, `expedition-s1`, `story-s2`); no database change. The server sanitize and delete cover every slot id. Save v12 adds `slotName`, `difficulty`, `sideDex` (Kids book), `story`, `ach` and `hazards`. Full design: `12-difficulty-slots-achievements.md`.
 
 ## 3. Accounts (WP-9)
 

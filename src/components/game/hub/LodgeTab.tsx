@@ -14,6 +14,9 @@ import { Icon, type IconName } from "@/components/game/hub/icons";
 import { DarkPanel } from "@/components/game/hub/panel-shell";
 import { MasterDetail, type HubItem } from "@/components/game/hub/parts";
 import { Painting } from "@/components/game/hub/art";
+import { AchievementsRoom } from "@/components/game/achievements-ui";
+import { KidsBook, PbRoom } from "@/components/game/trophy-room";
+import { StoryRoom } from "@/components/game/story-ui";
 
 const named = <K extends string>(load: () => Promise<Record<K, ComponentType>>, key: K) => lazy(() => load().then((m) => ({ default: m[key] })));
 const Lodge = () => import("@/components/game/panels/LodgePanel");
@@ -48,8 +51,13 @@ function entries(scope: LodgeScope, rules: { trips: boolean; aquarium: boolean; 
   const evOn = eventModeOn(rules as Parameters<typeof eventModeOn>[0]);
   const tank: Entry = { id: "tank", title: "Aquarium", sub: "Fish that earn coins", icon: "waters", art: "reef", view: Aquarium };
   const trophies: Entry = { id: "trophies", title: "Trophies and medals", sub: "Prizes from tournaments", icon: "flag", art: "coast", view: TrophyShelf };
+  /* WP-16: the Trophy Room, Achievements and the Kids book (12 §1, §6, §8). Events and Survival have none of them. */
+  const pb: Entry = { id: "pbroom", title: "Trophy room", sub: "Your biggest fish of every kind", icon: "flag", art: "coast", view: PbRoom };
+  const ach: Entry = { id: "achievements", title: "Achievements", sub: "Goals you have reached", icon: "flag", art: "kelp", view: AchievementsRoom };
+  const kids: Entry = { id: "kidsbook", title: "Kids book", sub: "Fish from Kid Mode and Super Easy", icon: "lodge", art: "pond", view: KidsBook };
+  const storyRoom: Entry = { id: "story", title: "Story", sub: "Your chapters, goals and rewards", icon: "map", art: "swamp", view: StoryRoom };
   if (scope === "collection") {
-    const list: Entry[] = [book, record];
+    const list: Entry[] = [book, record, pb, ach, kids];
     if (evOn) list.push(events);
     if (fun) list.push(pet, regulars);
     if (rules.aquarium) list.push(tank);
@@ -57,7 +65,8 @@ function entries(scope: LodgeScope, rules: { trips: boolean; aquarium: boolean; 
   }
   /* The Lodge. A tournament shows only what gives no edge: records, the book and trophies. */
   if (rules.id === "tournament") return [trophies, record, book];
-  const list: Entry[] = [trophies, record];
+  const list: Entry[] = rules.id === "story" ? [storyRoom, trophies, record] : [trophies, record];
+  list.push(pb, ach, kids);
   if (rules.trips) list.push(logbook);
   list.push(book);
   if (evOn) list.push(events);
