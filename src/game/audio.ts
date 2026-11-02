@@ -65,6 +65,12 @@ export const audio = {
     tone(880, 0.06, "sine", 0.04);
     tone(1320, 0.1, "sine", 0.03);
   },
+  /** A short brass arpeggio for epic catches and new species. */
+  fanfare() {
+    tone(523, 0.14, "sawtooth", 0.035);
+    setTimeout(() => tone(659, 0.14, "sawtooth", 0.035), 120);
+    setTimeout(() => tone(784, 0.3, "sawtooth", 0.04), 240);
+  },
   frenzy() {
     tone(520, 0.08, "triangle", 0.04);
     tone(780, 0.14, "sine", 0.04);

@@ -1,5 +1,19 @@
 import { create } from "zustand";
 import { audio } from "@/game/audio";
+import { helpingHand } from "@/game/assist";
+import {
+  DEVICE_KEY,
+  deviceSubset,
+  formOf,
+  isGfxPref,
+  overlayDevice,
+  readDevice,
+  readDeviceSettings,
+  resolveGfx,
+  type Gfx,
+  type GfxPref,
+} from "@/game/device";
+import { TIERS } from "@/game/graphics";
 import {
   AUTO_PRICE,
   BAITS,
@@ -88,6 +102,10 @@ export type Save = {
   sound: boolean;
   motion: boolean;
   flash: boolean;
+  /* WP-1 (save v4): device-level settings, mirrored to fac-ultra-device */
+  gfx: GfxPref;
+  assist: boolean;
+  followClock: boolean;
   /* Expansion (save v3) */
   sigBox: number[];
   sig: number;
@@ -114,11 +132,13 @@ export type LastCatch = {
   boss: boolean;
   frenzy: boolean;
   discovered: boolean;
+  /** Heavier than this species' previous best (and not the first one caught). */
+  record: boolean;
 };
 
 type Toast = { id: number; text: string };
 
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 const MARKS = [10, 25, 50, 100, 150, 200, 250, 300, 375];
 
 export const MODE_KEYS: Record<Mode, string> = {
@@ -148,12 +168,6 @@ export function speciesRemap(old: number) {
 let toastSeq = 1;
 let saveTimer = 0;
 let bound = false;
-
-export const hud = {
-  track: null as HTMLDivElement | null,
-  zone: null as HTMLDivElement | null,
-  cursor: null as HTMLDivElement | null,
-};
 
 type Particle = {
   x: number;
@@ -206,6 +220,21 @@ export const sim = {
   particles: [] as Particle[],
   swimmers: [] as Swimmer[],
   leap: null as null | { t: number; look: Rolled },
+  /* WP-1: fight ring and Helping Hand (never saved) */
+  cap: 90,
+  trail: [50, 50, 50, 50, 50, 50],
+  trailI: 0,
+  hitAngles: [] as number[],
+  spinT: 0,
+  bandFlash: 0,
+  baseZone: 18,
+  zoneBonus: 0,
+  speedFactor: 1,
+  misses: 0,
+  failedFights: 0,
+  wins: 0,
+  lastInput: 0,
+  hover: null as null | { x: number; y: number },
 };
 
 function starterContracts(): Contract[] {
@@ -253,6 +282,9 @@ export function fresh(): Save {
     sound: true,
     motion: true,
     flash: true,
+    gfx: "auto",
+    assist: true,
+    followClock: true,
     sigBox: [],
     sig: -1,
     baitBox: {},
@@ -528,6 +560,9 @@ export function sanitize(raw: unknown): Save {
     sound: bool(o.sound, true),
     motion: bool(o.motion, true),
     flash: bool(o.flash, true),
+    gfx: isGfxPref(o.gfx) ? o.gfx : "auto",
+    assist: bool(o.assist, true),
+    followClock: bool(o.followClock, true),
     sigBox,
     sig,
     baitBox,
@@ -575,6 +610,9 @@ export function snapshot(s: Save): Save {
     sound: s.sound,
     motion: s.motion,
     flash: s.flash,
+    gfx: s.gfx,
+    assist: s.assist,
+    followClock: s.followClock,
     sigBox: s.sigBox,
     sig: s.sig,
     baitBox: s.baitBox,
@@ -596,6 +634,8 @@ function persistNow() {
     const prev = localStorage.getItem(key);
     if (prev) localStorage.setItem(key + "-bak", prev);
     localStorage.setItem(key, json);
+    /* Device settings follow the player across modes (07 §2). */
+    localStorage.setItem(DEVICE_KEY, JSON.stringify(deviceSubset(useGame.getState())));
   } catch {
     /* private mode or quota */
   }
@@ -780,6 +820,7 @@ function withCatch(s: Save & { toasts: Toast[] }, fish: Rolled, o: { auto: boole
     boss: fish.boss && !o.auto,
     frenzy: o.frenzy && !o.auto,
     discovered,
+    record: !discovered && fish.w > (prev?.w || 0),
   };
   return {
     dex,
@@ -806,7 +847,7 @@ function burst(x: number, y: number, n: number, kind: Particle["kind"]) {
   const motion = useGame.getState().motion;
   const count = motion ? n : Math.min(3, n);
   for (let i = 0; i < count; i++) {
-    if (sim.particles.length > 110) sim.particles.shift();
+    if (sim.particles.length >= sim.cap) sim.particles.shift();
     const a = Math.random() * Math.PI * 2;
     const sp = 0.05 + Math.random() * 0.18;
     sim.particles.push({
@@ -867,20 +908,33 @@ export function resetSim() {
   sim.particles.length = 0;
   sim.perfect = false;
   sim.bossCast = false;
+  sim.hitAngles.length = 0;
+  sim.spinT = 0;
+  sim.misses = 0;
+  sim.failedFights = 0;
+  sim.wins = 0;
+  sim.zoneBonus = 0;
+  sim.speedFactor = 1;
 }
 
-function paintHud() {
-  const track = hud.track;
-  const zone = hud.zone;
-  const cursor = hud.cursor;
-  if (!track || !zone || !cursor) return;
-  const on = sim.phase === "reel";
-  track.style.opacity = on ? "1" : "0";
-  track.style.height = on ? "1.75rem" : "0px";
-  track.style.marginTop = on ? "0.5rem" : "0px";
-  zone.style.left = `${sim.zc - sim.zone / 2}%`;
-  zone.style.width = `${sim.zone}%`;
-  cursor.style.left = `${sim.cp}%`;
+/** Re-read Helping Hand: the band and the cursor speed follow the player's streak, live. */
+function applyAssist() {
+  const h = helpingHand({
+    assist: useGame.getState().assist,
+    misses: sim.misses,
+    failedFights: sim.failedFights,
+    wins: sim.wins,
+  });
+  sim.zone = sim.baseZone + h.zoneBonus;
+  sim.zoneBonus = h.zoneBonus;
+  sim.speedFactor = h.speedFactor;
+  const helping = h.zoneBonus > 0;
+  if (useGame.getState().helping !== helping) useGame.setState({ helping });
+}
+
+function assistNow() {
+  const s = useGame.getState();
+  return helpingHand({ assist: s.assist, misses: 0, failedFights: sim.failedFights, wins: sim.wins });
 }
 
 function updateBobber() {
@@ -941,7 +995,7 @@ function tickWeatherFx(dt: number) {
     rate = 6;
   }
   if (!kind || Math.random() > rate * dt) return;
-  if (sim.particles.length > 90) return;
+  if (sim.particles.length >= sim.cap * 0.8) return;
   if (kind === "rain") {
     sim.particles.push({
       x: Math.random(),
@@ -1000,7 +1054,7 @@ function beginBite() {
   });
   sim.fish = fish;
   sim.phase = "bite";
-  sim.biteMax = (1300 + RODS[s.rod].zone * 8) / 1000;
+  sim.biteMax = (1300 + RODS[s.rod].zone * 8) / 1000 + assistNow().biteBonus;
   sim.biteLeft = sim.biteMax;
   sim.trauma = Math.min(1, sim.trauma + (fish.boss ? 0.85 : 0.28));
   audio.bite();
@@ -1025,11 +1079,21 @@ function succeed() {
   sim.hitstop = fish.t >= 3 || fish.boss ? 0.07 : 0.04;
   if (s.flash) sim.hitFlash = fish.t >= 4 || fish.boss ? 0.4 : 0.16;
   burst(sim.bnx, sim.bny, 18, "splash");
-  if (sim.perfect || fish.t >= 3) burst(sim.bnx, sim.bny - 0.05, 10, "spark");
+  burst(sim.bnx, sim.bny, 24, "spark");
   audio.land(fish.t);
+  sim.wins += 1;
+  sim.failedFights = 0;
+  sim.misses = 0;
+  sim.zoneBonus = 0;
+  sim.hitAngles.length = 0;
   buzz(12);
+  const lc = next.lastCatch;
+  if (lc && (fish.t >= 3 || lc.discovered || lc.boss)) audio.fanfare();
   useGame.setState({
     ...next,
+    helping: false,
+    tension: 0,
+    celebration: lc ? { catch: lc, at: Date.now() } : null,
     phase: "idle",
     message: fish.boss ? `${fish.name} landed!` : "Landed.",
     detail: "",
@@ -1077,10 +1141,18 @@ function fail(kind: "slip" | "snap") {
   sim.castLair = false;
   sim.trauma = Math.min(1, sim.trauma + (kind === "snap" ? 0.6 : 0.22));
   burst(sim.bnx, sim.bny, 8, "splash");
+  burst(sim.bnx, sim.bny, 24, "spark");
+  sim.failedFights += 1;
+  sim.wins = 0;
+  sim.misses = 0;
+  sim.zoneBonus = 0;
+  sim.hitAngles.length = 0;
   audio.fail(kind);
   buzz(kind === "snap" ? 24 : 10);
   const s = useGame.getState();
   useGame.setState({
+    helping: false,
+    tension: 0,
     phase: "idle",
     streak: 0,
     lair: wasLair && !s.rush ? false : s.lair,
@@ -1114,6 +1186,9 @@ export function frame(dt: number) {
   const s = useGame.getState();
   if (!s.hydrated) return;
   sim.t += dt;
+  sim.cap = TIERS[s.tier].particles;
+  if (sim.spinT > 0) sim.spinT = Math.max(0, sim.spinT - dt);
+  if (sim.bandFlash > 0) sim.bandFlash = Math.max(0, sim.bandFlash - dt);
   sim.trauma = Math.max(0, sim.trauma - dt * 1.7);
   sim.hitFlash = Math.max(0, sim.hitFlash - dt * 2.4);
   sim.flashA = Math.max(0, sim.flashA - dt * 1.6);
@@ -1185,7 +1260,6 @@ export function frame(dt: number) {
 
   if (sim.hitstop > 0) {
     sim.hitstop -= dt;
-    paintHud();
     return;
   }
 
@@ -1197,7 +1271,7 @@ export function frame(dt: number) {
     if (sim.biteLeft <= 0) fail("slip");
   } else if (sim.phase === "reel" && sim.fish) {
     const fish = sim.fish;
-    let speed = (70 + fish.t * 28 + fish.i * 1.5) / (1 + sim.reelSpeed * 0.07);
+    let speed = ((70 + fish.t * 28 + fish.i * 1.5) / (1 + sim.reelSpeed * 0.07)) * sim.speedFactor;
     const stage = stageOf(s.dex, s.biome);
     if (stage === 2) speed *= 1.3;
     if (currentMode === "sandbox") speed *= 0.6;
@@ -1214,12 +1288,19 @@ export function frame(dt: number) {
           if (Math.random() < 0.55) {
             sim.cd = sim.cd > 0 ? -1 : 1;
             placeZone();
+            sim.spinT = 0.22;
+            buzz(30);
             sim.trauma = Math.min(1, sim.trauma + 0.15);
           }
         }
       }
     }
+    const tf = sim.tz / Math.max(0.01, sim.hold);
+    const bucket: 0 | 1 | 2 = tf >= 0.85 ? 2 : tf >= 0.5 ? 1 : 0;
+    if (bucket !== s.tension) useGame.setState({ tension: bucket });
     sim.cp += sim.cd * speed * dt;
+    sim.trailI = (sim.trailI + 1) % 6;
+    sim.trail[sim.trailI] = sim.cp;
     if (sim.cp > 100) {
       sim.cp = 100;
       sim.cd = -1;
@@ -1262,7 +1343,6 @@ export function frame(dt: number) {
       }
     }
   }
-  paintHud();
 }
 
 function startCast() {
@@ -1328,11 +1408,17 @@ function hook() {
   sim.tz = 0;
   sim.need = fish.boss ? 6 + Math.floor(s.biome / 3) : 2 + fish.t;
   const calmFx = sigEffect(s.sig);
-  sim.zone = RODS[s.rod].zone + (calmFx?.kind === "calm" ? calmFx.zone : 0);
+  sim.baseZone = RODS[s.rod].zone + (calmFx?.kind === "calm" ? calmFx.zone : 0);
+  sim.misses = 0;
+  sim.hitAngles.length = 0;
+  sim.spinT = 0;
+  sim.zone = sim.baseZone;
   sim.hold = LINES[s.line].hold;
   sim.reelSpeed = REELS[s.reel].speed;
   sim.cd = Math.random() < 0.5 ? -1 : 1;
   sim.cp = 8 + Math.random() * 84;
+  sim.trail.fill(sim.cp);
+  applyAssist();
   placeZone();
   if (sim.perfect) {
     sim.hitstop = 0.06;
@@ -1351,8 +1437,13 @@ function reelTap() {
   if (!fish || sim.phase !== "reel") return;
   if (Math.abs(sim.cp - sim.zc) <= sim.zone / 2) {
     sim.hits += 1;
+    sim.misses = 0;
+    sim.bandFlash = 0.08;
+    sim.hitAngles.push(sim.cp);
+    applyAssist();
     sim.trauma = Math.min(1, sim.trauma + 0.12);
     audio.tick();
+    buzz(10);
     burst(sim.bnx, sim.bny, 5, "spark");
     if (sim.hits >= sim.need) {
       succeed();
@@ -1369,13 +1460,15 @@ function reelTap() {
     sim.tz += (1 + fish.t * 0.5 + fish.i / 20) * (fish.boss ? 1.15 : 1) * (phase3 ? 1.6 : 1);
     sim.trauma = Math.min(1, sim.trauma + 0.2);
     audio.miss();
+    sim.misses += 1;
+    applyAssist();
     if (sim.tz >= sim.hold) {
       fail("snap");
       return;
     }
     useGame.setState({
       message: "Miss. The line strains.",
-      detail: `${sim.hits}/${sim.need} · line ${linePct()}%`,
+      detail: sim.zoneBonus > 0 ? "Helping hand: the band is wider." : `${sim.hits}/${sim.need} · line ${linePct()}%`,
     });
   }
 }
@@ -1414,6 +1507,13 @@ type Ui = {
   mode: Mode;
   lodgeView: LodgeView;
   welcomeBack: { gain: number; hours: number } | null;
+  /* WP-1 */
+  tier: Gfx;
+  celebration: { catch: LastCatch; at: number } | null;
+  photo: boolean;
+  helping: boolean;
+  /** Line strain, 0 calm · 1 strained · 2 about to snap (colours the message pill). */
+  tension: 0 | 1 | 2;
 };
 
 type Store = Save &
@@ -1452,7 +1552,9 @@ type Store = Save &
     pin: (key: string) => void;
     rebirth: () => void;
     wipe: () => void;
-    toggleSetting: (key: "sound" | "motion" | "flash") => void;
+    toggleSetting: (key: "sound" | "motion" | "flash" | "assist" | "followClock") => void;
+    setGfx: (pref: GfxPref) => void;
+    dismissCelebration: () => void;
     importSave: (raw: unknown) => boolean;
     exportCode: () => string;
     importCode: (code: string) => boolean;
@@ -1475,6 +1577,17 @@ export const useGame = create<Store>((set, get) => ({
   mode: "career",
   lodgeView: "record",
   welcomeBack: null,
+  tier: "full",
+  celebration: null,
+  photo: false,
+  helping: false,
+  tension: 0,
+  setGfx: (pref) => {
+    const d = readDevice();
+    set({ gfx: pref, tier: resolveGfx(pref, formOf(d), d.mem, d.cores) });
+    persistSoon();
+  },
+  dismissCelebration: () => set({ celebration: null }),
   setTab: (tab) => set({ tab, armRebirth: false, armReset: false }),
   setScreen: (screen) => set({ screen }),
   setLodgeView: (view) => set({ lodgeView: view, tab: "lodge" }),
@@ -1781,6 +1894,9 @@ export const useGame = create<Store>((set, get) => ({
       sound: s.sound,
       motion: s.motion,
       flash: s.flash,
+      gfx: s.gfx,
+      assist: s.assist,
+      followClock: s.followClock,
       tank: { ...s.tank, lastSettle: Date.now() },
       mastered: s.mastered,
       sigBox: s.sigBox,
@@ -1808,6 +1924,12 @@ export const useGame = create<Store>((set, get) => ({
     const tab = s.tab;
     set({
       ...(currentMode === "sandbox" ? sandboxSave() : fresh()),
+      sound: s.sound,
+      motion: s.motion,
+      flash: s.flash,
+      gfx: s.gfx,
+      assist: s.assist,
+      followClock: s.followClock,
       hydrated: true,
       tab,
       phase: "idle",
@@ -1880,10 +2002,18 @@ function loadSlot(mode: Mode, toGame: boolean) {
   let save: Save;
   if (!raw && mode === "sandbox") save = sandboxSave();
   else save = sanitize(raw);
-  if (!raw && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  let device: ReturnType<typeof readDeviceSettings> = {};
+  try {
+    device = readDeviceSettings(JSON.parse(localStorage.getItem(DEVICE_KEY) || "null"));
+  } catch {
+    device = {};
+  }
+  if (!raw && !Object.keys(device).length && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     save.motion = false;
     save.flash = false;
   }
+  save = overlayDevice(save, device);
+  const dev = readDevice();
   if (dexCount(save.dex) >= TOTAL_SPECIES) {
     save.contracts = save.contracts.map((c) =>
       c.kind === "discover" && c.prog < c.goal ? makeContract(save, "count") : c,
@@ -1902,6 +2032,9 @@ function loadSlot(mode: Mode, toGame: boolean) {
   resetSim();
   useGame.setState({
     ...save,
+    tier: resolveGfx(save.gfx, formOf(dev), dev.mem, dev.cores),
+    celebration: null,
+    helping: false,
     hydrated: true,
     mode,
     screen: toGame ? "game" : "menu",

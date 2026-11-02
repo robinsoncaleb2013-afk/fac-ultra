@@ -62,3 +62,39 @@ test("str() and list() helpers", () => {
   assert.deepEqual(list("nope", () => 1), []);
   assert.equal(list(new Array(1000).fill(0), () => 0, 20).length, 20);
 });
+
+/* ── v3 → v4 (WP-1): gfx, assist, followClock ─────────────────────────────── */
+
+test("a v3 save gains the WP-1 settings with safe defaults and keeps its progress", () => {
+  const raw = JSON.parse(readFileSync(join(dir, "save-v3.json"), "utf8")) as Record<string, unknown>;
+  assert.equal(raw.version, 3);
+  assert.equal("gfx" in raw, false);
+  const s = sanitize(raw);
+  assert.equal(s.version, 4);
+  assert.equal(s.gfx, "auto");
+  assert.equal(s.assist, true);
+  assert.equal(s.followClock, true);
+  assert.equal(s.c, raw.c, "money preserved");
+  assert.equal(dexCount(s.dex), 3, "dex preserved");
+  assert.equal(s.caught, raw.caught);
+  for (const [k, v] of Object.entries(s)) {
+    if (typeof v === "number") assert.ok(Number.isFinite(v), `${k} is not NaN`);
+  }
+});
+
+test("v4 settings round-trip through snapshot and export/import shape", () => {
+  const s = sanitize({ ...fresh(), gfx: "lite", assist: false, followClock: false });
+  assert.equal(s.gfx, "lite");
+  assert.equal(s.assist, false);
+  assert.equal(s.followClock, false);
+  const back = sanitize(JSON.parse(JSON.stringify(snapshot(s))));
+  assert.deepEqual(back, s);
+});
+
+test("hostile gfx / assist / followClock values fall back to defaults", () => {
+  const s = sanitize({ ...fresh(), gfx: "ultra-hd", assist: "maybe", followClock: { x: 1 } });
+  assert.equal(s.gfx, "auto");
+  assert.equal(s.assist, true);
+  assert.equal(s.followClock, true);
+  assert.equal(sanitize({ ...fresh(), gfx: 7 }).gfx, "auto");
+});
