@@ -3,7 +3,7 @@
    mode (Survival in WP-5, Tournament in WP-7) is data, not scattered `if`s.
    Pure: no React, no store, no browser, so every rule here is unit-tested. */
 
-import type { Records } from "./records.ts";
+import { stageOf } from "./content.ts";
 
 /** WP-5 added "survival", WP-7 added "tournament". */
 export type Mode = "expedition" | "recreational" | "survival" | "coop" | "tournament";
@@ -33,8 +33,12 @@ export type ModeRules = {
   /** Multiplies the wait for a bite (Recreational 0.8: they bite sooner). */
   biteSpeed: number;
   keepRelease: KeepRelease;
-  /** "career": catches also fill the Expedition dex and records. "own": this slot keeps its own. */
-  dexShared: "own" | "career";
+  /** Every mode keeps its own collection, records, stickers and Fish of the Day claim in its own save slot.
+      Nothing is shared between modes (decided by the owner on 2026-11-02, docs/architecture/05 §3).
+      The field stays so a test can pin it: a mode that ever says anything else breaks the build. */
+  dexShared: "own";
+  /** Every stage of every water, and each boss's Lair, is open from the first cast (no collection needed). */
+  stagesOpen: boolean;
   hud: HudItem[];
   /* Beyond the 05 §1 table (decisions recorded in the WP-4 PR): */
   /** Each visit is a trip with a log (Recreational). */
@@ -66,6 +70,7 @@ export const MODES: Record<Mode, ModeRules> = {
     biteSpeed: 1,
     keepRelease: "both",
     dexShared: "own",
+    stagesOpen: false,
     hud: WILD,
     trips: false,
     photo: true,
@@ -74,7 +79,7 @@ export const MODES: Record<Mode, ModeRules> = {
   recreational: {
     id: "recreational",
     title: "Recreational",
-    blurb: "Just fish. Everything is unlocked, nothing to sell, calmer water. Keep a logbook.",
+    blurb: "Relaxed fishing. Everything is unlocked and nothing here touches your career. Keep a logbook.",
     /* The same slot the old Sandbox used, so those saves carry straight over. */
     saveKey: "fac-ultra-sandbox",
     economy: false,
@@ -87,7 +92,8 @@ export const MODES: Record<Mode, ModeRules> = {
     fightSpeed: 0.75,
     biteSpeed: 0.8,
     keepRelease: "both",
-    dexShared: "career",
+    dexShared: "own",
+    stagesOpen: true,
     hud: ["level", "weather", "window"],
     trips: true,
     photo: true,
@@ -110,6 +116,7 @@ export const MODES: Record<Mode, ModeRules> = {
     keepRelease: "eat",
     /* Survival keeps its own collection and never touches the career. */
     dexShared: "own",
+    stagesOpen: false,
     hud: ["hunger", "warmth", "day", "weather"],
     trips: false,
     photo: true,
@@ -132,6 +139,7 @@ export const MODES: Record<Mode, ModeRules> = {
     biteSpeed: 1,
     keepRelease: "both",
     dexShared: "own",
+    stagesOpen: false,
     hud: WILD,
     trips: false,
     photo: true,
@@ -156,6 +164,7 @@ export const MODES: Record<Mode, ModeRules> = {
     biteSpeed: 1,
     keepRelease: "keepOnly",
     dexShared: "own",
+    stagesOpen: false,
     hud: ["level", "weather", "window", "timer"],
     trips: false,
     photo: false,
@@ -206,8 +215,12 @@ export const priceIn = (r: ModeRules, price: number) => (r.economy ? price : 0);
 
 export const showsMoney = (r: ModeRules) => r.hud.includes("money");
 
-/** Where the other fish come from: only the career dex is shared, and only into modes that ask. */
-export const sharesCareerDex = (r: ModeRules) => r.dexShared === "career" && r.id !== "expedition";
+/** The stage (0 Shallows to 3 Boss Lair) of a water in this mode: wide open where the mode says so,
+    otherwise earned from the collection of THIS mode's own save. */
+export const stageIn = (r: Pick<ModeRules, "stagesOpen">, dex: Dex, biome: number) => (r.stagesOpen ? 3 : stageOf(dex, biome));
+
+/** A collection: caught count, best weight and best mutation per species. Each mode's save holds its own. */
+export type Dex = Record<string, { c: number; w: number; m: number }>;
 
 /* ── The menu cards (05 §7) ──────────────────────────────────────────────── */
 
@@ -275,30 +288,4 @@ export function orderCards(cards: readonly MenuCard[], last: string | null): Men
   const i = cards.findIndex((c) => c.id === id);
   if (i <= 0) return [...cards];
   return [cards[i], ...cards.slice(0, i), ...cards.slice(i + 1)];
-}
-
-/* ── Sharing the career collection (05 §3: dexShared "career") ───────────── */
-
-export type Dex = Record<string, { c: number; w: number; m: number }>;
-
-/** Union of two collections: the bigger count, best weight and best mutation of each species. */
-export function mergeDex(a: Dex, b: Dex): Dex {
-  const out: Dex = {};
-  for (const src of [a, b]) {
-    for (const [k, e] of Object.entries(src)) {
-      const p = out[k];
-      out[k] = p ? { c: Math.max(p.c, e.c), w: Math.max(p.w, e.w), m: Math.max(p.m, e.m) } : { ...e };
-    }
-  }
-  return out;
-}
-
-/** Union of two record books: the heavier fish (with its story) wins each species. */
-export function mergeRecords(a: Records, b: Records): Records {
-  const out: Records = { ...a };
-  for (const [k, e] of Object.entries(b)) {
-    const p = out[k];
-    if (!p || e.w > p.w) out[k] = e;
-  }
-  return out;
 }

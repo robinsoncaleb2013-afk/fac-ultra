@@ -24,7 +24,7 @@ export type ModeRules = {
   fightSpeed: number;       // multiplier on fish pull (Recreational 0.75, Survival 1.15)
   biteSpeed: number;        // multiplier on wait time (Recreational 0.8)
   keepRelease: "both" | "keepOnly" | "releaseOnly" | "eat";
-  dexShared: "own" | "career";   // Recreational writes to the career dex (it's still you fishing); Survival has its own
+  dexShared: "own";              // every mode keeps its own dex, records and stickers (Recreational too: owner decision 2026-11-02, see §11)
   hud: ("money" | "level" | "weather" | "window" | "hunger" | "warmth" | "day" | "timer")[];
 };
 export const MODES: Record<ModeId, ModeRules>;
@@ -42,10 +42,10 @@ The career. Everything on. Unchanged by WP-4 apart from the rules refactor.
 
 For the enthusiast who wants to *fish*, not grind, and for a parent and kid sharing a screen.
 
-- `economy:false, contracts:false, bosses:true` (bosses still fishable once their dex gate is met in **career** — Recreational reads the career dex for gates but never changes career money), `allUnlocked:true`, `fightSpeed 0.75`, `biteSpeed 0.8`, `keepRelease:"both"` but Keep goes to a **creel** (today's inventory, no selling; empties when you leave the water, with a "Creel today: 7 fish, 22.4 lb" summary).
+- `economy:false, contracts:false, bosses:true` (every boss Lair is open from the first cast: Recreational needs nothing from the career, **owner decision 2026-11-02**), `allUnlocked:true`, `fightSpeed 0.75`, `biteSpeed 0.8`, `keepRelease:"both"` but Keep goes to a **creel** (today's inventory, no selling; empties when you leave the water, with a "Creel today: 7 fish, 22.4 lb" summary).
 - **Trip log**: each session is a *trip*. Start → choose water, time of day (real clock or pick dawn/day/dusk/night), weather (real or pick). End → a trip card: fish, biggest, species new to you, records. Trips save to `trips: Trip[]` (last 50) and the Lodge gets a **Logbook** view listing them. This is the recreational loop: "went to the River at dawn in the rain, caught 9, two browns over 3 lb."
 - **Photo mode**: `H` hides chrome (WP-1); here add `P` → renders the current canvas frame + a caption strip (water, species if a fish is up, date) to a PNG and downloads it. Kid feature and enthusiast feature at once.
-- Dex writes go to the **career dex** (`dexShared:"career"`) so recreational fishing still fills the collection. Records too.
+- **Completely separate from the career (owner decision, 2026-11-02; overrides the original plan).** Dex, sticker pages, shinies, records, personal bests, trips, creel, Fish of the Day claim, pet and Regulars head-to-head all live in the Recreational save slot (`fac-ultra-sandbox`) and nowhere else. Nothing done here changes Expedition XP, money, level, dex, records, stickers, trophies, titles, tournament history or Fish of the Day claims, and nothing here reads Expedition progress. The plan's "writes to the career dex / reads the career dex for boss gates" is **withdrawn**.
 
 ## 4. Kid Mode (WP-4) — a lens, not a mode
 
@@ -157,3 +157,16 @@ Rules are pure and seeded in `src/game/` (`rivals.ts`, `pet.ts`, `stickers.ts`, 
 - **Ambience (§6.5).** Five 30-second OGG loops in `public/audio/` (about 770 KB in all, none over 250 KB), built by `node scripts/ambience-build.mjs` (synthesized offline, reproducible). Fetched lazily after the first tap, only the loop for the water you are in, 2 s crossfade on travel. Rain and wind come from the WebAudio synth. Volume slider in Settings (default 35 %), Sound off mutes everything, Kid Mode speech ducks it. The spec lists no canyon group; canyon plays the fire/sky loop.
 - **Colour-blind rarity (§6.6).** `RarityMark` shows dot, diamond, star, hexagon, crown beside every rarity colour (celebration, last catch, bag, dex cells). Settings toggle swaps r1 to r4 for the deuteranopia-safe palette.
 - **Save v8.** `pet`, `stickers`, `shiny`, `fotdClaimed`, `rivalRecord`, plus the device settings `volume` and `cb` (mirrored to `fac-ultra-device`). Fixture `save-v7.json` is a real v7 session with a Derby running.
+
+## 11. As built: WP-11 Recreational is separate
+
+Decision (owner, 2026-11-02): Recreational, the old Sandbox, is a super-easy, everything-available mode with its **own** book. It never reads or writes the career, and the career never reads or writes it.
+
+- **Rules.** `dexShared` is `"own"` on every row (the type allows nothing else). A new rule `stagesOpen` is true only for Recreational: every stage of every water and every boss Lair is open from the first cast (`stageIn()` in `modes.ts`), so an empty book still gets the whole water. The Lair also needs no chum there (the box is full).
+- **Removed.** `sharesCareerDex`, `mergeDex`, `mergeRecords`, `mergeFun`, and the engine's `shareWithCareer` / `readCareer` and the load-time merge. Saving or opening a mode touches only its own slot (plus the device settings key).
+- **Tournaments.** Medals, titles and event history are the career's. Opening Tournaments from Recreational returns to the career first; `syncTrophies` does nothing in Recreational and the Lodge has no Trophies room there.
+- **Words.** The Play card says "Relaxed fishing. Everything is unlocked and nothing here touches your career." Lodge rooms show a small label saying whose book is open ("This is your Relaxed Fishing book. It is kept apart, so nothing here changes your Expedition."). The Fish book, trip card, save code and cloud chooser name the mode.
+- **Saves.** No new fields, so career `SAVE_VERSION` stays **9** and no new fixture was needed. Old Sandbox saves load as they were. **Anything that an earlier build already merged into a career save (species, records, stickers, shinies, claims, Regulars scores) stays there: it cannot be told apart from career catches, so it cannot be un-merged.** Likewise, a Sandbox save that already took in career data keeps it.
+- **Cloud.** `recreational` was already its own row in `saves`; the server runs it through the same `sanitize()`. A test pushes both and proves neither moves the other.
+- **Tests.** `modes-flow.test.ts` (real store, real `localStorage` slots): a Recreational catch leaves the career slot byte for byte unchanged and the reverse; stickers, shinies, pet, claim and Regulars stay apart; reload restores Recreational from its own slot; an old Sandbox save opens as it was; the Lair is open with an empty book. `fun-flow.test.ts`, `modes.test.ts`, `cloud.test.ts` and `accounts.test.ts` assert the same separation.
+

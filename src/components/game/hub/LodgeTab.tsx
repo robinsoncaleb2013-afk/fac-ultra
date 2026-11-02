@@ -2,6 +2,7 @@ import { lazy, Suspense, type ComponentType } from "react";
 import { useGame } from "@/game/engine";
 import { useHubUi } from "@/game/hubstate";
 import { MODES } from "@/game/modes";
+import { ModeLabel } from "@/components/game/mode-label";
 import { useFunOn } from "@/components/game/fun-hooks";
 import { Logbook } from "@/components/game/trips";
 import { PetView, RegularsView } from "@/components/game/fun";
@@ -24,7 +25,7 @@ const DexPanel = lazy(() => import("@/components/game/panels/DexPanel").then((m)
 type Entry = { id: string; title: string; sub: string; icon: IconName; art: string; view: ComponentType };
 
 /** Every Lodge room, in plain English. The id is the old Lodge view name, so the old routes still land on the right one. */
-function entries(survival: boolean, trips: boolean, fun: boolean, tournament: boolean): Entry[] {
+function entries(survival: boolean, trips: boolean, fun: boolean, tournament: boolean, relaxed = false): Entry[] {
   const book: Entry = { id: "book", title: "Fish book", sub: "Every fish you have found, as stickers", icon: "lodge", art: "pond", view: DexPanel };
   if (survival) {
     return [
@@ -33,10 +34,9 @@ function entries(survival: boolean, trips: boolean, fun: boolean, tournament: bo
       book,
     ];
   }
-  const list: Entry[] = [
-    { id: "trophies", title: "Trophies and medals", sub: "Prizes from tournaments", icon: "flag", art: "coast", view: TrophyShelf },
-    { id: "record", title: "Records", sub: "Your biggest fish and best days", icon: "flag", art: "river", view: RecordView },
-  ];
+  /* Medals and event results are the career's; Relaxed Fishing has no shelf for them. */
+  const list: Entry[] = relaxed ? [] : [{ id: "trophies", title: "Trophies and medals", sub: "Prizes from tournaments", icon: "flag", art: "coast", view: TrophyShelf }];
+  list.push({ id: "record", title: "Records", sub: "Your biggest fish and best days", icon: "flag", art: "river", view: RecordView });
   if (trips) list.push({ id: "logbook", title: "Logbook", sub: "Your fishing trips", icon: "map", art: "lake", view: Logbook });
   list.push(book);
   if (fun) {
@@ -55,7 +55,7 @@ export function LodgeTab({ split }: { split: boolean }) {
   const mode = useGame((s) => s.mode);
   const rules = MODES[mode];
   const fun = useFunOn();
-  const list = entries(!!rules.survival, !!rules.trips, fun, mode === "tournament");
+  const list = entries(!!rules.survival, !!rules.trips, fun, mode === "tournament", mode === "recreational");
   const saved = useHubUi((s) => s.item.lodge);
   const items: HubItem[] = list.map((e) => ({
     id: e.id,
@@ -85,6 +85,7 @@ export function LodgeTab({ split }: { split: boolean }) {
                 <p className="mt-1 text-sm text-muted">{e.sub}</p>
               </div>
             </div>
+            <ModeLabel className="mb-3" />
             <Suspense fallback={<p className="text-muted">Opening…</p>}>
               <View />
             </Suspense>

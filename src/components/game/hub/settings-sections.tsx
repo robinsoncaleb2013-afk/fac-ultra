@@ -4,6 +4,7 @@ import { LEVELS, type GfxPref } from "@/game/device";
 import { HOME_SCREEN_HINT, landscapeLockWanted, setLandscapeLockWanted } from "@/game/fullscreen";
 import { LEVEL_INFO } from "@/game/graphics";
 import { probeResult } from "@/game/probe";
+import { bookOf } from "@/game/hubcopy";
 import { MODES } from "@/game/modes";
 import { CloudSettings } from "@/components/game/account";
 import { useFullscreen } from "@/components/game/fullscreen";
@@ -287,7 +288,7 @@ export function SavesSection() {
       <Card>
         <h4 className="font-serif">Save code</h4>
         <p className="mt-1 text-sm text-muted">
-          One code carries this mode&apos;s whole ledger ({mode}). Paste it on another device to pick up where you left off. Importing replaces
+          One code carries the whole ledger of {bookOf(mode).name}. Each mode has its own, so a code never mixes in your other modes. Paste it on another device to pick up where you left off. Importing replaces
           this slot&apos;s save.
         </p>
         <Button

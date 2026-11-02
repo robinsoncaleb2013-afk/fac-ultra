@@ -30,7 +30,8 @@ Docs-only PRs #7 (self-hosting plan) and #10 (project page record) were merged t
 4. **Full-screen play** on PC and phone, plus a Home Screen hint for iPhone.
 5. **Google sign-in** (optional, hidden until keys are set) alongside the email link.
 6. **Art cleanup** removed the old JPG fallback; the game loads WebP only.
-7. **Small decisions** where the documents were silent are written in each PR under "Spec decisions".
+7. **Recreational is fully separate (owner decision, 2026-11-02).** The plan said Recreational writes to the career collection and records. It does not. Recreational keeps its own fish book, stickers, records, logbook, Fish of the Day, pet and Regulars record, everything is unlocked from the start, and nothing in either mode reads or changes the other. Fish already merged into a career save by earlier builds stay there. See `05` section 11.
+8. **Small decisions** where the documents were silent are written in each PR under "Spec decisions".
 
 ## Things only a person can check (nothing is blocked on them)
 
@@ -39,10 +40,6 @@ Docs-only PRs #7 (self-hosting plan) and #10 (project page record) were merged t
 - Real email delivery (needs a Resend key) and Google sign-in (needs a Google key).
 - Two real devices on different networks for Tournaments and friends.
 - A Neon database (everything was tested on the local PGlite database).
-
-## Open question for you
-
-Recreational mode also fills the career collection and records. Do you want that, or should Recreational stay separate?
 
 ## How to undo any part
 

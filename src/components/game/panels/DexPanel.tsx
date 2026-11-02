@@ -133,6 +133,7 @@ export function DexPanel() {
   const here = useGame((s) => s.biome);
   const n = dexCount(dex);
   const survival = useGame((s) => !!MODES[s.mode].survival);
+  const relaxed = useGame((s) => s.mode === "recreational");
   const fun = useFunOn();
   const shown = open ?? here;
   const pages = stickers.filter((x) => x.startsWith("page-")).length;
@@ -144,8 +145,10 @@ export function DexPanel() {
         </h3>
         <p className="text-sm text-muted">
           {survival
-            ? "Your own collection, just for Survival. It does not touch your career dex. Tap a fish to see where to find it."
-            : "Each water has a page of 25 stickers. Catch a fish to stick it in. Finish a page for a page sticker. Each species adds 1% to sale prices and 0.1 luck."}
+            ? "Your own collection, just for Survival. It does not touch your Expedition book. Tap a fish to see where to find it."
+            : relaxed
+              ? "Each water has a page of 25 stickers. Catch a fish to stick it in. Nothing you catch here counts toward your Expedition."
+              : "Each water has a page of 25 stickers. Catch a fish to stick it in. Finish a page for a page sticker. Each species adds 1% to sale prices and 0.1 luck."}
         </p>
         {fun ? (
           <p className="mt-1 text-sm text-brass">

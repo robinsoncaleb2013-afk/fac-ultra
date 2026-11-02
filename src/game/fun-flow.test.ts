@@ -1,5 +1,5 @@
 /* The fun layer working in the real store (05 §6): Fish of the Day, shiny, sticker pages, the pet, the Regulars' Derby,
-   saving, sharing between Expedition and Recreational, and staying OUT of Tournaments and Survival. A tiny fake browser is enough. */
+   saving, keeping Expedition and Recreational apart, and staying OUT of Tournaments and Survival. A tiny fake browser is enough. */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -162,18 +162,31 @@ test("the Derby is fished against the Regulars, filed in the head-to-head record
   assert.equal(st().derbiesWon, v7.derbiesWon + 1);
 });
 
-test("Expedition and Recreational share one angler's stickers, shinies, pet and daily claim", async () => {
+test("Expedition and Recreational each keep their own stickers, shinies, pet and daily claim", async () => {
   boot();
   const f = fotdFor(today(), st().ub)!;
   useGame.setState({ ...land(f.biome, f.species), lv: 5 });
   st().choosePet("dog");
   await flush();
+  const careerBefore = mem.get(MODE_KEYS.expedition);
   st().switchMode("recreational");
   const rec = st();
   assert.equal(rec.mode, "recreational");
-  assert.deepEqual(rec.fotdClaimed, [today()], "the day's fish is claimed once across both modes");
-  assert.equal(rec.pet.kind, "dog");
-  assert.ok(rec.stickers.includes(frameId(f.key)));
+  assert.deepEqual(rec.fotdClaimed, [], "the career's claim is not Relaxed Fishing's");
+  assert.equal(rec.pet.kind, null, "no pet carried over");
+  assert.ok(!rec.stickers.includes(frameId(f.key)));
+  /* Relaxed Fishing can claim today's fish for itself, once, without touching the career */
+  const fr = fotdFor(today(), st().ub)!;
+  useGame.setState({ ...land(fr.biome, fr.species), lv: 5 });
+  assert.deepEqual(st().fotdClaimed, [today()]);
+  st().choosePet("otter");
+  await flush();
+  assert.equal(mem.get(MODE_KEYS.expedition), careerBefore, "the career slot did not change by a byte");
+  st().switchMode("expedition");
+  assert.equal(st().pet.kind, "dog");
+  assert.deepEqual(st().fotdClaimed, [today()]);
+  st().switchMode("recreational");
+  assert.equal(st().pet.kind, "otter");
 });
 
 test("Tournaments and Survival leave the fun layer out", () => {

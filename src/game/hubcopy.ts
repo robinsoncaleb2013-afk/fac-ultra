@@ -26,8 +26,8 @@ export const PLAY_META: readonly PlayMeta[] = [
   {
     id: "recreational",
     title: "Relaxed Fishing",
-    summary: "No pressure. Take a fishing trip, enjoy the water and keep a logbook of your day.",
-    facts: ["Everything is already unlocked", "Fish bite sooner and fights are gentler", "Keep a fish or let it go"],
+    summary: "Relaxed fishing. Everything is unlocked and nothing here touches your career.",
+    facts: ["Its own fish book, records and logbook", "Fish bite sooner and fights are gentler", "Keep a fish or let it go"],
     art: "lake",
   },
   {
@@ -88,6 +88,17 @@ export const PLAY_META: readonly PlayMeta[] = [
   },
 ];
 
+/* Which book a screen is showing. Every mode keeps its own fish book, records and stickers (WP-11). */
+export type BookMode = "expedition" | "recreational" | "survival" | "coop" | "tournament";
+export const BOOK_TEXT: Record<BookMode, { name: string; line: string }> = {
+  expedition: { name: "Expedition", line: "This is your Expedition book. Relaxed Fishing keeps a separate one." },
+  recreational: { name: "Relaxed Fishing", line: "This is your Relaxed Fishing book. It is kept apart, so nothing here changes your Expedition." },
+  survival: { name: "Survival", line: "This is your Survival book. It is kept on its own." },
+  coop: { name: "Local Co-op", line: "This is your Co-op book. It is kept on its own." },
+  tournament: { name: "Tournaments", line: "Events keep their own results." },
+};
+export const bookOf = (mode: BookMode) => BOOK_TEXT[mode];
+
 export const playMeta = (id: string) => PLAY_META.find((m) => m.id === id);
 
 /** One short line for each water, in the order of BIOMES. */
@@ -139,6 +150,7 @@ export function gearFacts(kind: GearKindName, i: number): string[] {
 export function allHubCopy(): string[] {
   const out: string[] = [];
   for (const m of PLAY_META) out.push(m.title, m.summary, ...m.facts, m.hint ?? "");
+  for (const b of Object.values(BOOK_TEXT)) out.push(b.name, b.line);
   out.push(...WATER_BLURB);
   for (const k of Object.keys(GEAR_TEXT) as GearKindName[]) {
     out.push(GEAR_TEXT[k].one);

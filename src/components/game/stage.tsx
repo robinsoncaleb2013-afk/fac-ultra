@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { formOf, readDevice } from "@/game/device";
 import { loadArt, wantedSize } from "@/game/art";
-import { biomeSpeciesCaught, BIOMES, BOSS_INDEX, STAGE_NAMES, stageOf, WEATHER } from "@/game/content";
-import { MODES } from "@/game/modes";
+import { biomeSpeciesCaught, BIOMES, BOSS_INDEX, STAGE_NAMES, WEATHER } from "@/game/content";
+import { MODES, stageIn } from "@/game/modes";
 import { creelLine } from "@/game/trips";
 import { act, frame, reelDown, reelUp, sim, useGame, windowFor } from "@/game/engine";
 import { WINDOW_INFO } from "@/game/presentation";
@@ -183,7 +183,7 @@ export function StageChips({ className, style }: { className?: string; style?: C
   const biome = useGame((s) => s.biome);
   const weather = useGame((s) => s.weather);
   const frenzy = useGame((s) => s.frenzyLeft);
-  const stage = useGame((s) => stageOf(s.dex, s.biome));
+  const stage = useGame((s) => stageIn(MODES[s.mode], s.dex, s.biome));
   const lair = useGame((s) => s.lair);
   const boss = useGame((s) => biomeSpeciesCaught(s.dex, s.biome));
   const slot = useWindow();

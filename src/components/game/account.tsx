@@ -32,7 +32,7 @@ import {
    and pick who is fishing, and the chooser that appears only when two saves each have something the other lacks.
    The game is fully playable without any of this. Words are short and kind: kids read them. */
 
-const MODE_NAME: Record<SyncMode, string> = { expedition: "Expedition", recreational: "Recreational", survival: "Survival", coop: "Co-op" };
+const MODE_NAME: Record<SyncMode, string> = { expedition: "Expedition", recreational: "Relaxed Fishing", survival: "Survival", coop: "Co-op" };
 
 function ago(ms: number, now = Date.now()): string {
   if (!ms) return "a while ago";

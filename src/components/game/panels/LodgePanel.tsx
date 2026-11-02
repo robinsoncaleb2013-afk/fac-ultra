@@ -148,7 +148,7 @@ export function Record() {
         </p>
       </div>
       <RecordBook />
-      <TourneyHistory />
+      {s.mode === "recreational" ? null : <TourneyHistory />}
       <Stewardship />
       <ul className="rounded-2xl border border-line bg-surface p-3 text-sm">
         {parts.map(([label, value]) => (

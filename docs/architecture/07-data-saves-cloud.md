@@ -31,7 +31,7 @@ Save v4 is the version that ships with WP-1; each later package bumps once.
 
 ## 2. Save slots
 
-One `localStorage` key per mode (`modes.ts` `saveKey`). Settings that are about the *device* (gfx, sound, motion, flash, kid, followClock) are **also** mirrored to a shared key `fac-ultra-device` so they apply across modes; `hydrate()` overlays them.
+One `localStorage` key per mode (`modes.ts` `saveKey`): `fac-ultra` (Expedition), `fac-ultra-sandbox` (Recreational), `fac-ultra-survival`, `fac-ultra-coop`, `fac-ultra-tourney`. **Slots never share data** (WP-11): a mode reads and writes only its own key, including its dex, records, stickers, shinies, Fish of the Day claim, pet and Regulars record. Settings that are about the *device* (gfx, sound, motion, flash, kid, followClock) are **also** mirrored to a shared key `fac-ultra-device` so they apply across modes; `hydrate()` overlays them.
 
 ## 3. Accounts (WP-9)
 
@@ -86,7 +86,7 @@ Decisions the spec left open, and what shipped. Where this section and §3-5 dif
 
 **Profiles.** Up to 4 per account (`profiles`, slot 0-3). A profile is a nickname (run through `safeName`) and a kid flag. No email, no birthday. Only a signed-in grown-up can add one. Picking a kid's profile turns Kid Mode on for that screen and a grown-up's turns it off. With Kid Mode on, the account screens show no email box, no Google button and no sign-out/delete/add/remove controls. This is a fence for a family, not a lock.
 
-**Cloud saves.** `saves(profile_id, mode, rev, data, device, updated_at)` for `expedition`, `recreational`, `survival` and `coop`. Tournament saves stay on the tournament server. Differences from §4.2, on purpose:
+**Cloud saves.** `saves(profile_id, mode, rev, data, device, updated_at)` for `expedition`, `recreational`, `survival` and `coop`, each its own row and revision (Recreational is never folded into Expedition). Tournament saves stay on the tournament server. Differences from §4.2, on purpose:
 - The browser sends `baseRev` (the revision it last saw) and the server makes it `baseRev + 1` if that is still the stored revision. The browser does not invent revisions. A stale `baseRev` gets `409 conflict` with the stored save. `force: true` is only sent after the player chose "keep this device".
 - Sync state is **not** in the `Save` (the planned `cloud` field would have synced itself and bumped `SAVE_VERSION` for nothing). It lives in `localStorage["fac-cloud"]` beside a 7-day backup list in `fac-cloud-backups`. The save version stays 9.
 - "Changed since last sync" is a fingerprint of the save without the Aquarium clock (`changeKey`), not a flag, so nothing can forget to set it. A push happens 10 s after a change, when the page is hidden, when the connection returns and every 60 s while offline.

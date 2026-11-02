@@ -146,7 +146,7 @@ export function TripCard() {
           {t.recs.join(", ")}
         </p>
       ) : null}
-      <p className="mt-3 text-xs text-muted">The creel is emptied and this trip is saved in your Logbook.</p>
+      <p className="mt-3 text-xs text-muted">The creel is emptied and this trip is saved in your Relaxed Fishing logbook. Your Expedition is not touched.</p>
       <div className="mt-4 grid grid-cols-2 gap-2">
         <Button className="col-span-2" onClick={dismiss}>
           Plan another trip

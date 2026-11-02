@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
   canKeep,
@@ -9,16 +12,13 @@ import {
   MODE_KEYS,
   MODE_LIST,
   MODES,
-  mergeDex,
-  mergeRecords,
   orderCards,
   priceIn,
   rulesOf,
-  sharesCareerDex,
+  stageIn,
   showsMoney,
 } from "./modes.ts";
 import { modeRules } from "./engine.ts";
-import type { Records } from "./records.ts";
 
 test("every mode has a rules row whose id matches its key and its own save slot", () => {
   assert.deepEqual([...MODE_LIST].sort(), Object.keys(MODES).sort());
@@ -59,7 +59,7 @@ test("Survival follows 05 §5: its own slot, its own dex, no money, tougher fish
   assert.equal(r.fightSpeed, 1.15);
   assert.equal(r.keepRelease, "eat");
   assert.equal(r.dexShared, "own");
-  assert.equal(sharesCareerDex(r), false, "Survival never writes to the career");
+  assert.equal(r.dexShared, "own", "Survival never writes to the career");
   assert.deepEqual(r.hud, ["hunger", "warmth", "day", "weather"]);
   assert.equal(canKeep(r), true);
   assert.equal(canRelease(r), false, "you eat what you catch");
@@ -78,7 +78,7 @@ test("Recreational follows 05 §3", () => {
   assert.equal(r.fightSpeed, 0.75);
   assert.equal(r.biteSpeed, 0.8);
   assert.equal(r.keepRelease, "both");
-  assert.equal(r.dexShared, "career");
+  assert.equal(r.dexShared, "own", "its own book, apart from the career");
   assert.equal(r.trips, true);
   assert.equal(r.photo, true);
   assert.equal(showsMoney(r), false);
@@ -117,10 +117,19 @@ test("keep and release follow keepRelease", () => {
   assert.equal(canRelease({ ...base, keepRelease: "eat" }), false);
 });
 
-test("only Recreational fills the career collection", () => {
-  assert.equal(sharesCareerDex(MODES.recreational), true);
-  assert.equal(sharesCareerDex(MODES.expedition), false, "the career is the collection, it does not share into itself");
-  assert.equal(sharesCareerDex(MODES.coop), false);
+test("every mode keeps its own collection: nothing is shared with the career (WP-11)", () => {
+  for (const id of MODE_LIST) assert.equal(MODES[id].dexShared, "own", `${id} keeps its own book`);
+  assert.equal(MODES.recreational.dexShared, "own");
+  /* no leftover code that could merge one mode into another */
+  const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "modes.ts"), "utf8");
+  assert.ok(!/mergeDex|mergeRecords|sharesCareerDex/.test(src));
+});
+
+test("Recreational opens every stage and Lair from the first cast; the others earn them from their own book", () => {
+  assert.equal(MODES.recreational.stagesOpen, true);
+  for (const id of MODE_LIST) if (id !== "recreational") assert.equal(MODES[id].stagesOpen, false, id);
+  assert.equal(stageIn(MODES.recreational, {}, 4), 3, "an empty book still has the whole water");
+  assert.equal(stageIn(MODES.expedition, {}, 4), 0, "the career earns its stages");
 });
 
 test("legacy names still mean something", () => {
@@ -158,34 +167,4 @@ test("the card you played last goes first and the rest keep their order", () => 
   assert.equal(aq[0], "aquarium");
   assert.deepEqual(aq.slice(1), base.filter((x) => x !== "aquarium"));
   assert.equal(ids("sandbox")[0], "recreational", "the old Sandbox card id still finds Recreational");
-});
-
-test("mergeDex keeps the bigger of everything and never loses a species", () => {
-  const a = { "0-1": { c: 3, w: 2, m: 0 }, "0-2": { c: 1, w: 9, m: 2 } };
-  const b = { "0-1": { c: 5, w: 1, m: 1 }, "1-1": { c: 1, w: 4, m: 0 } };
-  const m = mergeDex(a, b);
-  assert.deepEqual(m["0-1"], { c: 5, w: 2, m: 1 });
-  assert.deepEqual(m["0-2"], a["0-2"]);
-  assert.deepEqual(m["1-1"], b["1-1"]);
-  assert.deepEqual(mergeDex(a, {}), a);
-  assert.deepEqual(mergeDex(m, m), m, "merging twice changes nothing");
-  assert.notEqual(m["0-2"], a["0-2"], "copies, not shared objects");
-});
-
-test("mergeRecords keeps the heavier fish with its story", () => {
-  const mk = (w: number, spot: string) => ({
-    w,
-    at: 1,
-    spot,
-    p: { family: "worm" as const, depth: 1 as const, retrieve: "slow" as const },
-    weather: 0,
-    window: "day" as const,
-  });
-  const a: Records = { "0-1": mk(3, "pond-pads"), "0-2": mk(5, "x") };
-  const b: Records = { "0-1": mk(4, "pond-dock"), "1-1": mk(2, "y") };
-  const m = mergeRecords(a, b);
-  assert.equal(m["0-1"].spot, "pond-dock");
-  assert.equal(m["0-2"].w, 5);
-  assert.equal(m["1-1"].w, 2);
-  assert.deepEqual(mergeRecords(m, a), m);
 });
