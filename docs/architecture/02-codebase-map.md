@@ -19,6 +19,9 @@ src/
     ui/button.tsx       The one shared UI primitive. (Radix is installed but mostly unused in the game.)
   game/
     content.ts          THE DATA. Biomes, species names, rarity bands, gear ladders, lures, signature lures, baits, weather, tank tiers, formulas (luck, value, weight, rollFish).
+    modes.ts            The mode rules table (Expedition, Recreational, Co-op …), menu cards, career-collection merge. Pure.
+    trips.ts            Recreational trips, creel and logbook helpers, photo caption. Pure.
+    kid.ts              Kid Mode helpers (confirmations, hints, number words). Pure.
     engine.ts           THE RULES + STATE. Save type, sanitize/migrate, Zustand store + actions, the per-frame `sim`, cast → wait → bite → reel → catch, contracts, derby, rush, persistence.
     fish-draw.ts        Procedural fish artist: 12 archetypes × pattern layer. drawFish(ctx, x, y, len, dir, look).
     art.ts              Loads the 15 biome paintings (eagerly — fixed in WP-1), fitCanvas() for DPR-correct canvases.

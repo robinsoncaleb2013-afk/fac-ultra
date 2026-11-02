@@ -3,6 +3,10 @@ import { BIOMES, MUTATIONS, money, multOf, RARITIES, TONE } from "@/game/content
 import { STEWARD_SPECIES } from "@/game/keep";
 import { recordLine } from "@/game/records";
 import { useGame } from "@/game/engine";
+import { moneyWords } from "@/game/kid";
+import { canKeep, canRelease, MODES } from "@/game/modes";
+import { SpeakButton } from "@/components/game/kid";
+import { useKidOn } from "@/components/game/use-kid";
 import { confettiFor, RARITY_COLORS } from "@/game/graphics";
 import { FishPortrait } from "@/components/game/portrait";
 import { ArtThumb, Badge } from "@/components/game/panels/shared";
@@ -71,6 +75,8 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
   const motion = useGame((s) => s.motion);
   const tier = useGame((s) => s.tier);
   const mult = useGame((s) => multOf(s.dex, s.rb));
+  const rules = useGame((s) => MODES[s.mode]);
+  const kid = useKidOn();
   const at = cel?.at;
   const startY = useRef(0);
 
@@ -144,7 +150,13 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
         </p>
         <h2 className="font-serif text-[32px] leading-tight">{c.name}</h2>
         <p className="text-sm text-muted">
-          {BIOMES[c.biome].name} · {c.weight} lb · worth {money(Math.round(c.value * mult))}
+          {BIOMES[c.biome].name} · {c.weight} lb
+          {rules.economy ? (
+            <span title={kid ? moneyWords(Math.round(c.value * mult)) : undefined}>
+              {" "}
+              · worth {money(Math.round(c.value * mult))}
+            </span>
+          ) : null}
         </p>
         <div className="flex flex-wrap gap-1.5 pt-1">
           {c.discovered ? <Badge>New species</Badge> : null}
@@ -157,12 +169,22 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
           <p className="text-xs leading-snug text-lagoon">New best · {recordLine(newBest, c.biome)}</p>
         ) : null}
         <div className="mt-auto flex gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
-          <Button className="min-h-12 flex-1" onClick={keep}>
-            Keep{mobile ? null : <kbd className="ml-1.5 text-xs opacity-70">K</kbd>}
-          </Button>
-          <Button variant="ghost" className="min-h-12 flex-1" onClick={release}>
-            Release{mobile ? null : <kbd className="ml-1.5 text-xs opacity-70">R</kbd>}
-          </Button>
+          {kid ? (
+            <SpeakButton
+              text={`${c.name}. ${RARITIES[c.rarity].name}. ${c.weight} pounds. Caught in ${BIOMES[c.biome].name}.${c.discovered ? " A new kind of fish for you!" : ""}`}
+              className="size-12"
+            />
+          ) : null}
+          {canKeep(rules) ? (
+            <Button className="min-h-12 flex-1" onClick={keep}>
+              Keep{mobile ? null : <kbd className="ml-1.5 text-xs opacity-70">K</kbd>}
+            </Button>
+          ) : null}
+          {canRelease(rules) ? (
+            <Button variant="ghost" className="min-h-12 flex-1" onClick={release}>
+              Release{mobile ? null : <kbd className="ml-1.5 text-xs opacity-70">R</kbd>}
+            </Button>
+          ) : null}
         </div>
         <p className="text-center text-xs text-muted">
           {isSteward

@@ -7,7 +7,7 @@ import { biomeArt, fitCanvas } from "@/game/art";
 import { BIOMES, BOSS_INDEX, SPECIES_PER_BIOME } from "@/game/content";
 import type { Gfx } from "@/game/device";
 import { drawFish } from "@/game/fish-draw";
-import { sim, useGame } from "@/game/engine";
+import { pickedHour, sim, useGame } from "@/game/engine";
 import { TIERS } from "@/game/graphics";
 import { spotResidents } from "@/game/match";
 import { peerBoats } from "@/game/multiplayer";
@@ -272,14 +272,15 @@ export function paint(canvas: HTMLCanvasElement, view: View) {
     paintPicture(ctx, w, h, s.biome, s.weather, false);
     drawSwimmers(ctx, w, h, s.biome, spec.swimmers, 0.9);
   } else {
-    const key = `${s.biome}:${s.weather}:${tier}:${w}x${h}:${s.followClock}`;
+    const hour = pickedHour(s);
+    const key = `${s.biome}:${s.weather}:${tier}:${w}x${h}:${s.followClock}:${hour}`;
     if (reuseBackground(ctx, tier, key, w, h)) {
       night = lastNight;
     } else if (sizeBuffers(Math.round(w * dpr), Math.round(h * dpr))) {
       const b = beginBuffer(dpr);
       if (b) {
         paintPicture(b, w, h, s.biome, s.weather, true);
-        night = drawTimeTint(b, w, h, s.weather, s.followClock);
+        night = drawTimeTint(b, w, h, s.weather, s.followClock, hour);
         lastNight = night;
         if (spec.swimmersThroughWater) {
           b.save();

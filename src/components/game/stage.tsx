@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { loadArt, wantedSize } from "@/game/art";
 import { biomeSpeciesCaught, BIOMES, BOSS_INDEX, STAGE_NAMES, stageOf, WEATHER } from "@/game/content";
-import { act, frame, reelDown, reelUp, sim, useGame } from "@/game/engine";
-import { windowNow } from "@/game/match";
+import { MODES } from "@/game/modes";
+import { creelLine } from "@/game/trips";
+import { act, frame, reelDown, reelUp, sim, useGame, windowFor } from "@/game/engine";
 import { WINDOW_INFO } from "@/game/presentation";
 import { nearestSpot } from "@/game/spots";
 import { FpsMeter, governorStep, shouldSkipFrame, TIERS } from "@/game/graphics";
@@ -144,7 +145,7 @@ export function Stage({ menu = false, big = false, className, biomeOverride, onW
         sim.hover = null;
       }}
     >
-      <canvas ref={ref} className="absolute inset-0 h-full w-full touch-none" />
+      <canvas ref={ref} data-stage={menu ? undefined : ""} className="absolute inset-0 h-full w-full touch-none" />
       {children}
     </div>
   );
@@ -154,12 +155,13 @@ export function Stage({ menu = false, big = false, className, biomeOverride, onW
 function useWindow() {
   const weather = useGame((s) => s.weather);
   const follow = useGame((s) => s.followClock);
+  const trip = useGame((s) => s.trip);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(t);
   }, []);
-  return windowNow(follow, weather, now);
+  return windowFor({ trip, followClock: follow, weather }, now);
 }
 
 export function StageChips({ className, style }: { className?: string; style?: CSSProperties }) {
@@ -170,6 +172,7 @@ export function StageChips({ className, style }: { className?: string; style?: C
   const lair = useGame((s) => s.lair);
   const boss = useGame((s) => biomeSpeciesCaught(s.dex, s.biome));
   const slot = useWindow();
+  const inCreel = useGame((s) => (MODES[s.mode].trips && s.trip ? s.inv : null));
   return (
     <div style={style} className={cn("pointer-events-none flex flex-wrap gap-1.5", className)}>
       <Chip>{WEATHER[weather].name}</Chip>
@@ -179,6 +182,7 @@ export function StageChips({ className, style }: { className?: string; style?: C
       <Chip>
         {BIOMES[biome].fish[BOSS_INDEX]} {boss}/{BOSS_INDEX}
       </Chip>
+      {inCreel ? <Chip>{creelLine(inCreel.length, inCreel.reduce((n, f) => n + f.w, 0))}</Chip> : null}
       {frenzy > 0 ? <Chip brass>Frenzy {Math.ceil(frenzy)}s</Chip> : null}
     </div>
   );

@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { takePhoto } from "@/components/game/photo";
+import { MODES } from "@/game/modes";
 import { act, nudgeDrag, partnerDown, partnerUp, reelDown, reelUp, sim, useGame, type Tab } from "@/game/engine";
 
 const NUMBER_TABS: Tab[] = ["cast", "bag", "gear", "lures", "waters", "dex", "lodge"];
@@ -13,7 +15,7 @@ export function toggleFullscreen() {
 }
 
 /** Desktop keyboard (03 §8, 04 §5.2): Space/Enter act (hold to reel), 1–7 tabs, Esc, F, H, M, J (partner),
-    [ and ] for drag during a fight, K and R to keep or release the fish just landed. */
+    [ and ] for drag during a fight, K and R to keep or release the fish just landed, P to take a picture. */
 export function useKeys() {
   useEffect(() => {
     const onUp = (event: KeyboardEvent) => {
@@ -30,7 +32,7 @@ export function useKeys() {
         return;
       }
       if (typing || event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.code === "KeyJ" && state.mode === "coop") {
+      if (event.code === "KeyJ" && MODES[state.mode].twoPlayer) {
         if (!event.repeat) partnerDown();
         return;
       }
@@ -50,6 +52,7 @@ export function useKeys() {
       }
       if (event.code === "KeyF") return void toggleFullscreen();
       if (event.code === "KeyH") return void useGame.setState({ photo: true });
+      if (event.code === "KeyP" && MODES[state.mode].photo) return void takePhoto();
       if (event.code === "KeyM") return void state.toggleSetting("sound");
       const digit = /^Digit([1-7])$/.exec(event.code);
       if (digit) {

@@ -1,3 +1,5 @@
+import { KID_HELP_FLOOR } from "./kid.ts";
+
 /* Helping Hand: the kid-mode reel assist (docs/architecture/03 §5).
    A pure function of how the player has been doing, so it is unit-tested and
    the component layer never computes a band width. */
@@ -11,6 +13,8 @@ export type AssistInput = {
   failedFights: number;
   /** Consecutive fights won. */
   wins: number;
+  /** Kid Mode: the help never fades below a moderate amount (05 §4). */
+  kid?: boolean;
 };
 
 export type AssistResult = {
@@ -60,12 +64,12 @@ export function fightHelp(i: AssistInput): FightHelp | null {
   if (!i.assist) return null;
   const h = helpingHand(i);
   return {
-    strength: clamp(0.4 + (h.zoneBonus / 14) * 0.6, 0.15, 1),
+    strength: clamp(0.4 + (h.zoneBonus / 14) * 0.6, i.kid ? KID_HELP_FLOOR : 0.15, 1),
     pullMul: h.speedFactor,
   };
 }
 
 /** Should the ring glow and the pill say "Helping hand: the green is wider."? Honest, never secret. */
-export function isHelping(help: FightHelp | null): boolean {
-  return !!help && help.strength >= HELP_SHOWN;
+export function isHelping(help: FightHelp | null, always = false): boolean {
+  return !!help && (always || help.strength >= HELP_SHOWN);
 }

@@ -7,6 +7,8 @@ import { countSession } from "@/components/game/sessions";
 import { useForm } from "@/components/game/layout/use-form";
 import { MainMenu } from "@/components/game/menu";
 import { Toasts, WelcomeBack } from "@/components/game/overlays";
+import { useKidAttr } from "@/components/game/use-kid";
+import { TripCard, TripStart } from "@/components/game/trips";
 
 /** The screen router: menu or game, in the layout this device gets (docs/architecture/03 §1, 09 §2). */
 export function Game() {
@@ -17,6 +19,7 @@ export function Game() {
     countSession();
   }, []);
   useKeys();
+  useKidAttr();
 
   if (!ready) return <div className="h-dvh bg-bg" />;
   return (
@@ -32,6 +35,8 @@ export function Game() {
         <MobileLayout plan={plan} height={height} />
       )}
       <WelcomeBack />
+      <TripCard />
+      <TripStart />
     </div>
   );
 }

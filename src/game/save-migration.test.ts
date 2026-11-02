@@ -150,7 +150,7 @@ test("a v3 save walks all the way to the current version", () => {
 
 test("fresh saves start with nothing remembered", () => {
   const f = fresh();
-  assert.equal(f.version, 6);
+  assert.equal(f.version, 7);
   assert.deepEqual(f.lastSpot, {});
   assert.deepEqual(f.rig, {});
 });
@@ -223,7 +223,7 @@ test("a v5 save gains empty WP-3 fields, keeps its progress and its spots and ri
   assert.equal(raw.version, 5);
   for (const k of ["records", "released", "stewards", "coached", "drag"]) assert.equal(k in raw, false, k);
   const s = sanitize(raw);
-  assert.equal(s.version, 6);
+  assert.equal(s.version, 7);
   assert.deepEqual(s.records, {});
   assert.deepEqual(s.released, {});
   assert.deepEqual(s.stewards, { species: [], waters: [] });
@@ -241,10 +241,13 @@ test("a v5 save gains empty WP-3 fields, keeps its progress and its spots and ri
   }
 });
 
-test("a v4 save walks all the way to v6 with every new field empty", () => {
+test("a v4 save walks all the way to v7 with every new field empty", () => {
   const raw = JSON.parse(readFileSync(join(dir, "save-v4.json"), "utf8")) as Record<string, unknown>;
   const s = sanitize(raw);
-  assert.equal(s.version, 6);
+  assert.equal(s.version, 7);
+  assert.equal(s.kid, false);
+  assert.deepEqual(s.trips, []);
+  assert.equal(s.trip, null);
   assert.deepEqual(s.records, {});
   assert.deepEqual(s.stewards, { species: [], waters: [] });
 });
@@ -313,4 +316,94 @@ test("hostile WP-3 values are cleaned: unknown species, bad numbers, wrong shape
     assert.deepEqual(t.stewards, { species: [], waters: [] });
     assert.deepEqual(t.coached, {});
   }
+});
+
+/* ── v6 → v7 (WP-4): kid, trips, trip ─────────────────────────────────────── */
+
+import { MODES } from "./modes.ts";
+import { finishTrip, startTrip, tripCatch } from "./trips.ts";
+import { unlockedSave } from "./engine.ts";
+import { BIOMES } from "./content.ts";
+
+test("a v6 save gains Kid Mode off and an empty logbook, and keeps everything it had", () => {
+  const raw = JSON.parse(readFileSync(join(dir, "save-v6.json"), "utf8")) as Record<string, unknown>;
+  assert.equal(raw.version, 6);
+  for (const k of ["kid", "trips", "trip"]) assert.equal(k in raw, false, k);
+  const s = sanitize(raw);
+  assert.equal(s.version, 7);
+  assert.equal(s.kid, false);
+  assert.deepEqual(s.trips, []);
+  assert.equal(s.trip, null);
+  assert.equal(s.c, raw.c, "money preserved");
+  assert.equal(s.caught, raw.caught, "catch count preserved");
+  assert.deepEqual(s.dex, raw.dex, "dex preserved");
+  assert.deepEqual(s.records, raw.records, "WP-3 records preserved");
+  assert.equal(s.drag, raw.drag);
+  assert.equal(s.assist, raw.assist);
+  for (const [k, v] of Object.entries(s)) {
+    if (typeof v === "number") assert.ok(Number.isFinite(v), `${k} is not NaN`);
+  }
+});
+
+test("a v3, v4 and v5 save all reach v7 with the WP-4 fields at their defaults", () => {
+  for (const f of ["save-v3.json", "save-v4.json", "save-v5.json"]) {
+    const s = sanitize(JSON.parse(readFileSync(join(dir, f), "utf8")));
+    assert.equal(s.version, 7, f);
+    assert.equal(s.kid, false, f);
+    assert.deepEqual(s.trips, [], f);
+    assert.equal(s.trip, null, f);
+  }
+});
+
+test("an old Sandbox-shaped save (nothing to sell, everything unlocked) loads as a Recreational save", () => {
+  /* The sandbox slot's saves are in the v6 shape: no kid, no trips. They keep their gear, waters and bag. */
+  const old = JSON.parse(JSON.stringify(unlockedSave())) as Record<string, unknown>;
+  old.version = 6;
+  delete old.kid;
+  delete old.trips;
+  delete old.trip;
+  old.dex = { "0-4": { c: 2, w: 3.1, m: 0 } };
+  old.inv = [{ name: "Perch", t: 0, v: 4, w: 1.2, i: 4, b: 0, m: 0 }];
+  const s = sanitize(old);
+  assert.equal(s.version, 7);
+  assert.equal(s.ub.length, BIOMES.length, "every water is still unlocked");
+  assert.deepEqual(s.dex, { "0-4": { c: 2, w: 3.1, m: 0 } });
+  assert.equal(s.inv.length, 1);
+  assert.equal(MODES.recreational.saveKey, "fac-ultra-sandbox");
+});
+
+test("kid and the trip log round-trip through snapshot and the export code", () => {
+  let trip = startTrip(1_700_000_000_000, 2, "dusk", 1);
+  trip = tripCatch(trip, { name: "Pike", w: 4.2, rarity: 1, discovered: true, record: false }, 1_700_000_100_000);
+  const done = finishTrip(trip, 1_700_000_500_000);
+  const open = startTrip(1_700_001_000_000, 0);
+  const s = sanitize({ ...fresh(), kid: true, trips: [done], trip: open });
+  assert.equal(s.kid, true);
+  assert.deepEqual(s.trips, [done]);
+  assert.deepEqual(s.trip, open);
+  const back = sanitize(JSON.parse(JSON.stringify(snapshot(s))));
+  assert.deepEqual(back, s);
+  const viaCode = sanitize(
+    JSON.parse(decodeURIComponent(escape(atob(btoa(unescape(encodeURIComponent(JSON.stringify(snapshot(s))))))))),
+  );
+  assert.deepEqual(viaCode, s);
+});
+
+test("hostile WP-4 values are cleaned: junk trips, a closed trip pretending to be open, too many trips", () => {
+  const done = finishTrip(startTrip(1_700_000_000_000, 0), 1_700_000_001_000);
+  const s = sanitize({
+    ...fresh(),
+    kid: "yes",
+    trips: [done, 7, null, { start: "x" }, ...new Array(90).fill(done)],
+    trip: done,
+  });
+  assert.equal(s.kid, false, "only a real boolean (or 0/1) turns Kid Mode on");
+  assert.equal(s.trips.length, 50);
+  assert.equal(s.trip, null, "a finished trip is not the trip in progress");
+  for (const junk of [null, 5, "str", [], {}]) {
+    const t = sanitize({ ...fresh(), trips: junk, trip: junk });
+    assert.deepEqual(t.trips, []);
+    assert.equal(t.trip, null);
+  }
+  assert.equal(sanitize({ ...fresh(), kid: 1 }).kid, true);
 });

@@ -16,6 +16,35 @@ import { defaultSpot, resolveSpot, spotById, type Spot } from "@/game/spots";
 import { audio } from "@/game/audio";
 import { fightHelp, helpingHand, isHelping } from "@/game/assist";
 import {
+  canKeep,
+  canRelease,
+  legacyMode,
+  MODE_KEYS,
+  MODES,
+  mergeDex,
+  mergeRecords,
+  priceIn,
+  sharesCareerDex,
+  type Mode,
+  type ModeRules,
+} from "@/game/modes";
+import { assistOn, coachAlways, hintAfter, kidActive, needsSure } from "@/game/kid";
+import {
+  addTrip,
+  finishTrip,
+  readTrip,
+  readTrips,
+  startTrip,
+  tripCardLines,
+  creelLine,
+  tripCatch,
+  tripIsStale,
+  tripRelease,
+  windowHour,
+  type Trip,
+  type TripWindow,
+} from "@/game/trips";
+import {
   applyHelp,
   COACH,
   COACH_FIGHTS,
@@ -104,8 +133,9 @@ import {
 
 export type Tab = "cast" | "bag" | "gear" | "lures" | "waters" | "dex" | "lodge";
 export type Phase = "idle" | "wait" | "bite" | "reel";
-export type Mode = "career" | "sandbox" | "coop";
-export type LodgeView = "record" | "tank" | "derby" | "crew" | "settings";
+export type { Mode } from "@/game/modes";
+export { MODE_KEYS } from "@/game/modes";
+export type LodgeView = "record" | "logbook" | "tank" | "derby" | "crew" | "settings";
 
 export type DerbyState = {
   endsAt: number;
@@ -155,6 +185,11 @@ export type Save = {
   gfx: GfxPref;
   assist: boolean;
   followClock: boolean;
+  /* WP-4 (save v7): Kid Mode is a device setting too (it follows the person at the screen). */
+  kid: boolean;
+  /* WP-4 (save v7): the Recreational logbook (finished trips, newest first, last 50) and the trip in progress */
+  trips: Trip[];
+  trip: Trip | null;
   /* WP-2 (save v5): where you last fished each water, and how you rigged it there */
   lastSpot: Record<number, string>;
   rig: Record<number, Rig>;
@@ -198,19 +233,18 @@ export type LastCatch = {
 
 type Toast = { id: number; text: string };
 
-const SAVE_VERSION = 6;
+const SAVE_VERSION = 7;
 const MARKS = [10, 25, 50, 100, 150, 200, 250, 300, 375];
 
-export const MODE_KEYS: Record<Mode, string> = {
-  career: "fac-ultra",
-  sandbox: "fac-ultra-sandbox",
-  coop: "fac-ultra-coop",
-};
-
-let currentMode: Mode = "career";
+let currentMode: Mode = "expedition";
 
 export function modeKey(mode: Mode = currentMode) {
   return MODE_KEYS[mode];
+}
+
+/** The rules of the mode being played (05 §1). Every mode branch in the game reads this. */
+export function modeRules(mode: Mode = currentMode): ModeRules {
+  return MODES[mode];
 }
 
 /* v1 → v3 world remap: five biomes were inserted into the ladder and five
@@ -372,6 +406,9 @@ export function fresh(): Save {
     gfx: "auto",
     assist: true,
     followClock: true,
+    kid: false,
+    trips: [],
+    trip: null,
     lastSpot: {},
     rig: {},
     records: {},
@@ -393,8 +430,8 @@ export function fresh(): Save {
   };
 }
 
-/** Sandbox — Zen Waters: everything unlocked, no economy, its own dex. */
-export function sandboxSave(): Save {
+/** A new save for a mode where `allUnlocked` is true (Recreational): every water and every piece of gear is yours. */
+export function unlockedSave(): Save {
   const base = fresh();
   const box: Record<string, number> = {};
   for (let i = 0; i < LURES.length; i++) box[String(i)] = 999;
@@ -700,6 +737,10 @@ export function sanitize(raw: unknown): Save {
     gfx: isGfxPref(o.gfx) ? o.gfx : "auto",
     assist: bool(o.assist, true),
     followClock: bool(o.followClock, true),
+    /* v6 → v7 (WP-4): three new fields, nothing existing changed meaning. Old saves get no logbook and Kid Mode off. */
+    kid: bool(o.kid, false),
+    trips: readTrips(o.trips),
+    trip: openTrip(o.trip),
     /* v4 → v5 (WP-2): two new fields, nothing existing changed meaning. Old saves get {}. */
     lastSpot: readLastSpot(o.lastSpot),
     rig: readRigs(o.rig),
@@ -759,6 +800,9 @@ export function snapshot(s: Save): Save {
     gfx: s.gfx,
     assist: s.assist,
     followClock: s.followClock,
+    kid: s.kid,
+    trips: s.trips,
+    trip: s.trip,
     lastSpot: s.lastSpot,
     rig: s.rig,
     records: s.records,
@@ -780,6 +824,36 @@ export function snapshot(s: Save): Save {
   };
 }
 
+/** The trip in progress from untrusted data (a finished one is not "open"). */
+function openTrip(v: unknown): Trip | null {
+  const t = readTrip(v);
+  return t && t.end === 0 ? t : null;
+}
+
+/** Weight of what is in the creel, in lb. */
+function creelWeight(inv: Save["inv"]) {
+  return Math.round(inv.reduce((sum, f) => sum + f.w, 0) * 10) / 10;
+}
+
+/** Pack up a trip: file it in the logbook, empty the creel. `card` shows the trip card. */
+function closeTrip(
+  s: Pick<Save, "trip" | "trips" | "inv">,
+  now: number,
+  card = true,
+): Pick<Save, "trip" | "trips" | "inv"> & { tripCard: { trip: Trip; lines: string[] } | null } {
+  const t = s.trip;
+  if (!t) return { trip: null, trips: s.trips, inv: s.inv, tripCard: null };
+  const done = finishTrip(t, now);
+  /* A blink-and-gone trip with nothing caught is not worth a logbook line. */
+  const worth = card || done.caught > 0 || now - done.start > 2 * 60_000;
+  return {
+    trip: null,
+    trips: worth ? addTrip(s.trips, done) : s.trips,
+    inv: [],
+    tripCard: card ? { trip: done, lines: tripCardLines({ trip: done, creelCount: s.inv.length, creelLb: creelWeight(s.inv) }) } : null,
+  };
+}
+
 function persistNow() {
   try {
     const key = modeKey();
@@ -789,9 +863,31 @@ function persistNow() {
     localStorage.setItem(key, json);
     /* Device settings follow the player across modes (07 §2). */
     localStorage.setItem(DEVICE_KEY, JSON.stringify(deviceSubset(useGame.getState())));
+    if (sharesCareerDex(modeRules())) shareWithCareer(useGame.getState());
   } catch {
     /* private mode or quota */
   }
+}
+
+/** The career save as stored, or null. Never throws. */
+function readCareer(): Save | null {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MODE_KEYS.expedition) || "null");
+    return raw ? sanitize(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Recreational still fills the collection (05 §3): its dex and records are merged into the career slot.
+    Money, level and everything else in the career are never touched. */
+function shareWithCareer(st: Save) {
+  const career = readCareer();
+  const base = career ?? fresh();
+  const dex = mergeDex(base.dex, st.dex);
+  const records = mergeRecords(base.records, st.records);
+  if (JSON.stringify(dex) === JSON.stringify(base.dex) && JSON.stringify(records) === JSON.stringify(base.records)) return;
+  localStorage.setItem(MODE_KEYS.expedition, JSON.stringify(snapshot({ ...base, dex, records })));
 }
 
 function persistSoon() {
@@ -841,7 +937,7 @@ export function settleTank(s: Save, now = Date.now()): { gain: number; hours: nu
   const cap = TANK_TIERS[s.tank.tier].capHours;
   const elapsedH = Math.max(0, (now - s.tank.lastSettle) / 3_600_000);
   const hours = Math.min(elapsedH, cap);
-  const rate = currentMode === "sandbox" ? 0 : tankRatePerHour(s.tank, s.dex, now);
+  const rate = modeRules().economy ? tankRatePerHour(s.tank, s.dex, now) : 0;
   const gain = Math.floor(rate * hours);
   return { gain, hours, tank: { ...s.tank, lastSettle: now } };
 }
@@ -944,7 +1040,7 @@ function withCatch(
   let c = s.c;
   let tot = s.tot;
   let contracts = bumpCatch(s.contracts, { rarity: fish.t, biome: fish.b, boss: fish.boss && !o.auto, discovered });
-  if (overflow) {
+  if (overflow && modeRules().economy) {
     const gained = Math.round(overflow * multOf(dex, s.rb));
     c += gained;
     tot += gained;
@@ -1089,21 +1185,54 @@ export function resetSim() {
 function applyAssist() {
   const F = sim.fight;
   if (!F) return;
+  const st = useGame.getState();
+  const kid = kidOn(st);
   const help = fightHelp({
-    assist: useGame.getState().assist,
+    assist: effAssist(st),
     misses: sim.misses,
     failedFights: sim.failedFights,
     wins: sim.wins,
+    kid,
   });
   applyHelp(F, help);
-  const helping = isHelping(help);
+  const helping = isHelping(help, kid);
   sim.helpGlow = helping;
   if (useGame.getState().helping !== helping) useGame.setState({ helping });
 }
 
 function assistNow() {
   const s = useGame.getState();
-  return helpingHand({ assist: s.assist, misses: 0, failedFights: sim.failedFights, wins: sim.wins });
+  return helpingHand({ assist: effAssist(s), misses: 0, failedFights: sim.failedFights, wins: sim.wins });
+}
+
+/** Helping Hand is on: switched on in Settings, or Kid Mode (where the mode allows it). */
+function effAssist(s: { assist: boolean; kid: boolean }) {
+  return assistOn(s.assist, s.kid, modeRules());
+}
+
+/** Kid Mode is in force: switched on, and this mode allows it. */
+function kidOn(s: { kid: boolean }) {
+  return kidActive(s.kid, modeRules());
+}
+
+/** The time-of-day window the fish feed in: the one you picked for a trip, or the real clock's. */
+export function windowFor(
+  s: { trip: Trip | null; followClock: boolean; weather: number },
+  now: Date = new Date(),
+): Window {
+  const pick = pickedWindow(s);
+  return pick ?? windowNow(s.followClock, s.weather, now);
+}
+
+/** The window a Recreational trip fixed, or null for the real clock. */
+export function pickedWindow(s: { trip: Trip | null }): Window | null {
+  return modeRules().trips && s.trip && s.trip.window !== "clock" ? s.trip.window : null;
+}
+
+/** The clock hour the painting should be tinted for when a window is picked; null = the real time. */
+export function pickedHour(s: { trip: Trip | null }): number | null {
+  const w = pickedWindow(s);
+  return w ? windowHour(w) : null;
 }
 
 const ARC_SECONDS = 0.5;
@@ -1254,7 +1383,7 @@ function castNow(s: Save, lureIdx: number, baitIdx: number, lair: boolean): Cast
   const spot = resolveSpot(s.biome, s.lastSpot[s.biome]);
   const rig = s.rig[s.biome] ?? DEFAULT_RIG;
   const p = presentationOf({ lure: lureIdx, sig: s.sig, bait: lair ? -1 : baitIdx }, rig);
-  const window = windowNow(s.followClock, s.weather);
+  const window = windowFor(s);
   /* The Boss Lair is its own place: the boss is not matched to a spot. */
   const plan = lair
     ? null
@@ -1318,6 +1447,14 @@ function succeed() {
     helping: false,
     tension: 0,
     celebration: lc ? { catch: lc, at: Date.now() } : null,
+    trip:
+      lc && s.trip && modeRules().trips
+        ? tripCatch(
+            s.trip,
+            { name: lc.name, w: lc.weight, rarity: lc.rarity, discovered: lc.discovered, record: lc.record },
+            Date.now(),
+          )
+        : s.trip,
     phase: "idle",
     message: fish.boss ? `${fish.name} landed!` : "Landed. Keep it or let it go?",
     detail: sim.cast && !fish.boss ? (missNote(habitOf(fish.b, fish.i), sim.cast.p) ?? "") : "",
@@ -1645,7 +1782,7 @@ export function frame(dt: number) {
     sim.waitLeft -= dt;
     sim.waited += dt;
     /* A long quiet wait: one hint per cast about the best fish you have not caught here (04 §3.6). */
-    if (!sim.hinted && sim.cast && !sim.castLair && sim.waited >= HINT_AFTER && sim.waitLeft > 0.6) {
+    if (!sim.hinted && sim.cast && !sim.castLair && sim.waited >= hintAfter(kidOn(s), HINT_AFTER) && sim.waitLeft > 0.6) {
       sim.hinted = true;
       const c = sim.cast;
       const spot = spotById(s.biome, c.spotId);
@@ -1667,7 +1804,9 @@ export function frame(dt: number) {
     if (sim.phase === "bite" || sim.phase === "reel") sim.weatherAcc = 45;
     else {
       sim.weatherAcc = 0;
-      useGame.setState({ weather: (rng() * 5) | 0 });
+      const tr = modeRules().trips ? s.trip : null;
+      /* A trip can fix the weather. A picked time of day also keeps "Night" weather out of daytime. */
+      if (!tr || tr.weather < 0) useGame.setState({ weather: (rng() * (tr && tr.window !== "clock" ? 4 : 5)) | 0 });
     }
   }
 
@@ -1733,6 +1872,7 @@ function startCast() {
   const fx = sigEffect(s.sig);
   if (fx?.kind === "bite") factor *= fx.mult;
   if (sim.castBait === 0) factor *= 0.85;
+  factor *= modeRules().biteSpeed;
   /* WP-2: the better the spot and rig suit the fish around, the sooner they bite. */
   const at = castNow(s, sim.castLure, sim.castBait, lair);
   sim.cast = { spotId: at.spotId, p: at.p, window: at.window, weather: at.weather, ms: at.ms, avg: at.avg };
@@ -1771,7 +1911,7 @@ function hook() {
      stronger line takes more strain, and a calm lure takes some fight out of the fish. */
   let pullMul = 1;
   if (stageOf(s.dex, s.biome) === 2) pullMul *= 1.1;
-  if (currentMode === "sandbox") pullMul *= 0.75;
+  pullMul *= modeRules().fightSpeed;
   let bandPad = Math.max(0, RODS[s.rod].zone - 18) * 0.0015;
   if (fx?.kind === "calm") {
     pullMul *= Math.sqrt(fx.speed);
@@ -1802,7 +1942,8 @@ function hook() {
   sim.shownDetail = "";
   msgHold = 0;
   const met = s.coached[habit.fight] ?? 0;
-  sim.coach = fish.boss ? s.bosses < 3 : met < COACH_FIGHTS;
+  const kid = kidOn(s);
+  sim.coach = fish.boss ? kid || s.bosses < 3 : coachAlways(kid, met, COACH_FIGHTS);
   applyAssist();
   if (sim.perfect) {
     sim.hitstop = 0.06;
@@ -1897,6 +2038,13 @@ type Ui = {
   helping: boolean;
   /** Line strain, 0 calm · 1 strained · 2 about to snap (colours the message pill). */
   tension: 0 | 1 | 2;
+  /* WP-4 */
+  /** The card shown when a trip ends (Recreational). */
+  tripCard: { trip: Trip; lines: string[] } | null;
+  /** First launch: ask "Who's fishing today?". */
+  askWho: boolean;
+  /** Kid Mode "Are you sure?": which sale is waiting for its second tap. */
+  armSell: string;
 };
 
 type Store = Save &
@@ -1940,6 +2088,15 @@ type Store = Save &
     rebirth: () => void;
     wipe: () => void;
     toggleSetting: (key: "sound" | "motion" | "flash" | "assist" | "followClock") => void;
+    /** Kid Mode on or off (a device setting, shared by every mode that allows it). */
+    setKid: (on: boolean) => void;
+    /** First-launch answer to "Who's fishing today?". */
+    answerWho: (who: "kid" | "grown" | "both") => void;
+    /** Recreational: begin a trip on a water, at a time of day, in a weather. */
+    beginTrip: (water: number, window: TripWindow, weather: number) => void;
+    /** Recreational: pack up. Shows the trip card, empties the creel, files the trip in the logbook. */
+    endTrip: () => void;
+    dismissTripCard: () => void;
     setGfx: (pref: GfxPref) => void;
     setDrag: (drag: Drag) => void;
     dismissCelebration: () => void;
@@ -1966,7 +2123,7 @@ export const useGame = create<Store>((set, get) => ({
   pull: "",
   frenzyLeft: 0,
   screen: "menu",
-  mode: "career",
+  mode: "expedition",
   lodgeView: "record",
   welcomeBack: null,
   tier: "full",
@@ -1974,6 +2131,49 @@ export const useGame = create<Store>((set, get) => ({
   photo: false,
   helping: false,
   tension: 0,
+  tripCard: null,
+  askWho: false,
+  armSell: "",
+  setKid: (on) => {
+    set({ kid: on });
+    persistSoon();
+  },
+  answerWho: (who) => {
+    try {
+      localStorage.setItem(WHO_KEY, "1");
+    } catch {
+      /* private mode */
+    }
+    set({ askWho: false, kid: who !== "grown" });
+    persistNow();
+  },
+  beginTrip: (water, window, weather) => {
+    const s = get();
+    if (!modeRules().trips || sim.phase !== "idle") return;
+    const w = Math.min(BIOMES.length - 1, Math.max(0, water));
+    const trip = startTrip(Date.now(), w, window, weather);
+    /* Starting a trip empties whatever was left in the creel (the old Sandbox bag). */
+    set({
+      trip,
+      inv: [],
+      biome: w,
+      ub: s.ub.includes(w) ? s.ub : [...s.ub, w],
+      lair: false,
+      weather: trip.weather >= 0 ? trip.weather : s.weather,
+      tab: "cast",
+      tripCard: null,
+      message: "Line in when you are ready.",
+      detail: "",
+    });
+    persistSoon();
+  },
+  endTrip: () => {
+    const s = get();
+    if (!s.trip || sim.phase !== "idle") return;
+    set(closeTrip(s, Date.now()));
+    persistSoon();
+  },
+  dismissTripCard: () => set({ tripCard: null }),
   setDrag: (drag) => {
     if (sim.fight) sim.fight.drag = drag;
     set({ drag });
@@ -1985,11 +2185,16 @@ export const useGame = create<Store>((set, get) => ({
     persistSoon();
   },
   dismissCelebration: () => set({ celebration: null }),
-  keepCatch: () => set({ celebration: null }),
+  keepCatch: () => {
+    /* A mode that only lets fish go turns every Keep into a release. */
+    if (!canKeep(modeRules())) return get().releaseCatch();
+    set({ celebration: null });
+  },
   releaseCatch: () => {
     const s = get();
     const cel = s.celebration;
     if (!cel) return;
+    if (!canRelease(modeRules())) return set({ celebration: null });
     const lc = cel.catch;
     const gone = releaseFish(
       s,
@@ -2013,6 +2218,7 @@ export const useGame = create<Store>((set, get) => ({
       lv: gone.lv,
       released: gone.released,
       stewards: gone.stewards,
+      trip: modeRules().trips && s.trip ? tripRelease(s.trip, lc.weight, Date.now()) : s.trip,
       celebration: null,
       toasts: toasts.slice(-3),
       message: note.message,
@@ -2020,8 +2226,17 @@ export const useGame = create<Store>((set, get) => ({
     });
     persistSoon();
   },
-  setTab: (tab) => set({ tab, armRebirth: false, armReset: false }),
-  setScreen: (screen) => set({ screen }),
+  setTab: (tab) => set({ tab, armRebirth: false, armReset: false, armSell: "" }),
+  setScreen: (screen) => {
+    /* The main menu is the career's front door: leaving another mode for it saves that mode and
+       shows the career again (rank, bosses and locks on the cards are the career's, not the side mode's). */
+    if (screen === "menu" && currentMode !== "expedition" && sim.phase === "idle") {
+      persistNow();
+      loadSlot("expedition", false);
+      return;
+    }
+    set({ screen });
+  },
   setLodgeView: (view) => set({ lodgeView: view, tab: "lodge" }),
   dismissWelcome: () => set({ welcomeBack: null }),
   switchMode: (mode) => {
@@ -2085,12 +2300,13 @@ export const useGame = create<Store>((set, get) => ({
     const s = get();
     const item = SIG_LURES[index];
     if (!item || s.sigBox.includes(index)) return;
-    if (currentMode !== "sandbox" && s.c < item.price) {
+    const cost = priceIn(modeRules(), item.price);
+    if (s.c < cost) {
       audio.fail("slip");
       return;
     }
     audio.coin();
-    set({ c: currentMode === "sandbox" ? s.c : s.c - item.price, sigBox: [...s.sigBox, index], sig: index });
+    set({ c: s.c - cost, sigBox: [...s.sigBox, index], sig: index });
     persistSoon();
   },
   equipSig: (index) => {
@@ -2104,13 +2320,14 @@ export const useGame = create<Store>((set, get) => ({
     const item = BAITS[index];
     if (!item) return;
     const price = index === BOSS_CHUM_INDEX ? bossChumPrice(s.biome) : item.price;
-    if (currentMode !== "sandbox" && s.c < price) {
+    const cost = priceIn(modeRules(), price);
+    if (s.c < cost) {
       audio.fail("slip");
       return;
     }
     audio.coin();
     const baitBox = { ...s.baitBox, [String(index)]: (s.baitBox[String(index)] || 0) + 1 };
-    set({ c: currentMode === "sandbox" ? s.c : s.c - price, baitBox });
+    set({ c: s.c - cost, baitBox });
     persistSoon();
   },
   equipBait: (index) => {
@@ -2252,22 +2469,34 @@ export const useGame = create<Store>((set, get) => ({
   },
   sellOne: (index) => {
     const s = get();
-    if (currentMode === "sandbox") {
-      set((st) => ({ toasts: pushToast([...st.toasts], "Nothing is sold in Zen Waters.") }));
+    if (!modeRules().economy) {
+      set((st) => ({ toasts: pushToast([...st.toasts], `Nothing is sold in ${modeRules().title}.`) }));
       return;
     }
     const item = s.inv[index];
     if (!item) return;
+    /* Kid Mode: a rare or better fish asks "Are you sure?" first. */
+    const armKey = `one:${index}:${item.name}`;
+    if (needsSure(kidOn(s), { kind: "sell", rarity: item.t }) && s.armSell !== armKey) {
+      set({ armSell: armKey, toasts: pushToast([...s.toasts], `Are you sure? Tap again to sell ${item.name}.`) });
+      return;
+    }
     const inv = s.inv.filter((_, j) => j !== index);
     const gained = Math.round(item.v * multOf(s.dex, s.rb));
     audio.coin();
-    set({ inv, c: s.c + gained, tot: s.tot + gained, contracts: bumpBank(s.contracts, gained) });
+    set({ inv, c: s.c + gained, tot: s.tot + gained, contracts: bumpBank(s.contracts, gained), armSell: "" });
     persistSoon();
   },
   sellUpTo: (maxRarity) => {
     const s = get();
-    if (currentMode === "sandbox") {
-      set((st) => ({ toasts: pushToast([...st.toasts], "Nothing is sold in Zen Waters.") }));
+    if (!modeRules().economy) {
+      set((st) => ({ toasts: pushToast([...st.toasts], `Nothing is sold in ${modeRules().title}.`) }));
+      return;
+    }
+    const top = s.inv.reduce((m, f) => (f.t <= maxRarity ? Math.max(m, f.t) : m), -1);
+    const armKey = `up:${maxRarity}`;
+    if (top >= 0 && needsSure(kidOn(s), { kind: "sellMany", topRarity: top }) && s.armSell !== armKey) {
+      set({ armSell: armKey, toasts: pushToast([...s.toasts], "Are you sure? Some of these are rare. Tap again to sell.") });
       return;
     }
     let sum = 0;
@@ -2281,7 +2510,7 @@ export const useGame = create<Store>((set, get) => ({
     if (!sum) return;
     const gained = Math.round(sum * multOf(s.dex, s.rb));
     audio.coin();
-    set({ inv, c: s.c + gained, tot: s.tot + gained, contracts: bumpBank(s.contracts, gained) });
+    set({ inv, c: s.c + gained, tot: s.tot + gained, contracts: bumpBank(s.contracts, gained), armSell: "" });
     persistSoon();
   },
   travel: (index) => {
@@ -2291,6 +2520,24 @@ export const useGame = create<Store>((set, get) => ({
     const price = BIOMES[index].price;
     if (!owned && s.c < price) return;
     audio.coin();
+    if (modeRules().trips && s.trip) {
+      /* Leaving the water ends the trip: the creel empties, the trip goes in the logbook,
+         and a new one starts on the new water with the same time and weather picks. */
+      const now = Date.now();
+      const closed = closeTrip(s, now, false);
+      const trip = startTrip(now, index, s.trip.window, s.trip.weather);
+      const toasts = [...s.toasts];
+      pushToast(toasts, `Left ${BIOMES[s.biome].name}. ${creelLine(s.inv.length, creelWeight(s.inv))}`);
+      set({
+        ...closed,
+        trip,
+        biome: index,
+        weather: trip.weather >= 0 ? trip.weather : s.weather,
+        toasts: toasts.slice(-3),
+      });
+      persistSoon();
+      return;
+    }
     set({
       c: owned ? s.c : s.c - price,
       ub: owned ? s.ub : [...s.ub, index],
@@ -2320,7 +2567,7 @@ export const useGame = create<Store>((set, get) => ({
   },
   rebirth: () => {
     const s = get();
-    if (s.tot < 1e7 || s.ub.length < BIOMES.length || sim.phase !== "idle") return;
+    if (!modeRules().rebirth || s.tot < 1e7 || s.ub.length < BIOMES.length || sim.phase !== "idle") return;
     if (!s.armRebirth) {
       set({ armRebirth: true });
       return;
@@ -2347,6 +2594,7 @@ export const useGame = create<Store>((set, get) => ({
       gfx: s.gfx,
       assist: s.assist,
       followClock: s.followClock,
+      kid: s.kid,
       lastSpot: s.lastSpot,
       rig: s.rig,
       records: s.records,
@@ -2380,13 +2628,14 @@ export const useGame = create<Store>((set, get) => ({
     resetSim();
     const tab = s.tab;
     set({
-      ...(currentMode === "sandbox" ? sandboxSave() : fresh()),
+      ...(modeRules().allUnlocked ? unlockedSave() : fresh()),
       sound: s.sound,
       motion: s.motion,
       flash: s.flash,
       gfx: s.gfx,
       assist: s.assist,
       followClock: s.followClock,
+      kid: s.kid,
       drag: s.drag,
       hydrated: true,
       tab,
@@ -2450,7 +2699,7 @@ function loadSlot(mode: Mode, toGame: boolean) {
   } catch {
     raw = null;
   }
-  if (!raw && mode === "career") {
+  if (!raw && mode === "expedition") {
     try {
       raw = JSON.parse(localStorage.getItem("facultra") || "null");
     } catch {
@@ -2458,8 +2707,27 @@ function loadSlot(mode: Mode, toGame: boolean) {
     }
   }
   let save: Save;
-  if (!raw && mode === "sandbox") save = sandboxSave();
+  if (!raw && MODES[mode].allUnlocked) save = unlockedSave();
   else save = sanitize(raw);
+  /* Recreational fills the career collection: bring the career dex and records in (and, the first time,
+     the old Sandbox's own dex goes the other way, see persistNow). */
+  if (sharesCareerDex(MODES[mode])) {
+    const career = readCareer();
+    if (career) {
+      save.dex = mergeDex(save.dex, career.dex);
+      save.records = mergeRecords(save.records, career.records);
+    }
+  }
+  /* A mode with no contracts has none (a save is never trusted to say so). */
+  if (!MODES[mode].contracts) save.contracts = [];
+  /* A trip left open for a long time was over when you left: file it. */
+  if (save.trip && tripIsStale(save.trip, Date.now())) {
+    const t = save.trip;
+    const done = finishTrip(t, t.last);
+    save.trips = addTrip(save.trips, done);
+    save.trip = null;
+    save.inv = [];
+  }
   let device: ReturnType<typeof readDeviceSettings> = {};
   try {
     device = readDeviceSettings(JSON.parse(localStorage.getItem(DEVICE_KEY) || "null"));
@@ -2496,6 +2764,8 @@ function loadSlot(mode: Mode, toGame: boolean) {
     hydrated: true,
     mode,
     screen: toGame ? "game" : "menu",
+    tripCard: null,
+    armSell: "",
     phase: "idle",
     message: "Ready to cast.",
     detail: "",
@@ -2509,10 +2779,24 @@ function loadSlot(mode: Mode, toGame: boolean) {
   persistNow();
 }
 
-export function hydrate(mode: Mode = "career") {
+/** Set once the "Who's fishing today?" question has been answered. */
+const WHO_KEY = "fac-ultra-who";
+
+export function hydrate(mode: Mode = "expedition") {
+  /* A brand-new device (no save in any slot, question never answered) gets asked who is fishing. */
+  let first = false;
+  try {
+    first = !localStorage.getItem(WHO_KEY) && !localStorage.getItem("facultra") && !Object.values(MODE_KEYS).some((k) => localStorage.getItem(k));
+  } catch {
+    first = false;
+  }
   loadSlot(mode, false);
+  if (first) useGame.setState({ askWho: true });
   bindLifecycle();
 }
+
+/** The mode a stored name means (old names like "career" and "sandbox" included). */
+export { legacyMode };
 
 export function downloadSave() {
   const blob = new Blob([JSON.stringify(snapshot(useGame.getState()))], { type: "application/json" });

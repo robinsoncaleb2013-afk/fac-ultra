@@ -108,3 +108,26 @@
 .fac-stamp {
   animation: fac-stamp 520ms ease-out both;
 }
+
+/* Kid Mode (docs/architecture/05 §4): every text size goes up one step. The attribute is set on <html> by
+   useKidAttr(). Tailwind v4 text utilities are single classes, so a [data-kid] prefix outranks them. */
+[data-kid] .text-xs {
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+}
+[data-kid] .text-sm {
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
+}
+[data-kid] .text-base {
+  font-size: var(--text-lg);
+  line-height: var(--text-lg--line-height);
+}
+[data-kid] .text-lg {
+  font-size: var(--text-xl);
+  line-height: var(--text-xl--line-height);
+}
+[data-kid] .text-xl {
+  font-size: var(--text-2xl);
+  line-height: var(--text-2xl--line-height);
+}

@@ -1,5 +1,8 @@
 import { act, partnerDown, partnerUp, reelDown, reelUp, sim, useGame } from "@/game/engine";
 import { Button } from "@/components/ui/button";
+import { SpeakButton } from "@/components/game/kid";
+import { useKidOn, useRules } from "@/components/game/use-kid";
+import { isLongMessage } from "@/game/kid";
 import { cn } from "@/lib/cn";
 
 /** The pill follows the needle: calm and green, pulling hard (amber), too tight (red). */
@@ -10,7 +13,8 @@ export function CastDock({ mobile, onCast }: { mobile?: boolean; onCast?: () => 
   const phase = useGame((s) => s.phase);
   const message = useGame((s) => s.message);
   const detail = useGame((s) => s.detail);
-  const mode = useGame((s) => s.mode);
+  const twoPlayer = useRules().twoPlayer;
+  const kid = useKidOn();
   const helping = useGame((s) => s.helping);
   const tension = useGame((s) => s.tension);
   const label = phase === "idle" ? "Cast" : phase === "wait" ? "Waiting" : phase === "bite" ? "Hook" : "Reel";
@@ -27,6 +31,7 @@ export function CastDock({ mobile, onCast }: { mobile?: boolean; onCast?: () => 
             ? "Tap the water, or the button."
             : "Click the water, or press Space.";
   const sub = phase === "reel" && helping ? "Helping hand: the green is wider." : detail || hint;
+  const readable = kid && isLongMessage(`${message} ${sub}`);
   return (
     <div
       className={cn(
@@ -38,13 +43,15 @@ export function CastDock({ mobile, onCast }: { mobile?: boolean; onCast?: () => 
     >
       <div
         className={cn(
-          "rounded-2xl bg-bg/70 px-3 py-1.5 text-center backdrop-blur-sm",
+          "relative rounded-2xl bg-bg/70 px-3 py-1.5 text-center backdrop-blur-sm",
           mobile ? "mb-2" : "mb-3 min-h-9",
+          readable && "px-12",
         )}
         aria-live="polite"
       >
         <p className={cn("font-serif text-lg leading-tight", phase === "reel" && TENSION[tension])}>{message}</p>
         <p className="min-h-4 text-xs text-muted">{sub}</p>
+        {readable ? <SpeakButton text={`${message} ${sub}`} className="absolute top-1/2 right-1 -translate-y-1/2" /> : null}
       </div>
       <div className="flex gap-2">
         <Button
@@ -69,7 +76,7 @@ export function CastDock({ mobile, onCast }: { mobile?: boolean; onCast?: () => 
         >
           {label}
         </Button>
-        {mode === "coop" ? (
+        {twoPlayer ? (
           <Button
             variant="ghost"
             disabled={phase !== "reel"}

@@ -1,6 +1,8 @@
 import { Menu as MenuIcon } from "lucide-react";
 import { dexCount, money, rankName, TOTAL_SPECIES, xpNeed } from "@/game/content";
 import { useGame } from "@/game/engine";
+import { moneyWords } from "@/game/kid";
+import { MODES, showsMoney } from "@/game/modes";
 import { cn } from "@/lib/cn";
 
 function useHud() {
@@ -9,14 +11,16 @@ function useHud() {
   const xp = useGame((s) => s.xp);
   const dex = useGame((s) => dexCount(s.dex));
   const mode = useGame((s) => s.mode);
-  return { coins, lv, xp, dex, mode, cash: mode === "sandbox" ? "—" : money(coins), pct: Math.min(100, (xp / xpNeed(lv)) * 100) };
+  const rules = MODES[mode];
+  const cash = showsMoney(rules) ? money(coins) : "";
+  return { coins, lv, xp, dex, rules, cash, words: moneyWords(coins), pct: Math.min(100, (xp / xpNeed(lv)) * 100) };
 }
 
 /** Desktop: floating 56 px bar over the water, fading to nothing. */
 export function HudBar({ left }: { left: number }) {
   const h = useHud();
   const setScreen = useGame((s) => s.setScreen);
-  const modeLabel = h.mode === "sandbox" ? "Zen Waters" : h.mode === "coop" ? "Local Co-op" : "Expedition";
+  const modeLabel = h.rules.title;
   return (
     <header
       style={{ paddingLeft: left + 12 }}
@@ -45,7 +49,11 @@ export function HudBar({ left }: { left: number }) {
         <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-2" title={`Level ${h.lv}`}>
           <div className="h-full bg-brass" style={{ width: `${h.pct}%` }} />
         </div>
-        <p className="font-serif text-2xl leading-none text-brass">{h.cash}</p>
+        {h.cash ? (
+          <p className="font-serif text-2xl leading-none text-brass" title={h.words}>
+            {h.cash}
+          </p>
+        ) : null}
       </div>
     </header>
   );
@@ -61,7 +69,11 @@ export function HudBarMobile({ onMenu, className }: { onMenu: () => void; classN
         className,
       )}
     >
-      <p className="font-serif text-xl leading-none text-brass">{h.cash}</p>
+      {h.cash ? (
+        <p className="font-serif text-xl leading-none text-brass" title={h.words}>
+          {h.cash}
+        </p>
+      ) : null}
       <p className="text-xs text-fg">Lv {h.lv}</p>
       <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
         <div className="h-full bg-brass" style={{ width: `${h.pct}%` }} />

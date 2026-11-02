@@ -162,9 +162,16 @@ export function plainBlit(dst: CanvasRenderingContext2D, w: number, h: number) {
   dst.drawImage(buf.canvas, 0, 0, buf.canvas.width, buf.canvas.height, 0, 0, w, h);
 }
 
-export function drawTimeTint(ctx: CanvasRenderingContext2D, w: number, h: number, weather: number, follow: boolean) {
+export function drawTimeTint(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  weather: number,
+  follow: boolean,
+  hour: number | null = null,
+) {
   const d = new Date();
-  const tint = timeTint(d.getHours() + d.getMinutes() / 60, weather, follow);
+  const tint = timeTint(hour ?? d.getHours() + d.getMinutes() / 60, weather, follow || hour !== null);
   if (tint.color) {
     ctx.globalAlpha = tint.alpha;
     ctx.fillStyle = tint.color;

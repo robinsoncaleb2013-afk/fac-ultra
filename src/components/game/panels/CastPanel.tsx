@@ -17,6 +17,8 @@ import {
   TONE,
 } from "@/game/content";
 import { useGame } from "@/game/engine";
+import { MODES } from "@/game/modes";
+import { TripBar } from "@/components/game/trips";
 import { DEFAULT_RIG, FAMILY_INFO, familyOf, rigLabel } from "@/game/presentation";
 import { resolveSpot } from "@/game/spots";
 import { FishPortrait } from "@/components/game/portrait";
@@ -32,8 +34,10 @@ export function BossControls() {
   const lure = useGame((s) => s.lure);
   const box = useGame((s) => s.box);
   const mode = useGame((s) => s.mode);
+  const rules = MODES[mode];
   return (
     <div className="flex flex-col gap-3">
+      <TripBar />
       <BossCard />
       {lure >= 0 ? (
         <p className="text-sm text-muted">
@@ -46,7 +50,7 @@ export function BossControls() {
         <Button variant={autoOn ? "primary" : "ghost"} aria-pressed={autoOn} onClick={toggleAuto}>
           {autoOn ? "Auto-reel running" : "Auto-reel off"}
         </Button>
-      ) : mode === "sandbox" ? null : (
+      ) : !rules.economy ? null : (
         <p className="text-sm text-muted">Auto-reel is in Gear for {money(AUTO_PRICE)}. It banks fish at 40% value.</p>
       )}
     </div>

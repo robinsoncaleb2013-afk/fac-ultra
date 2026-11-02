@@ -22,6 +22,9 @@ import {
   xpNeed,
 } from "@/game/content";
 import { downloadSave, sim, useGame } from "@/game/engine";
+import { MODES } from "@/game/modes";
+import { Logbook } from "@/components/game/trips";
+import { useKidOn } from "@/components/game/use-kid";
 import { createRoom, joinRoom, leaveRoom, useCrew } from "@/game/multiplayer";
 import { FishPortrait } from "@/components/game/portrait";
 import { Button } from "@/components/ui/button";
@@ -34,18 +37,21 @@ import { RecordBook, Stewardship } from "@/components/game/panels/RecordsSection
 export function LodgePanel() {
   const view = useGame((s) => s.lodgeView);
   const setView = useGame((s) => s.setLodgeView);
+  const trips = useGame((s) => MODES[s.mode].trips);
+  const views = (
+    [
+      ["record", "Record"],
+      ["logbook", "Logbook"],
+      ["tank", "Aquarium"],
+      ["derby", "Derby"],
+      ["crew", "Crew"],
+      ["settings", "Settings"],
+    ] as const
+  ).filter(([id]) => id !== "logbook" || trips);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-1 overflow-x-auto">
-        {(
-          [
-            ["record", "Record"],
-            ["tank", "Aquarium"],
-            ["derby", "Derby"],
-            ["crew", "Crew"],
-            ["settings", "Settings"],
-          ] as const
-        ).map(([id, label]) => (
+        {views.map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -60,6 +66,7 @@ export function LodgePanel() {
         ))}
       </div>
       {view === "record" ? <Record /> : null}
+      {view === "logbook" && trips ? <Logbook /> : null}
       {view === "tank" ? <Aquarium /> : null}
       {view === "derby" ? <DerbyView /> : null}
       {view === "crew" ? <CrewView /> : null}
@@ -71,6 +78,8 @@ export function LodgePanel() {
 function Record() {
   const s = useGame();
   const rebirth = useGame((st) => st.rebirth);
+  const rules = MODES[s.mode];
+  const kid = useKidOn();
   const ready = s.tot >= 1e7 && s.ub.length === BIOMES.length && (s.phase === "idle" || sim.phase === "idle");
   const parts = [
     ["Rod", RODS[s.rod].luck],
@@ -88,8 +97,8 @@ function Record() {
           Level {s.lv} · {s.xp}/{xpNeed(s.lv)} xp
         </p>
         <p>Caught {s.caught}</p>
-        <p>Earned this run {money(s.tot)}</p>
-        <p>Sale multiplier ×{multOf(s.dex, s.rb).toFixed(2)}</p>
+        {rules.economy ? <p>Earned this run {money(s.tot)}</p> : null}
+        {rules.economy ? <p>Sale multiplier ×{multOf(s.dex, s.rb).toFixed(2)}</p> : null}
         <p>Luck {Math.round(luckTotal(s, s.lure))}</p>
         <p>
           Rebirths {s.rb} · streak best {s.bestStreak}
@@ -112,6 +121,7 @@ function Record() {
           </li>
         ))}
       </ul>
+      {rules.rebirth ? (
       <div className="rounded-2xl border border-line bg-surface p-3">
         <h3 className="font-serif text-lg">Rebirth</h3>
         <p className="mt-1 text-sm text-muted">
@@ -123,9 +133,10 @@ function Record() {
           Earned {money(s.tot)} / {money(1e7)} · waters {s.ub.length}/{BIOMES.length}
         </p>
         <Button className="mt-3" disabled={!ready} onClick={rebirth}>
-          {s.armRebirth ? "Tap again to rebirth" : "Rebirth"}
+          {s.armRebirth ? (kid ? "Are you sure? Tap again" : "Tap again to rebirth") : "Rebirth"}
         </Button>
       </div>
+      ) : null}
     </div>
   );
 }
@@ -238,7 +249,7 @@ function Aquarium() {
         <p className="mt-1 text-sm text-muted">
           Exhibits {tank.exhibits.length}/{tier.slots} · glass worth {money(totalValue)} · offline cap {tier.capHours}h
           {tank.gift ? ` · gift shop +${tank.gift * 25}%` : ""}
-          {mode === "sandbox" ? " · Zen Waters exhibits are for the love of it — no rent" : ""}
+          {!MODES[mode].economy ? ` · ${MODES[mode].title} exhibits are just for show, no rent` : ""}
         </p>
         <div className="mt-2 flex flex-wrap gap-2">
           <Button disabled={feedLeft > 0 || tank.exhibits.length === 0} onClick={feedTank}>
@@ -518,6 +529,7 @@ const CONTROLS: [string, string, string][] = [
   ["Esc", "Close the panel or the catch card", "Closes whatever is open on top of the water"],
   ["F", "Full screen on or off", "Fills the whole screen. Press F again or Esc to leave."],
   ["H", "Hide the buttons for a clean picture", "Photo mode. Press any key or click to bring the buttons back."],
+  ["P", "Save a picture of the water", "Saves a PNG with the water, the fish if one is up, and the date."],
   ["M", "Sound on or off", "Mute"],
   ["J", "Player 2 holds the reel too (Local Co-op)", "Shared glory: it adds to your reel"],
 ];
@@ -526,6 +538,10 @@ function Settings() {
   const motion = useGame((s) => s.motion);
   const flash = useGame((s) => s.flash);
   const assist = useGame((s) => s.assist);
+  const kidSetting = useGame((s) => s.kid);
+  const setKid = useGame((s) => s.setKid);
+  const kidIn = useKidOn();
+  const assistAllowed = MODES[useGame((s) => s.mode)].assistAllowed;
   const followClock = useGame((s) => s.followClock);
   const gfx = useGame((s) => s.gfx);
   const tier = useGame((s) => s.tier);
@@ -554,8 +570,19 @@ function Settings() {
       <Toggle on={flash} onClick={() => toggle("flash")}>
         Flashes
       </Toggle>
-      <Toggle on={assist} onClick={() => toggle("assist")}>
-        Helping Hand (a wider green when fights are tough)
+      <div className="rounded-2xl border border-line bg-surface p-3">
+        <Toggle on={kidSetting} onClick={() => setKid(!kidSetting)}>
+          Kid Mode
+        </Toggle>
+        <p className="mt-2 text-sm text-muted">
+          For younger anglers. Helping Hand stays on and always glows, the writing gets bigger, hints come sooner and
+          the coaching never stops. Messages get a speaker button that reads them out loud. Rare fish and Rebirth ask
+          &quot;Are you sure?&quot; first. Tournaments ignore Kid Mode so every score stays fair.
+        </p>
+        {kidSetting && !assistAllowed ? <p className="mt-1 text-sm text-brass">Not used in this mode.</p> : null}
+      </div>
+      <Toggle on={assist || kidIn} onClick={() => (kidIn ? undefined : toggle("assist"))}>
+        {kidIn ? "Helping Hand (on with Kid Mode)" : "Helping Hand (a wider green when fights are tough)"}
       </Toggle>
       <Toggle on={followClock} onClick={() => toggle("followClock")}>
         Follow the clock (dawn, dusk and night light)

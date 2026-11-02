@@ -121,10 +121,12 @@ export type DeviceSettings = {
   motion: boolean;
   flash: boolean;
   followClock: boolean;
+  /** Kid Mode (WP-4): the person at this screen, so it follows them into every mode. */
+  kid: boolean;
 };
 
 export function deviceSubset(s: DeviceSettings): DeviceSettings {
-  return { gfx: s.gfx, sound: s.sound, motion: s.motion, flash: s.flash, followClock: s.followClock };
+  return { gfx: s.gfx, sound: s.sound, motion: s.motion, flash: s.flash, followClock: s.followClock, kid: s.kid };
 }
 
 /** Read the shared device record; unknown or hostile shapes are ignored field by field. */
@@ -133,7 +135,7 @@ export function readDeviceSettings(raw: unknown): Partial<DeviceSettings> {
   const o = raw as Record<string, unknown>;
   const out: Partial<DeviceSettings> = {};
   if (isGfxPref(o.gfx)) out.gfx = o.gfx;
-  for (const k of ["sound", "motion", "flash", "followClock"] as const) {
+  for (const k of ["sound", "motion", "flash", "followClock", "kid"] as const) {
     if (typeof o[k] === "boolean") out[k] = o[k];
   }
   return out;
