@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: typecheck · lint · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # `npm install`, not `npm ci`: the committed package-lock.json is stale
+      # (it predates the sandbox's last dependency bump and `npm ci` refuses it).
+      # Switch back to `npm ci` once a regenerated lockfile is committed.
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+        env:
+          # No database in CI: the build's db:migrate step skips when unset.
+          DATABASE_URL: ""
