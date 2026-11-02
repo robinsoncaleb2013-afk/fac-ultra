@@ -11,6 +11,7 @@ It is written so that an implementing agent — any model, any tool — can pick
 | [`01-vision-and-pillars.md`](01-vision-and-pillars.md) | Before anything. Who the game is for and the five rules every feature must obey. |
 | [`02-codebase-map.md`](02-codebase-map.md) | Before touching code. What each file does, how state flows, where to extend, what not to touch. |
 | [`03-presentation-big-water.md`](03-presentation-big-water.md) | Building the desktop presentation layer (WP-1). |
+| [`09-mobile.md`](09-mobile.md) | The phone/tablet presentation and graphics tiers — same site, chosen automatically (WP-1). |
 | [`04-fishing-model.md`](04-fishing-model.md) | Building the enthusiast fishing simulation: spots, presentations, the fight (WP-2, WP-3). |
 | [`05-game-modes.md`](05-game-modes.md) | Building Recreational, Survival, Kid Mode and the mode framework (WP-4, WP-5, WP-6). |
 | [`06-multiplayer-tournaments.md`](06-multiplayer-tournaments.md) | Building server-scored tournaments and the lobby (WP-7, WP-8). |
@@ -34,7 +35,7 @@ These are not suggestions. A PR that breaks one of them is not done.
    node scripts/browser-smoke.mjs   # if present: no console errors, visible content
    ```
    Then play the feature in a real browser (Playwright is installed; Chromium may live at `/opt/pw-browsers/`). Screenshots go in `screenshots/`. A PR description must say what you played and what you saw.
-3. **The game must still play on a phone.** Desktop is the primary target now, but every layout change keeps the existing phone layout working below the `lg` breakpoint (1024 px). Verify at 390×844 and 1440×900.
+3. **One site, every device.** The same URL serves phones, tablets and PCs; `device.ts` picks the layout and graphics tier automatically (`09-mobile.md`). Every presentation change is verified at 390×844 (phone portrait), 844×390 (phone landscape) and 1440×900 (desktop), and the per-tier table in `09` §1.2 decides what each device draws.
 4. **No new rendering engine and no heavy dependencies.** Canvas 2D, CSS and the existing libraries. `three`, Phaser, PixiJS and similar are **not** allowed. If a spec calls for an effect, it is achievable in Canvas 2D; see `03-presentation-big-water.md`.
 5. **Never break saves.** Every change to the `Save` type goes through `sanitize()` with a version bump and a migration; old saves must load. `07-data-saves-cloud.md` has the procedure. Test it with the fixtures in `src/game/__fixtures__/` (created in WP-0).
 6. **Don't touch the platform plumbing** unless a package says to: `public/__grok/`, `server/`, `scripts/grok-pwa-*`, `scripts/with-app-env.mjs`, `src/lib/auth/*`, `src/lib/app-data/*`, `src/lib/preview-*`. They came from the original sandbox and keep the Vercel build working.
@@ -62,4 +63,5 @@ These are not suggestions. A PR that breaks one of them is not done.
 | **Dex** | The species collection. `dex["b-i"] = {c: count, w: best weight, m: best mutation}`. |
 | **Mode** | A save slot with its own rules: Expedition (career), Recreational, Survival, Co-op, Tournament. |
 | **Helping Hand** | Kid-mode difficulty assist (WP-1). |
+| **Form / tier** | `form` = phone / tablet / desktop (how the page is laid out); `gfx` tier = full / lite / mobile (what the water draws). Both chosen by `device.ts` at load. |
 | **Event / Tournament** | A server-scheduled competition with a seed, rules and a server-verified leaderboard (WP-7). |

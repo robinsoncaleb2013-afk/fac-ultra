@@ -7,7 +7,7 @@ Branch naming: `wp-<n>-<slug>` off `main`. Open the PR against `main`.
 | # | Package | Spec | Size | Depends on |
 |---|---|---|---|---|
 | 0 | Green outside the sandbox | below | S | — |
-| 1 | Big Water presentation | `03` | L | 0 |
+| 1 | Big Water presentation + mobile version | `03`, `09` | L | 0 |
 | 2 | Spots, rigs, habits, seeded RNG | `04` §1–4 | L | 1 |
 | 3 | Fight v2, keep/release, records | `04` §5–7 | M | 2 |
 | 4 | Mode framework, Recreational, Kid Mode | `05` §1–4 | M | 3 |
@@ -38,10 +38,10 @@ Packages 5, 6 and 7 are independent of each other and can run in parallel on sep
 
 ---
 
-## WP-1 · Big Water presentation
-Spec: `03`. **Done when:** `03` §9, all nine items. Also: this package bumps `SAVE_VERSION` to 4 (`gfx`, `assist`, `followClock`).
+## WP-1 · Big Water presentation + mobile version
+Spec: `03` (desktop, effects, fight ring, celebration, Helping Hand, assets) and `09` (device/graphics tiers, phone and tablet layouts, touch controls, phone loading budget). **Done when:** `03` §9 items 1–9 **and** `09` §8 items 10–16. This package bumps `SAVE_VERSION` to 4 (`gfx`, `assist`, `followClock`).
 
-Suggested order inside the package (each a commit, one PR): split `panels.tsx` → desktop layout shells (rail, drawer, HUD bar, cast dock) → ring fight display + remove DOM bar → offscreen buffer + ripples + glints + rays + clock tint + rain rings → art pipeline + lazy loading → celebration → Helping Hand → keys + fullscreen + photo-hide → fps meter + auto-lite → tests + screenshots.
+Suggested order inside the package (each a commit, one PR): `device.ts` tiers → split `panels.tsx` → desktop layout shells (rail, drawer, HUD bar, cast dock) → **mobile layout** (sticky water block, peek strip, pinned cast, bottom tabs, `☰` sheet) → ring fight display + remove DOM bar (touch hold on mobile) → offscreen buffer + ripples + glints + rays + clock tint + rain rings, driven by the tier table → art pipeline (two sizes) + lazy loading per tier → celebration (card on desktop, bottom sheet on mobile) → Helping Hand → keys + fullscreen + photo-hide → fps governor + background pause → tap-target audit script → tests + screenshots at all three viewports.
 
 ---
 

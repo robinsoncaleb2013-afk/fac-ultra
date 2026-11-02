@@ -25,8 +25,8 @@ Species have habits: where they hold, when they feed, what they'll hit, how they
 ### 3. Challenge that bends, never breaks
 Difficulty adapts to the player in the moment (Helping Hand) and to the mode (Recreational is gentle, Survival is harsh, Tournaments are fixed and fair). A player should fail sometimes, and know *why* — the message always names the cause ("You set the hook too late", "That fish wanted a slower retrieve").
 
-### 4. Smooth at 60, light on the wire
-60 fps on a five-year-old laptop's integrated graphics. First paint under 1.5 s on a 20 Mbps connection. No WebGL engine, no asset downloads the player isn't about to look at. Performance budgets are in `03-presentation-big-water.md` §Budgets and are acceptance criteria.
+### 4. Smooth at 60, light on the wire, on whatever they own
+60 fps on a five-year-old laptop's integrated graphics *and* on a mid-range Android phone. One website: the page detects the device and picks the layout and graphics tier itself — PC gets every effect, phones get a lighter tier that still looks like the same game, nobody downloads a different app. First paint under 1.5 s on a 20 Mbps connection (2 s on a phone). No WebGL engine, no asset downloads the player isn't about to look at. Budgets are in `03` §7 and `09` §1–5 and are acceptance criteria.
 
 ### 5. Fair when it counts
 Anything that goes on a shared leaderboard is scored on the server from a server-issued seed and a replayable envelope of player inputs. Casual play stays client-side and instant; competition is verified. No feature may put a client-trusted number on a public board.

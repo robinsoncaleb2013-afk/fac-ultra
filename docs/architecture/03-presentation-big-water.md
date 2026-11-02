@@ -4,11 +4,14 @@ Work package **WP-1**. The water fills the screen on PC, the fight happens on th
 
 ## 1. Layout
 
-### 1.1 Breakpoints
-- `< 1024 px` (phone/tablet): **today's layout, unchanged.** Header, stage strip, action band, scrolling panel, bottom nav.
-- `≥ 1024 px` (desktop, `lg:`): the **Big Water** layout below.
+### 1.1 One site, two presentations
+The same URL serves everyone. `src/game/device.ts` (`09-mobile.md` §1) decides at load — and again on rotate/resize — which **form** the player is on (`phone` / `tablet` / `desktop`) and which **graphics tier** to run (`full` / `lite` / `mobile`). Nobody picks a version; Settings lets a player pin a tier.
 
-Implement as one component tree with Tailwind `lg:` variants where cheap, and a `useDesktop()` hook (`matchMedia("(min-width: 1024px)")`) where the trees genuinely differ (the stage is full-bleed vs. a strip; the panel is a drawer vs. inline).
+- `form === "desktop"`, or a tablet in landscape ≥ 1024 px: the **Big Water** layout below (§1.2).
+- `form === "phone"` in portrait, and tablets in portrait: the **mobile layout** in `09-mobile.md` §2 — a redesigned portrait screen with the water at 52 % of the viewport, not today's 288 px strip.
+- Landscape phone: Big Water with a collapsed rail (`09` §2.2).
+
+Implement as one component tree with a `useForm()` hook (`matchMedia("(pointer: coarse)")` + viewport) where the trees genuinely differ (full-bleed stage vs. sticky water block; drawer vs. inline panels) and Tailwind variants where that's cheaper. The effects stack in §3 reads the tier table in `09` §1.2 to decide what to draw.
 
 ### 1.2 Desktop layout
 
@@ -63,7 +66,7 @@ Replace the horizontal bar with a **ring around the bobber**, drawn in `paint()`
 
 ## 3. Living water (Canvas 2D only)
 
-All effects are gated by `s.motion`. Quality tier `s.gfx: "high" | "lite"` (new setting, default `high`; auto-drops to `lite` if the frame loop measures < 45 fps for 3 s — see §7).
+All effects are gated by `s.motion`. Quality tier `gfx: "full" | "lite" | "mobile"` is a device setting chosen by `device.ts` (`09` §1.1: desktops start at `full`, tablets `lite`, phones `mobile`); the fps governor steps it down one tier if the loop measures < 45 fps for 3 s (§7) and the player can pin it in Settings. The per-tier table — strip size, particle caps, which effects are skipped — is `09` §1.2 and is the single source of truth for what each tier draws. The descriptions below are the `full` tier.
 
 ### 3.1 Water line
 Each biome gets a `waterY` (0–1, where the painting's waterline is) in a new table `WATER_LINE: number[]` in `content.ts` (eyeball from the paintings; Pond ≈ 0.52, Sky ≈ 0.6 … record all 15). Everything below `waterY·h` is "water".
@@ -72,7 +75,7 @@ Each biome gets a `waterY` (0–1, where the painting's waterline is) in a new t
 Draw the painting once per frame into an **offscreen canvas** `buf` the size of the stage (reuse; resize only when the stage resizes). Then copy the water region to the main canvas **in horizontal strips** with a sinusoidal x-offset:
 
 ```ts
-const strip = gfx === "high" ? 2 : 4;              // px per strip
+const strip = STRIP[gfx];                          // px per strip: full 2 · lite 4 · mobile 6 (09 §1.2)
 for (let y = waterTop; y < h; y += strip) {
   const depth = (y - waterTop) / (h - waterTop);   // 0 at the waterline, 1 at the bottom
   const amp = 1.5 + depth * 6;                      // ripples grow toward the camera
@@ -140,9 +143,9 @@ Show it honestly: when `zoneBonus > 0`, the ring band gets a soft white outer gl
 - Fonts: keep Google Fonts but add `font-display: swap` (it's in the URL already) and a `<link rel=preload>` for the two faces used above the fold.
 - Target budget (acceptance): first paint < 1.5 s and first biome visible < 2.5 s on a throttled "Fast 3G" Playwright profile; total transfer for the first screen < 1.2 MB.
 
-## 7. Performance budget and auto-lite
+## 7. Performance budget and the fps governor
 
-- Measure fps in the loop: a rolling average over 60 frames. If avg < 45 fps for 3 s and `gfx === "high"` and the player hasn't pinned the setting, switch to `lite` and toast "Switched to light graphics for a smoother game — change it in Settings." `lite` = 4 px ripple strips, no light rays, half the glints, no plankton.
+- Measure fps in the loop: a rolling average over 60 frames. If avg < 45 fps for 3 s and the player hasn't pinned the setting, step the tier down one (`full → lite → mobile`) and toast "Switched to lighter graphics for a smoother game — change it in Settings." Never step up automatically. What each tier skips is the table in `09` §1.2.
 - Draw calls: keep `paint()` under 1,200 canvas operations per frame at 1080p `high`. Count them in dev with a `window.__facDraw` counter behind `import.meta.env.DEV`.
 - Never allocate in the frame loop: pre-allocate particle arrays, reuse the offscreen buffer, no `.map()` in `paint()`.
 
@@ -162,12 +165,13 @@ Mouse: hovering the water shows a faint crosshair at the pointer (groundwork for
 
 ## 9. Done when (acceptance for WP-1)
 
-1. At 1440×900 the painting fills the viewport; rail, HUD bar, cast dock and drawer behave as §1.2; at 390×844 the old layout is pixel-for-pixel equivalent (compare screenshots).
+1. At 1440×900 the painting fills the viewport; rail, HUD bar, cast dock and drawer behave as §1.2; at 390×844 the mobile layout in `09` §2.1 applies (items 10–16 below).
 2. The reel fight is a ring around the bobber with band, cursor, hits and tension exactly as §2; the DOM bar is gone; boss phase 2 shows the spin.
-3. Ripples, glints, rays, time-of-day tint, rain rings are visible in a screenshot taken at 20:00 local in Rain on Pond; `motion` off disables all of them; `lite` disables rays/plankton.
+3. Ripples, glints, rays, time-of-day tint, rain rings are visible in a screenshot taken at 20:00 local in Rain on Pond; `motion` off disables all of them; `lite` and `mobile` skip what `09` §1.2 says they skip.
 4. Catch celebration appears on desktop for every catch, with confetti for rare+ and NEW! for a first catch.
 5. Helping Hand widens the band after two misses (unit test on the formula) and the glow + hint appear; turning it off in Settings removes the effect.
 6. First-screen transfer < 1.2 MB, measured with Playwright `page.on("response")` byte totals; only two biome images load before the player travels.
-7. Rolling fps ≥ 55 in Playwright headless at 1440×900 for 30 s of idle on Pond (log the measure in the PR). Auto-lite triggers when fps is forced low (test by setting `strip = 1` temporarily or throttling CPU 6× in Playwright).
+7. Rolling fps ≥ 55 in Playwright headless at 1440×900 for 30 s of idle on Pond (log the measure in the PR). The governor steps the tier down when fps is forced low (test by setting `strip = 1` temporarily or throttling CPU 6× in Playwright).
 8. All keys in §8 work; `F` and `H` have tooltips in Settings → Controls.
 9. `panels.tsx` is split; `shell.tsx` < 250 lines; gates green; screenshots of menu, Pond idle, bite, reel, celebration and two drawers attached to the PR.
+10–16. The mobile acceptance items in `09-mobile.md` §8 (device tiers, portrait and landscape layouts, touch controls, mobile-tier rendering and fps, phone loading budget, tap-target audit, background pause).
