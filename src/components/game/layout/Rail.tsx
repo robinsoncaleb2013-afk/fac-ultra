@@ -1,11 +1,12 @@
 import { useGame } from "@/game/engine";
 import { cn } from "@/lib/cn";
-import { TABS } from "@/components/game/tabs";
+import { useTabs } from "@/components/game/tabs";
 
 /** Desktop and landscape-phone tab rail: icon + label, or icons only when collapsed. */
 export function Rail({ collapsed }: { collapsed: boolean }) {
   const tab = useGame((s) => s.tab);
   const setTab = useGame((s) => s.setTab);
+  const TABS = useTabs();
   return (
     <nav
       aria-label="Game menu"

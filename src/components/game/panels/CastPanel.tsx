@@ -19,6 +19,7 @@ import {
 import { useGame } from "@/game/engine";
 import { MODES } from "@/game/modes";
 import { TripBar } from "@/components/game/trips";
+import { TournamentPanel } from "@/components/game/tournament";
 import { DEFAULT_RIG, FAMILY_INFO, familyOf, rigLabel } from "@/game/presentation";
 import { resolveSpot } from "@/game/spots";
 import { FishPortrait } from "@/components/game/portrait";
@@ -144,6 +145,11 @@ function SpotCard() {
 }
 
 export function CastPanel() {
+  if (useGame((s) => s.mode === "tournament")) return <TournamentPanel />;
+  return <CastPanelCareer />;
+}
+
+function CastPanelCareer() {
   const luck = useGame((s) => Math.round(luckTotal(s, s.lure)));
   const streak = useGame((s) => s.streak);
   const last = useGame((s) => s.lastCatch);

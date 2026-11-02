@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Anchor, Fish, HandHelping, Smile, Swords, Timer, Users, Waves } from "lucide-react";
+import { Anchor, Fish, HandHelping, Smile, Swords, Timer, Trophy, Users, Waves } from "lucide-react";
 import { BIOMES, dexCount, rankName, TOTAL_SPECIES } from "@/game/content";
 import type { LayoutPlan } from "@/game/device";
 import { useGame } from "@/game/engine";
@@ -14,6 +14,7 @@ type G = ReturnType<typeof useGame.getState>;
 const ICONS: Record<string, typeof Fish> = {
   expedition: Fish,
   recreational: Anchor,
+  tournaments: Trophy,
   local: HandHelping,
   online: Users,
   aquarium: Waves,
@@ -30,6 +31,8 @@ function lockOf(c: MenuCard, g: G): string | null {
 
 function open(c: MenuCard) {
   const g = useGame.getState();
+  /* Tournaments open the event list over the menu; the mode switches once an event is joined. */
+  if (c.lobby) return g.openLobby();
   g.switchMode(c.mode);
   if (c.view) useGame.getState().setLodgeView(c.view);
 }
@@ -163,7 +166,7 @@ export function MainMenu({ plan }: { plan: LayoutPlan }) {
             </div>
             {kidChip}
           </div>
-          <div className={cn(plan.railCollapsed ? "flex gap-2 overflow-x-auto pb-1" : "grid grid-cols-7 gap-2")}>
+          <div className={cn(plan.railCollapsed ? "flex gap-2 overflow-x-auto pb-1" : "grid grid-cols-8 gap-2")}>
             {cards.map(card)}
           </div>
           <p className="text-xs text-muted">

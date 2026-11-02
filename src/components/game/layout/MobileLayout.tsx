@@ -3,7 +3,7 @@ import { mobileWaterHeight, peekCollapsed, type LayoutPlan } from "@/game/device
 import { act, useGame } from "@/game/engine";
 import { Stage, StageChips } from "@/components/game/stage";
 import { Panel } from "@/components/game/panels";
-import { TABS } from "@/components/game/tabs";
+import { useTabs } from "@/components/game/tabs";
 import { Toasts } from "@/components/game/overlays";
 import { Celebration } from "@/components/game/layout/Celebration";
 import { CastDock } from "@/components/game/layout/CastDock";
@@ -20,6 +20,7 @@ const PEEK = 120;
 export function MobileLayout({ plan, height }: { plan: LayoutPlan; height: number }) {
   const tab = useGame((s) => s.tab);
   const setTab = useGame((s) => s.setTab);
+  const TABS = useTabs();
   const [collapsed, setCollapsed] = useState(false);
   const [sheet, setSheet] = useState(false);
   const panel = useRef<HTMLDivElement>(null);

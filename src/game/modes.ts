@@ -5,8 +5,8 @@
 
 import type { Records } from "./records.ts";
 
-/** WP-5 adds "survival" and WP-7 adds "tournament" to this union and to MODES. */
-export type Mode = "expedition" | "recreational" | "coop";
+/** WP-5 adds "survival" to this union and to MODES. WP-7 added "tournament". */
+export type Mode = "expedition" | "recreational" | "coop" | "tournament";
 
 export type HudItem = "money" | "level" | "weather" | "window" | "hunger" | "warmth" | "day" | "timer";
 
@@ -112,15 +112,46 @@ export const MODES: Record<Mode, ModeRules> = {
     photo: true,
     twoPlayer: true,
   },
+  /* WP-7 (06 §1.4, 05 §1): a server-scored event. Helping Hand is off and Kid Mode's play help with it (the
+     reading and text features still work), the tackle is the same for everyone, the sky and the fish come from
+     the event's seed, and nothing is sold. The slot is a throwaway: events keep their own record on the server. */
+  tournament: {
+    id: "tournament",
+    title: "Tournaments",
+    blurb: "Real events with a seed, a clock and a leaderboard the server checks. Same tackle for everyone.",
+    saveKey: "fac-ultra-tourney",
+    economy: false,
+    contracts: false,
+    bosses: false,
+    rebirth: false,
+    aquarium: false,
+    allUnlocked: true,
+    assistAllowed: false,
+    fightSpeed: 1,
+    biteSpeed: 1,
+    keepRelease: "keepOnly",
+    dexShared: "own",
+    hud: ["level", "weather", "window", "timer"],
+    trips: false,
+    photo: false,
+    twoPlayer: false,
+  },
 };
 
-export const MODE_LIST: readonly Mode[] = ["expedition", "recreational", "coop"];
+export const MODE_LIST: readonly Mode[] = ["expedition", "recreational", "coop", "tournament"];
+
+/** Is this the server-scored mode? (The rules table has no flag for it; the id is the flag.) */
+export const isTournament = (r: Pick<ModeRules, "id">) => r.id === "tournament";
+
+/** The only tabs an event shows: Cast (the event panel), the Dex and the Lodge (Settings). */
+export const TOURNAMENT_TABS: readonly string[] = ["cast", "dex", "lodge"];
 
 /** localStorage key per mode. */
 export const MODE_KEYS: Record<Mode, string> = {
   expedition: MODES.expedition.saveKey,
   recreational: MODES.recreational.saveKey,
   coop: MODES.coop.saveKey,
+  tournament: MODES.tournament.saveKey,
 };
 
 export function isMode(v: unknown): v is Mode {
@@ -164,12 +195,21 @@ export type MenuCard = {
   view?: "tank" | "crew" | "derby";
   /** Needs this many bosses beaten first. */
   needsBosses?: number;
+  /** Opens the event lobby over the menu instead of switching mode straight away. */
+  lobby?: boolean;
 };
 
 /** Mode cards come straight from MODES; the other cards are things you do in the career. */
 export const MENU_CARDS: MenuCard[] = [
   { id: "expedition", title: MODES.expedition.title, blurb: MODES.expedition.blurb, mode: "expedition" },
   { id: "recreational", title: MODES.recreational.title, blurb: MODES.recreational.blurb, mode: "recreational" },
+  {
+    id: "tournaments",
+    title: MODES.tournament.title,
+    blurb: MODES.tournament.blurb,
+    mode: "tournament",
+    lobby: true,
+  },
   { id: "local", title: MODES.coop.title, blurb: MODES.coop.blurb, mode: "coop" },
   {
     id: "online",
