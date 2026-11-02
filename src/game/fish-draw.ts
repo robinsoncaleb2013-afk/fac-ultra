@@ -1,6 +1,8 @@
-import { BIOMES } from "@/game/content";
+import { archetypeOf, BIOMES, SPECIES_PER_BIOME, type Arch } from "@/game/content";
 
-export type Arch = "fish" | "eel" | "round" | "ray" | "shark" | "whale";
+export type { Arch };
+
+export type Pattern = "stripes" | "spots" | "saddle" | "gradient" | "glowtips" | "plain";
 
 type Traits = {
   arch: Arch;
@@ -8,6 +10,7 @@ type Traits = {
   hueJ: number;
   spots: boolean;
   stripes: boolean;
+  pattern: Pattern;
   dorsal: number;
 };
 
@@ -23,27 +26,24 @@ function rng(seed: number) {
   };
 }
 
-function archetype(name: string): Arch {
-  if (/ray|manta/i.test(name)) return "ray";
-  if (/eel|snake|gar|oarfish|leech|serpent|wraith/i.test(name)) return "eel";
-  if (/shark/i.test(name)) return "shark";
-  if (/turtle|crab|frog|octopus|squid|blobfish|sea pig|seahorse/i.test(name)) return "round";
-  if (/whale|leviathan|orca|beluga|walrus|hydra|titan|dragon/i.test(name)) return "whale";
-  return "fish";
-}
-
 export function traitsOf(biome: number, species: number): Traits {
-  const key = biome * 20 + species;
+  const key = biome * SPECIES_PER_BIOME + species;
   const hit = cache.get(key);
   if (hit) return hit;
   const name = BIOMES[biome]?.fish[species] ?? "Fish";
   const r = rng(key * 97 + 3);
+  const spots = r() > 0.48;
+  const stripes = r() > 0.66;
+  const pv = r();
+  const pattern: Pattern =
+    pv < 0.2 ? "saddle" : pv < 0.4 ? "gradient" : pv < 0.55 ? "glowtips" : stripes ? "stripes" : spots ? "spots" : "plain";
   const t: Traits = {
-    arch: archetype(name),
+    arch: archetypeOf(name),
     fat: 0.2 + r() * 0.14,
     hueJ: r() * 28 - 14,
-    spots: r() > 0.48,
-    stripes: r() > 0.66,
+    spots,
+    stripes,
+    pattern,
     dorsal: 0.35 + r() * 0.5,
   };
   cache.set(key, t);
@@ -134,6 +134,12 @@ export function drawFish(
       g.addColorStop(0.68, hsl(152, 64, 46));
       g.addColorStop(1, hsl(205, 74, 52));
       ctx.fillStyle = g;
+    } else if (t.pattern === "gradient") {
+      const g = ctx.createLinearGradient(0, -len * 0.3, 0, len * 0.3);
+      g.addColorStop(0, hsl(h, s, Math.max(14, l - 16)));
+      g.addColorStop(0.55, body);
+      g.addColorStop(1, hsl(h, Math.max(10, s - 10), Math.min(90, l + 24)));
+      ctx.fillStyle = g;
     } else ctx.fillStyle = body;
     ctx.fill();
     strokeInk(Math.max(1.2, len * 0.034));
@@ -144,7 +150,15 @@ export function drawFish(
     ctx.ellipse(len * 0.02, len * fat * 0.35, len * 0.3, len * fat * 0.42, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = alpha;
-    if (t.stripes) {
+    if (t.pattern === "saddle") {
+      ctx.fillStyle = hsl(h, Math.min(90, s + 10), Math.max(12, l - 20), 0.6);
+      ctx.beginPath();
+      ctx.ellipse(-len * 0.02, -len * fat * 0.55, len * 0.16, len * fat * 0.62, 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(len * 0.24, -len * fat * 0.4, len * 0.07, len * fat * 0.45, 0.25, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (t.stripes) {
       ctx.strokeStyle = hsl(h, s, Math.max(12, l - 16), 0.55);
       ctx.lineWidth = Math.max(1, len * 0.028);
       for (let i = -2; i <= 3; i++) {
@@ -160,6 +174,15 @@ export function drawFish(
         ctx.arc(-len * 0.12 + (i % 3) * len * 0.13, (i < 3 ? -1 : 1) * len * fat * 0.32, len * 0.032, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+    if (t.pattern === "glowtips") {
+      ctx.fillStyle = hsl(48, 92, 70, 0.9);
+      ctx.beginPath();
+      ctx.ellipse(-len * 0.3, 0, len * 0.045, len * fat * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(len * 0.05, -len * fat * 0.85, len * 0.09, len * 0.03, 0, 0, Math.PI * 2);
+      ctx.fill();
     }
     if (look.mutation === 5) {
       ctx.fillStyle = hsl(46, 80, 72, 0.9);
@@ -235,6 +258,229 @@ export function drawFish(
     ctx.fill();
     paintBody(path);
     eye(len * 0.12, -len * 0.06, len * 0.04);
+  } else if (t.arch === "turtle") {
+    /* Flippers behind the shell. */
+    ctx.fillStyle = fin;
+    for (const [fx, fy, rot] of [
+      [0.22, -0.16, -0.5],
+      [0.22, 0.16, 0.5],
+      [-0.24, -0.14, 0.6],
+      [-0.24, 0.14, -0.6],
+    ] as const) {
+      ctx.beginPath();
+      ctx.ellipse(len * fx, len * fy + Math.sin(wag * 3 + fx * 9) * len * 0.015, len * 0.09, len * 0.045, rot, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const path = () => {
+      ctx.beginPath();
+      ctx.ellipse(0, 0, len * 0.34, len * 0.24, 0, 0, Math.PI * 2);
+    };
+    paintBody(path);
+    /* Shell plates. */
+    ctx.strokeStyle = hsl(h, s, Math.max(12, l - 18), 0.7);
+    ctx.lineWidth = Math.max(1, len * 0.02);
+    for (const px of [-0.14, 0.02, 0.18]) {
+      ctx.beginPath();
+      ctx.ellipse(len * px, 0, len * 0.07, len * 0.15, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    /* Head. */
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.ellipse(len * 0.42, 0, len * 0.08, len * 0.06, 0, 0, Math.PI * 2);
+    ctx.fill();
+    strokeInk(Math.max(1, len * 0.02));
+    eye(len * 0.44, -len * 0.02, len * 0.026);
+  } else if (t.arch === "squid") {
+    /* Tentacles trail behind, waggling. */
+    ctx.strokeStyle = fin;
+    ctx.lineCap = "round";
+    for (let i = 0; i < 6; i++) {
+      const off = (i - 2.5) * len * 0.045;
+      ctx.lineWidth = len * 0.028;
+      ctx.beginPath();
+      ctx.moveTo(-len * 0.18, off * 0.4);
+      ctx.quadraticCurveTo(
+        -len * 0.34,
+        off + Math.sin(wag * 6 + i * 1.3) * len * 0.05,
+        -len * 0.5,
+        off * 1.6 + Math.cos(wag * 5 + i) * len * 0.04,
+      );
+      ctx.stroke();
+    }
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(len * 0.46, 0);
+      ctx.quadraticCurveTo(len * 0.2, -len * 0.2, -len * 0.05, -len * 0.13);
+      ctx.lineTo(-len * 0.2, 0);
+      ctx.lineTo(-len * 0.05, len * 0.13);
+      ctx.quadraticCurveTo(len * 0.2, len * 0.2, len * 0.46, 0);
+      ctx.closePath();
+    };
+    paintBody(path);
+    eye(len * 0.08, -len * 0.045, len * 0.045);
+    eye(len * 0.08, len * 0.045, len * 0.045);
+  } else if (t.arch === "seahorse") {
+    ctx.lineCap = "round";
+    const sway = wag * len * 0.05;
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = len * 0.17;
+    ctx.beginPath();
+    ctx.moveTo(len * 0.05, -len * 0.3);
+    ctx.bezierCurveTo(len * 0.22, -len * 0.12, len * 0.16, len * 0.1, -len * 0.02, len * 0.22);
+    ctx.bezierCurveTo(-len * 0.14, len * 0.3, -len * 0.2 + sway, len * 0.2, -len * 0.16 + sway, len * 0.08);
+    ctx.stroke();
+    ctx.strokeStyle = body;
+    ctx.lineWidth = len * 0.115;
+    ctx.stroke();
+    /* Snout + coronet. */
+    ctx.strokeStyle = body;
+    ctx.lineWidth = len * 0.07;
+    ctx.beginPath();
+    ctx.moveTo(len * 0.05, -len * 0.3);
+    ctx.lineTo(len * 0.24, -len * 0.34);
+    ctx.stroke();
+    ctx.fillStyle = fin;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(-len * 0.02 + i * len * 0.045, -len * 0.4, len * 0.02, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    /* Dorsal fan. */
+    ctx.fillStyle = fin;
+    ctx.beginPath();
+    ctx.ellipse(-len * 0.08, -len * 0.02, len * 0.07, len * 0.045, wag, 0, Math.PI * 2);
+    ctx.fill();
+    eye(len * 0.09, -len * 0.29, len * 0.03);
+  } else if (t.arch === "angler") {
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(len * 0.46, len * 0.04);
+      ctx.bezierCurveTo(len * 0.24, -len * fat * 1.15, -len * 0.05, -len * fat * 1.2, -len * 0.27, -len * fat * 0.4);
+      ctx.bezierCurveTo(-len * 0.35, len * fat * 0.2, -len * 0.1, len * fat * 1.05, len * 0.22, len * fat * 0.9);
+      ctx.quadraticCurveTo(len * 0.42, len * fat * 0.5, len * 0.46, len * 0.04);
+      ctx.closePath();
+    };
+    ctx.save();
+    ctx.translate(-len * 0.25, 0);
+    ctx.rotate(wag);
+    ctx.fillStyle = fin;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(-len * 0.15, -len * fat, -len * 0.27, -len * fat * 0.7);
+    ctx.quadraticCurveTo(-len * 0.1, 0, -len * 0.27, len * fat * 0.7);
+    ctx.quadraticCurveTo(-len * 0.15, len * fat, 0, 0);
+    ctx.closePath();
+    ctx.fill();
+    strokeInk(Math.max(1, len * 0.026));
+    ctx.restore();
+    paintBody(path);
+    /* The lure: stalk + glowing bulb. */
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = Math.max(1, len * 0.022);
+    ctx.beginPath();
+    ctx.moveTo(len * 0.16, -len * fat * 0.8);
+    ctx.quadraticCurveTo(len * 0.3, -len * (fat + 0.42), len * 0.44, -len * (fat + 0.3));
+    ctx.stroke();
+    ctx.save();
+    ctx.shadowColor = hsl(48, 95, 66, 0.95);
+    ctx.shadowBlur = len * 0.22;
+    ctx.fillStyle = hsl(48, 95, 72);
+    ctx.beginPath();
+    ctx.arc(len * 0.45, -len * (fat + 0.28), len * 0.045, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    /* Teeth. */
+    ctx.fillStyle = "#f4f7f6";
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(len * (0.3 + i * 0.045), len * fat * 0.52);
+      ctx.lineTo(len * (0.32 + i * 0.045), len * fat * 0.34);
+      ctx.lineTo(len * (0.34 + i * 0.045), len * fat * 0.52);
+      ctx.closePath();
+      ctx.fill();
+    }
+    eye(len * 0.24, -len * fat * 0.3, len * 0.038);
+  } else if (t.arch === "crab") {
+    /* Legs. */
+    ctx.strokeStyle = fin;
+    ctx.lineCap = "round";
+    ctx.lineWidth = len * 0.03;
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 3; i++) {
+        const lx = len * (-0.16 + i * 0.15);
+        const bend = Math.sin(wag * 7 + i * 1.7 + side) * len * 0.02;
+        ctx.beginPath();
+        ctx.moveTo(lx, side * len * 0.14);
+        ctx.lineTo(lx - len * 0.06, side * len * 0.26 + bend);
+        ctx.lineTo(lx - len * 0.02, side * len * 0.36 + bend);
+        ctx.stroke();
+      }
+    }
+    /* Claws. */
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = fin;
+      ctx.beginPath();
+      ctx.ellipse(len * 0.36, side * len * 0.17, len * 0.1, len * 0.065, side * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      strokeInk(Math.max(1, len * 0.02));
+      ctx.fillStyle = body;
+      ctx.beginPath();
+      ctx.moveTo(len * 0.42, side * len * 0.17);
+      ctx.lineTo(len * 0.52, side * len * 0.1);
+      ctx.lineTo(len * 0.5, side * len * 0.2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    const path = () => {
+      ctx.beginPath();
+      ctx.ellipse(0, 0, len * 0.32, len * 0.19, 0, 0, Math.PI * 2);
+    };
+    paintBody(path);
+    /* Eye stalks. */
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = Math.max(1, len * 0.02);
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(len * 0.24, side * len * 0.07);
+      ctx.lineTo(len * 0.32, side * len * 0.13);
+      ctx.stroke();
+    }
+    eye(len * 0.33, -len * 0.13, len * 0.026);
+    eye(len * 0.33, len * 0.13, len * 0.026);
+  } else if (t.arch === "jelly") {
+    /* Tentacles first, under the bell. */
+    ctx.strokeStyle = hsl(h, s, Math.min(88, l + 18), 0.65);
+    ctx.lineCap = "round";
+    for (let i = 0; i < 7; i++) {
+      const tx = -len * 0.2 + i * len * 0.065;
+      ctx.lineWidth = len * 0.02;
+      ctx.beginPath();
+      ctx.moveTo(tx, len * 0.08);
+      ctx.bezierCurveTo(
+        tx + Math.sin(wag * 4 + i) * len * 0.05,
+        len * 0.24,
+        tx - Math.sin(wag * 4 + i) * len * 0.05,
+        len * 0.36,
+        tx + Math.sin(wag * 3 + i * 1.4) * len * 0.07,
+        len * 0.5,
+      );
+      ctx.stroke();
+    }
+    const pulse = 1 + Math.sin(wag * 4) * 0.05;
+    const path = () => {
+      ctx.beginPath();
+      ctx.ellipse(0, 0, len * 0.3 * pulse, len * 0.24 / pulse, 0, Math.PI, Math.PI * 2);
+      ctx.quadraticCurveTo(len * 0.3 * pulse, len * 0.1, len * 0.2, len * 0.09);
+      ctx.quadraticCurveTo(0, len * 0.16, -len * 0.2, len * 0.09);
+      ctx.quadraticCurveTo(-len * 0.3 * pulse, len * 0.1, -len * 0.3 * pulse, 0);
+      ctx.closePath();
+    };
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.88;
+    paintBody(path);
+    ctx.restore();
+    eye(len * 0.1, -len * 0.08, len * 0.024);
   } else if (t.arch === "shark" || t.arch === "whale") {
     const tall = t.arch === "shark" ? fat * 0.85 : fat + 0.06;
     const path = () => {

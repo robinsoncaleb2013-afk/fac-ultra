@@ -157,6 +157,24 @@ Ordered so every phase makes the next one cheaper: the Tank early (it makes all 
 | **P7 Online Co-op** (~1–2 wks) | Room codes on the existing P2P engine, guest boats on your water, shared weather, co-op contracts, joint boss fights | Two browsers in two houses fish the same water with under a minute of setup |
 | **P8 More modes + cloud** (~1–2 wks) | Derby (daily), Boss Rush, accounts on Neon with cloud save sync | A save follows the player between phone and PC |
 
+### Shipped status — 2026-11-01
+
+The expansion was built in one pass on 2026-11-01. Status per phase:
+
+| Phase | Status |
+|---|---|
+| **P0 Foundations** | ✅ Shipped — main-menu shell with mode cards, save schema v3 with per-mode slots (career / sandbox / co-op), offline settlement, export/import by file and by save code. Old v1 saves migrate (biomes and species remapped into the new ladder). |
+| **P1 The Aquarium** | ✅ Shipped — exhibits from the dex, 3 showcase pedestals (×3), per-biome lighting (×1.5), gift shop (3 levels, +25% each), tank tiers (Glass 12 slots / 8h cap → Panoramic 24 / 16h → Grand Dome 40 / 24h), income at 1.5% of glass value per hour, Feed Frenzy (+50% for 1h), offline settlement with the welcome-back summary. |
+| **P2 Stages & Bosses** | ✅ Shipped — 4 stages per biome gated by dex count, Boss Lair armed with Boss Chum, 3-phase boss fights (fast strike → reversals and fake-outs → the run, with extra line strain), Mastered badges (+10 luck in that water), boss silhouette row in the dex with an x/24 counter. |
+| **P3 Content wave** | ✅ Shipped — 15 biomes × 25 species = 375 in the dex, gear ladders extended (rods 28, reels 14, lines 12, boats 9), 24 signature lures with real effects, bait slot (Dough Ball, Glow Worm, Chum Bucket, Boss Chum). |
+| **P4 Art & animation** | ◐ Partial — 6 new fish archetypes (turtle, squid, seahorse, angler, crab, jelly) and the pattern layer (stripes / spots / saddle / gradient / glowtips) shipped, plus ambient plankton drift, a boss shadow entrance, and paintings for the 5 new waters. Swim-cycle and catch/reel animation polish remains future work. |
+| **P5 Sandbox** | ✅ Shipped — Zen Waters: everything unlocked, own save slot and dex, fish are kept never sold, calmer strike cursor. |
+| **P6 Local Co-op** | ✅ Shipped — shared co-op ledger on one screen; Player 2 assists the reel (on-screen button or the J key). |
+| **P7 Online Co-op** | ◐ Shipped at v1 scope — room codes on the existing P2P engine with a new `/api/rtc` signaling relay, guest boats on your water, shared weather from the room creator, live catch feed. Joint boss fights and co-op contracts are not in v1; saves and dex stay per-player by design. The relay is in-memory (single instance) — a Neon-backed relay is the later swap if hosting ever scales out. |
+| **P8 More modes + cloud** | ◐ Partial — Derby (10 minutes, 3 AI rivals, purse payout) and Boss Rush (mastered bosses back to back, best-time record) shipped. **Cloud saves deferred**: accounts/auth stay off per the repo's own AGENTS.md §0.5 until accounts are asked for; the save-code export/import from P0 is the carry-your-save mechanism meanwhile. |
+
+Verification for the build: typecheck clean, app tests 59/59, production build green, the game exercised in a real browser (menu → every screen, zero console errors), and the `/api/rtc` relay round-trip tested (join / signal / leave).
+
 ## 9. Decisions — with recommended defaults
 
 None of these block starting P0–P2; each has a sane default already baked into the design above.

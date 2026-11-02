@@ -1,20 +1,26 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { biomeArt, fitCanvas, loadArt } from "@/game/art";
-import { BIOMES, WEATHER } from "@/game/content";
+import { BIOMES, BOSS_INDEX, SPECIES_PER_BIOME, stageOf, STAGE_NAMES, WEATHER } from "@/game/content";
 import { drawFish } from "@/game/fish-draw";
 import { act, frame, sim, useGame } from "@/game/engine";
+import { peerBoats } from "@/game/multiplayer";
 
 const FALLBACK: [string, string][] = [
-  ["#d7b56a", "#1d6a62"],
-  ["#9eb8c4", "#1a6e78"],
-  ["#c9d4c4", "#1c4a55"],
-  ["#6e8a62", "#163e36"],
-  ["#e2c48a", "#1a6f88"],
-  ["#7ed0c8", "#0e6a78"],
-  ["#d5e4ee", "#2a5a68"],
-  ["#1a2740", "#071018"],
-  ["#c45a32", "#1a1818"],
-  ["#f0c9a0", "#6a88a8"],
+  ["#d7b56a", "#1d6a62"], // Pond
+  ["#9eb8c4", "#1a6e78"], // River
+  ["#c9d4c4", "#1c4a55"], // Lake
+  ["#6e8a62", "#163e36"], // Swamp
+  ["#7a9a4e", "#14403a"], // Mangrove
+  ["#e2c48a", "#1a6f88"], // Coast
+  ["#d9905f", "#7a3b2e"], // Canyon
+  ["#7ed0c8", "#0e6a78"], // Reef
+  ["#4e9a6a", "#0d4a34"], // Kelp Forest
+  ["#d5e4ee", "#2a5a68"], // Arctic
+  ["#1a2740", "#071018"], // Deep
+  ["#cbb98a", "#3a4a55"], // Sunken City
+  ["#c45a32", "#1a1818"], // Volcano
+  ["#f0c9a0", "#6a88a8"], // Sky
+  ["#8a7ed0", "#141033"], // Astral Sea
 ];
 
 export function Stage() {
@@ -22,6 +28,8 @@ export function Stage() {
   const biome = useGame((s) => s.biome);
   const weather = useGame((s) => s.weather);
   const frenzy = useGame((s) => s.frenzyLeft);
+  const stage = useGame((s) => stageOf(s.dex, s.biome));
+  const lair = useGame((s) => s.lair);
 
   useEffect(() => {
     loadArt();
@@ -50,6 +58,7 @@ export function Stage() {
       <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap gap-1.5 p-3">
         <Chip>{WEATHER[weather].name}</Chip>
         <Chip>{BIOMES[biome].name}</Chip>
+        <Chip>{lair ? "Boss Lair" : STAGE_NAMES[stage]}</Chip>
         {frenzy > 0 ? <Chip brass>Frenzy {Math.ceil(frenzy)}s</Chip> : null}
       </div>
     </div>
@@ -127,12 +136,63 @@ function paint(canvas: HTMLCanvasElement) {
     const len = 28 * fish.sc;
     drawFish(ctx, fish.x * w, fish.y * h, len, fish.dir, {
       biome: s.biome,
-      species: (s.biome * 2 + fish.species) % 20,
+      species: (s.biome * 2 + fish.species) % SPECIES_PER_BIOME,
       rarity: fish.species % 5 === 0 ? 1 : 0,
       mutation: 0,
       wag: Math.sin(sim.t * 7 + fish.phase) * 0.4,
       alpha: 0.9,
     });
+  }
+
+  /* Ambient plankton: slow motes drifting on the current, every water. */
+  if (s.motion) {
+    ctx.fillStyle = "rgba(231,243,241,0.35)";
+    for (let i = 0; i < 14; i++) {
+      const px = ((i * 0.173 + sim.t * 0.008 * (1 + (i % 3) * 0.4)) % 1) * w;
+      const py = h * (0.52 + ((i * 37) % 40) / 100) + Math.sin(sim.t * 0.7 + i * 1.9) * 3;
+      ctx.beginPath();
+      ctx.arc(px, py, 1 + (i % 3) * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  /* Online co-op: guest boats fishing the same water. */
+  for (const boat of peerBoats(s.biome, sim.t)) {
+    drawFish(ctx, boat.x * w, boat.y * h, 30, boat.dir, {
+      biome: s.biome,
+      species: 3,
+      rarity: 1,
+      mutation: 0,
+      wag: Math.sin(sim.t * 6) * 0.35,
+      alpha: 0.95,
+    });
+    ctx.fillStyle = "rgba(12,26,34,0.65)";
+    const label = boat.name.slice(0, 14);
+    ctx.font = "11px Outfit, sans-serif";
+    const tw = ctx.measureText(label).width + 10;
+    ctx.beginPath();
+    ctx.roundRect(boat.x * w - tw / 2, boat.y * h - 34, tw, 16, 8);
+    ctx.fill();
+    ctx.fillStyle = "#e7f3f1";
+    ctx.textAlign = "center";
+    ctx.fillText(label, boat.x * w, boat.y * h - 22);
+  }
+
+  /* Boss intro: while the chum works, a huge shadow crosses the deep. */
+  if (sim.introT > 0 && sim.phase === "wait") {
+    const p = Math.min(1, Math.max(0, 1 - sim.introT / 2.6));
+    const sx = (0.15 + p * 0.7) * w;
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    drawFish(ctx, sx, h * 0.82, Math.min(w, h) * 0.62, 1, {
+      biome: s.biome,
+      species: BOSS_INDEX,
+      rarity: 4,
+      mutation: 5,
+      wag: Math.sin(sim.t * 3) * 0.2,
+      alpha: 0.55,
+    });
+    ctx.restore();
   }
 
   const bobx = sim.bnx * w;
