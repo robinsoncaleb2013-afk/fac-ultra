@@ -1,3 +1,4 @@
+import { useMutationText } from "@/components/game/use-mutation";
 import { useEffect, useRef, useState } from "react";
 import {
   BIOMES,
@@ -11,7 +12,6 @@ import {
   LURES,
   money,
   multOf,
-  MUTATIONS,
   rarityOf,
   RODS,
   SHOWCASE_SLOTS,
@@ -179,6 +179,7 @@ export function Record() {
 }
 
 export function Aquarium() {
+  const mutText = useMutationText();
   const tank = useGame((s) => s.tank);
   const dex = useGame((s) => s.dex);
   const biome = useGame((s) => s.biome);
@@ -324,7 +325,7 @@ export function Aquarium() {
                 <FishPortrait biome={b} species={i} rarity={rarityOf(i)} mutation={entry.m} className="size-12 shrink-0" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">
-                    {entry.m ? `${MUTATIONS[entry.m].name} ` : ""}
+                    {entry.m ? `${mutText.name(entry.m)} ` : ""}
                     {BIOMES[b].fish[i]}
                   </span>
                   <span className="block text-xs text-muted">

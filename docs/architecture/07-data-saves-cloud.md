@@ -25,6 +25,7 @@ Field inventory planned by this chapter (so names don't collide):
 | `survival` | WP-5 | `SurvivalRun \| null` (own save key) |
 | `pet`, `stickers`, `shiny`, `fotdClaimed`, `rivalRecord` (+ device `volume`, `cb`) | WP-6 | save v8, see `05` §6 and §10 |
 | `trophies`, `titles`, `bobberSkin`, `tourneyHistory` | WP-8 | arrays |
+| `events` | WP-15 | save v10: streak clock, running event, seen events, mutated-fish counts; see `11` §8 |
 | `cloud` | WP-9 | `{ userId, lastSync, rev }` |
 
 Save v4 is the version that ships with WP-1; each later package bumps once.

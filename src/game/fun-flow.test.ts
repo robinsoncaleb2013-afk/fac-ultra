@@ -34,7 +34,7 @@ g.window = Object.assign(globalThis, {
   dispatchEvent: () => true,
 });
 
-const { useGame, hydrate, MODE_KEYS, applyCatch, frame, resetSim } = await import("./engine.ts");
+const { useGame, hydrate, MODE_KEYS, applyCatch, frame, resetSim, fresh } = await import("./engine.ts");
 const rngMod = await import("./rng.ts");
 const { makeRng, setRng } = rngMod;
 /* `rng` is a live binding; a destructured copy would be stale, so always read it through the module. */
@@ -138,7 +138,7 @@ test("the pet opens at level 5, brings a gift once an hour, and keeps across a r
   assert.ok(LURES.length > 0);
   await flush();
   const saved = JSON.parse(mem.get(MODE_KEYS.expedition)!);
-  assert.equal(saved.version, 9);
+  assert.equal(saved.version, fresh().version);
   assert.equal(saved.pet.kind, "otter");
   hydrate();
   assert.equal(st().pet.kind, "otter");

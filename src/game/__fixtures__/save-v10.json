@@ -1,0 +1,159 @@
+{
+ "version": 10,
+ "c": 4321,
+ "xp": 120,
+ "lv": 9,
+ "rod": 0,
+ "reel": 0,
+ "line": 0,
+ "boat": 0,
+ "biome": 0,
+ "ub": [
+  0
+ ],
+ "box": {},
+ "lure": -1,
+ "dex": {
+  "0-0": {
+   "c": 5,
+   "w": 2.5,
+   "m": 8
+  },
+  "1-3": {
+   "c": 2,
+   "w": 9.1,
+   "m": 1
+  },
+  "3-7": {
+   "c": 1,
+   "w": 30,
+   "m": 0
+  }
+ },
+ "inv": [
+  {
+   "name": "Fish",
+   "t": 1,
+   "v": 400,
+   "w": 30,
+   "i": 7,
+   "b": 3,
+   "m": 8
+  }
+ ],
+ "rb": 0,
+ "tot": 0,
+ "caught": 77,
+ "auto": false,
+ "autoOn": false,
+ "weather": 0,
+ "streak": 0,
+ "bestStreak": 0,
+ "untilBoss": 12,
+ "bosses": 0,
+ "perfects": 0,
+ "taught": false,
+ "contracts": [
+  {
+   "id": "start-count",
+   "kind": "count",
+   "goal": 6,
+   "prog": 0,
+   "reward": 210,
+   "label": "Land 6 fish"
+  },
+  {
+   "id": "start-rare",
+   "kind": "rarity",
+   "goal": 2,
+   "prog": 0,
+   "reward": 280,
+   "label": "Land 2 rare or better",
+   "minRarity": 2
+  },
+  {
+   "id": "start-bank",
+   "kind": "bank",
+   "goal": 150,
+   "prog": 0,
+   "reward": 70,
+   "label": "Sell $150 worth"
+  }
+ ],
+ "pins": [],
+ "sound": true,
+ "motion": true,
+ "flash": true,
+ "gfx": "auto",
+ "assist": true,
+ "followClock": true,
+ "kid": false,
+ "trips": [],
+ "trip": null,
+ "lastSpot": {},
+ "rig": {},
+ "records": {},
+ "released": {},
+ "stewards": {
+  "species": [],
+  "waters": []
+ },
+ "coached": {},
+ "drag": 1,
+ "sigBox": [],
+ "sig": -1,
+ "baitBox": {},
+ "bait": -1,
+ "lair": false,
+ "mastered": [],
+ "tank": {
+  "tier": 0,
+  "gift": 0,
+  "lights": [],
+  "exhibits": [],
+  "ped": [],
+  "feedUntil": 0,
+  "lastSettle": 1793638857727
+ },
+ "derbiesWon": 0,
+ "derby": null,
+ "rush": null,
+ "rushBest": 0,
+ "pet": {
+  "kind": null,
+  "next": 0,
+  "gifts": 0
+ },
+ "stickers": [],
+ "shiny": [],
+ "fotdClaimed": [],
+ "rivalRecord": {},
+ "volume": 35,
+ "cb": false,
+ "trophies": [],
+ "titles": [],
+ "bobberSkin": "plain",
+ "tourneyHistory": [],
+ "events": {
+  "seed": 123456789,
+  "session": 2,
+  "streakMs": 5400000,
+  "lastAt": 1793650000000,
+  "awayMs": 60000,
+  "rolled": 1,
+  "cooldownUntil": 0,
+  "active": {
+   "id": "blood-moon",
+   "startedAt": 1793649000000,
+   "endsAt": 1793649720000
+  },
+  "seen": {
+   "shooting-stars": 1,
+   "blood-moon": 1
+  },
+  "fish": {
+   "blood-moon": 2
+  },
+  "draws": 14
+ }
+}

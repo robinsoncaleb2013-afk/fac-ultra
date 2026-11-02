@@ -148,7 +148,7 @@ test("a Recreational trip: pick the water, time and weather, fish, keep and rele
   /* Going to the menu saves this mode (and shows the career again). */
   useGame.getState().setScreen("menu");
   const saved = slot("recreational");
-  assert.equal(saved.version, 9);
+  assert.equal(saved.version, fresh().version);
   assert.equal(saved.trips.length, 1);
   assert.equal(slot("expedition").c, careerMoney, "career money untouched");
   /* the v7 Recreational save reloads */
@@ -272,7 +272,7 @@ test("an old Sandbox save opens as it was, and nothing is merged with the career
   flushSave();
   assert.equal(mem.get(MODE_KEYS.expedition), careerBefore, "and the career is not written to");
   assert.equal(slot("expedition").dex["2-3"], undefined);
-  assert.equal(slot("recreational").version, 9);
+  assert.equal(slot("recreational").version, fresh().version);
 });
 
 test("Relaxed Fishing needs nothing from the career: every Lair is open and the fish roll from the whole water", () => {

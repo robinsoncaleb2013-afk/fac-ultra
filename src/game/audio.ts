@@ -101,6 +101,17 @@ export const audio = {
     tone(520, 0.12, "sine", 0.04);
     setTimeout(() => tone(390, 0.18, "sine", 0.035), 90);
   },
+  /** An event begins: a rising shimmer that climbs higher and longer the rarer the event (0 Common ... 5 Mythic). */
+  event(rarity: number) {
+    const base = 440 + rarity * 60;
+    const notes = Math.min(6, 3 + rarity);
+    for (let i = 0; i < notes; i++) setTimeout(() => tone(base * 1.2 ** i, 0.22, "triangle", 0.035), i * 110);
+  },
+  /** A mutated fish lands: a short glassy chime. */
+  mutant() {
+    tone(988, 0.12, "sine", 0.04);
+    setTimeout(() => tone(1319, 0.2, "sine", 0.035), 90);
+  },
   frenzy() {
     tone(520, 0.08, "triangle", 0.04);
     tone(780, 0.14, "sine", 0.04);

@@ -108,7 +108,7 @@ Because `rollCast` and `simulateFight` are the same functions the client runs, a
 | **Big Fish** | heaviest single verified catch | second heaviest |
 | **Total Weight** | sum of kept-or-released weights (release counts; conservation isn't punished) | fish count |
 | **Species Sprint** | distinct species | time of last new species |
-| **Value** (Expedition-flavoured) | sum of values with mutation multipliers | big fish |
+| **Value** (Expedition-flavoured) | sum of values with mutation multipliers (rolled mutations only; WP-15 event mutations never apply in Tournaments) | big fish |
 | **Survival** | days survived on the daily seed | fish eaten |
 | **Team** (WP-8) | sum of a room's Total Weight; 2–4 players, shared code | biggest fish |
 
