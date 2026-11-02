@@ -29,6 +29,7 @@ import { cn } from "@/lib/cn";
 import { drawFish } from "@/game/fish-draw";
 import { biomeArt, fitCanvas } from "@/game/art";
 import { Toggle } from "@/components/game/panels/shared";
+import { RecordBook, Stewardship } from "@/components/game/panels/RecordsSection";
 
 export function LodgePanel() {
   const view = useGame((s) => s.lodgeView);
@@ -101,6 +102,8 @@ function Record() {
           {s.rushBest ? ` · best Boss Rush ${Math.round(s.rushBest / 1000)}s` : ""}
         </p>
       </div>
+      <RecordBook />
+      <Stewardship />
       <ul className="rounded-2xl border border-line bg-surface p-3 text-sm">
         {parts.map(([label, value]) => (
           <li key={label} className="flex justify-between border-b border-line py-1 last:border-0">
@@ -508,13 +511,15 @@ function CrewView() {
 }
 
 const CONTROLS: [string, string, string][] = [
-  ["Space", "Cast, hook and reel (Enter works too)", "Click the water for the same thing"],
+  ["Space", "Cast, hook, then hold to reel", "Hold Space or the mouse button to reel. Let go to give line. Enter works too."],
+  ["[ ]", "Looser or tighter drag in a fight", "Tight drag lands fish faster but snaps the line more easily"],
+  ["K / R", "Keep or release the fish you just landed", "Release for 20% more XP and a step toward Steward. Waiting 6 seconds keeps it."],
   ["1–7", "Open a tab (press again to close it)", "1 Cast, 2 Bag, 3 Gear, 4 Lures, 5 Waters, 6 Dex, 7 Lodge"],
   ["Esc", "Close the panel or the catch card", "Closes whatever is open on top of the water"],
   ["F", "Full screen on or off", "Fills the whole screen. Press F again or Esc to leave."],
   ["H", "Hide the buttons for a clean picture", "Photo mode. Press any key or click to bring the buttons back."],
   ["M", "Sound on or off", "Mute"],
-  ["J", "Player 2 reel tap (Local Co-op)", "Same band, shared glory"],
+  ["J", "Player 2 holds the reel too (Local Co-op)", "Shared glory: it adds to your reel"],
 ];
 function Settings() {
   const sound = useGame((s) => s.sound);
@@ -525,6 +530,8 @@ function Settings() {
   const gfx = useGame((s) => s.gfx);
   const tier = useGame((s) => s.tier);
   const setGfx = useGame((s) => s.setGfx);
+  const drag = useGame((s) => s.drag);
+  const setDrag = useGame((s) => s.setDrag);
   const toggle = useGame((s) => s.toggleSetting);
   const wipe = useGame((s) => s.wipe);
   const armed = useGame((s) => s.armReset);
@@ -548,7 +555,7 @@ function Settings() {
         Flashes
       </Toggle>
       <Toggle on={assist} onClick={() => toggle("assist")}>
-        Helping Hand (wider band when reeling is tough)
+        Helping Hand (a wider green when fights are tough)
       </Toggle>
       <Toggle on={followClock} onClick={() => toggle("followClock")}>
         Follow the clock (dawn, dusk and night light)
@@ -582,6 +589,29 @@ function Settings() {
           ))}
         </div>
         <p className="mt-2 text-xs text-muted">Showing: {tier === "full" ? "Full" : tier === "lite" ? "Light" : "Mobile"}</p>
+      </div>
+      <div className="rounded-2xl border border-line bg-surface p-3">
+        <h4 className="font-serif">Reel drag</h4>
+        <p className="mt-1 text-sm text-muted">
+          Loose drag is gentle on the line. Tight drag lands fish faster, but the line snaps more easily. You can also
+          change it in a fight with [ and ].
+        </p>
+        <div className="mt-2 grid grid-cols-3 gap-1">
+          {(["Loose", "Normal", "Tight"] as const).map((label, id) => (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={drag === id}
+              onClick={() => setDrag(id as 0 | 1 | 2)}
+              className={cn(
+                "min-h-11 rounded-full px-2 text-sm",
+                drag === id ? "bg-brass text-brass-ink" : "bg-surface-2 text-muted",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="rounded-2xl border border-line bg-surface p-3">
         <h4 className="font-serif">Controls</h4>

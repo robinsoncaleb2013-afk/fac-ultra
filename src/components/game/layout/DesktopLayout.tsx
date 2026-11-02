@@ -6,6 +6,7 @@ import { Stage, StageChips } from "@/components/game/stage";
 import { Toasts } from "@/components/game/overlays";
 import { Celebration } from "@/components/game/layout/Celebration";
 import { CastDock } from "@/components/game/layout/CastDock";
+import { DragButtons } from "@/components/game/layout/DragButtons";
 import { Drawer } from "@/components/game/layout/Drawer";
 import { HudBar } from "@/components/game/layout/HudBar";
 import { Rail } from "@/components/game/layout/Rail";
@@ -62,6 +63,7 @@ export function DesktopLayout({ plan }: { plan: LayoutPlan }) {
             </div>
           ) : null}
           <CastDock />
+          {plan.bigRing ? <DragButtons className="top-1/2 -translate-y-1/2" /> : null}
           <Toasts />
           <Celebration />
         </>

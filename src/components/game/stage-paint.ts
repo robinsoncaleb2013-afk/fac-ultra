@@ -43,10 +43,11 @@ const FALLBACK: [string, string][] = [
 
 let lastNight = false;
 
-/* 0 while the reel cursor sits in the zone, growing as it strays outside. */
+/* 0 while the line load sits in the green, growing 0 → 1.5 as it climbs past the top of it. */
 function reelStrain() {
-  const half = Math.max(1, sim.zone / 2);
-  return Math.min(1.5, Math.max(0, (Math.abs(sim.cp - sim.zc) - half) / half));
+  const F = sim.fight;
+  if (!F) return 0;
+  return Math.min(1.5, Math.max(0, (F.tension - F.hi) / Math.max(0.05, 1 - F.hi)));
 }
 
 function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, w: number, h: number, t: number) {
@@ -405,23 +406,40 @@ export function paint(canvas: HTMLCanvasElement, view: View) {
     const boby = sim.bny * h;
     if ((sim.phase === "bite" || sim.phase === "reel") && sim.fish) {
       const f = sim.fish;
-      const strain = sim.phase === "reel" ? reelStrain() : 0;
-      const fight = motion ? strain * (0.6 + f.t * 0.2 + (f.boss ? 0.4 : 0)) : 0;
+      /* A tired fish stops darting (04 §5.5); a running one throws itself about. */
+      const F = sim.fight;
+      const energy = F && sim.phase === "reel" ? 0.15 + 0.85 * F.stamina : 1;
+      const surge = F && F.run > 0 ? 1.8 : 1;
+      const fight = motion ? (0.4 + f.t * 0.15 + (f.boss ? 0.3 : 0)) * energy * surge : 0;
       const sph = (f.b * 37 + f.i * 13) % 6.28;
       const dart = Math.sin(sim.t * 11 + sph) * fight * w * 0.02;
       const dive = Math.max(0, Math.sin(sim.t * 5.7 + sph * 2)) * fight * h * 0.05;
-      drawFish(ctx, bobx - 10 + dart, boby + 8 + dive, 48 + f.t * 8, Math.sign(sim.cd) || -1, {
+      /* Far away while there is a lot of line out; right under the bobber when it is nearly in. */
+      const away = F && sim.phase === "reel" ? Math.min(1.3, F.dist) : 0.1;
+      const reach = Math.min(w, h * 1.6) * 0.16 * away;
+      const leaping = !!sim.leap?.small;
+      if (!leaping) drawFish(ctx, bobx - 10 - reach * 0.9 + dart, boby + 8 + reach * 0.35 + dive, 48 + f.t * 8, -1, {
         biome: f.b, species: f.i, rarity: f.t, mutation: f.m,
         wag: Math.sin(sim.t * (sim.phase === "bite" ? 20 : 8)) * 0.45, glow: f.boss || f.t >= 3,
       });
     }
     if (sim.leap) {
       const f = sim.leap.look;
-      const p = sim.leap.t / 0.95;
-      const arc = Math.sin(Math.min(1, p) * Math.PI);
-      drawFish(ctx, w * (0.42 + p * 0.06), h * (0.68 - arc * 0.32), 64 + f.t * 10, -1, {
-        biome: f.b, species: f.i, rarity: f.t, mutation: f.m, wag: Math.sin(p * 12) * 0.3, glow: true, alpha: 1 - p * 0.25,
-      });
+      if (sim.leap.small) {
+        /* A jumper's leap in the middle of the fight: up out of the water at the end of the line, and back. */
+        const p = Math.min(1, sim.leap.t / 0.8);
+        const arc = Math.sin(p * Math.PI);
+        const reach = Math.min(w, h * 1.6) * 0.16 * Math.min(1.3, sim.fight?.dist ?? 0.5);
+        drawFish(ctx, bobx - 10 - reach * 0.9 + p * 24, boby + 8 + reach * 0.35 - arc * h * 0.14, 48 + f.t * 8, -1, {
+          biome: f.b, species: f.i, rarity: f.t, mutation: f.m, wag: Math.sin(p * 14) * 0.4, glow: f.t >= 3 || f.boss,
+        });
+      } else {
+        const p = sim.leap.t / 0.95;
+        const arc = Math.sin(Math.min(1, p) * Math.PI);
+        drawFish(ctx, w * (0.42 + p * 0.06), h * (0.68 - arc * 0.32), 64 + f.t * 10, -1, {
+          biome: f.b, species: f.i, rarity: f.t, mutation: f.m, wag: Math.sin(p * 12) * 0.3, glow: true, alpha: 1 - p * 0.25,
+        });
+      }
     }
 
     /* Rod and line. */

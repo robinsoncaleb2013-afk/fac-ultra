@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { loadArt, wantedSize } from "@/game/art";
 import { biomeSpeciesCaught, BIOMES, BOSS_INDEX, STAGE_NAMES, stageOf, WEATHER } from "@/game/content";
-import { act, frame, sim, useGame } from "@/game/engine";
+import { act, frame, reelDown, reelUp, sim, useGame } from "@/game/engine";
 import { windowNow } from "@/game/match";
 import { WINDOW_INFO } from "@/game/presentation";
 import { nearestSpot } from "@/game/spots";
@@ -17,7 +17,7 @@ type StageProps = {
   className?: string;
   /** Show this water instead of the player's (menu preview swipes). */
   biomeOverride?: number;
-  /** What a tap on the water does. Default: act() (cast / hook / reel). */
+  /** What a tap on the water does when it is not a fight. Default: act() (cast / hook). While reeling, a press always holds the reel. */
   onWater?: () => void;
   children?: ReactNode;
 };
@@ -92,12 +92,17 @@ export function Stage({ menu = false, big = false, className, biomeOverride, onW
     };
     sim.lastInput = performance.now();
     start();
+    /* Lifting the finger anywhere gives line, even if it slid off the water. */
+    window.addEventListener("pointerup", reelUp);
+    window.addEventListener("pointercancel", reelUp);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pointerdown", touch);
     window.addEventListener("keydown", touch);
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pointerup", reelUp);
+      window.removeEventListener("pointercancel", reelUp);
       window.removeEventListener("pointerdown", touch);
       window.removeEventListener("keydown", touch);
     };
@@ -122,7 +127,11 @@ export function Stage({ menu = false, big = false, className, biomeOverride, onW
                 const spot = nearestSpot(st.biome, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r.width, r.height, big);
                 if (spot) st.setSpot(spot.id);
               }
-              if (onWater) onWater();
+              /* In the fight, press and hold anywhere on the water is the reel (09 §3.1). */
+              if (st.phase === "reel") {
+                e.currentTarget.setPointerCapture?.(e.pointerId);
+                reelDown();
+              } else if (onWater) onWater();
               else act();
             }
       }

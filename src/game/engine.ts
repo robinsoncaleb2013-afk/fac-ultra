@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { loose, rng } from "@/game/rng";
-import { habitOf } from "@/game/habits";
+import { habitOf, type FightStyle } from "@/game/habits";
 import { hintForCast, HINT_AFTER, missNote, planCast, windowNow, type CastPlan } from "@/game/match";
 import {
   DEFAULT_RIG,
@@ -14,7 +14,42 @@ import {
 } from "@/game/presentation";
 import { defaultSpot, resolveSpot, spotById, type Spot } from "@/game/spots";
 import { audio } from "@/game/audio";
-import { helpingHand } from "@/game/assist";
+import { fightHelp, helpingHand, isHelping } from "@/game/assist";
+import {
+  applyHelp,
+  COACH,
+  COACH_FIGHTS,
+  FIGHT_STEP,
+  linePercent,
+  newFight,
+  progressOf,
+  pushTrace,
+  stepFight,
+  TAP_STEPS,
+  zoneOf,
+  type Drag,
+  type Fight,
+} from "@/game/fight";
+import {
+  catchXp,
+  noStewards,
+  readReleased,
+  readStewards,
+  releaseFish,
+  releaseNote,
+  sizeMulOf,
+  type Released,
+  type Stewards,
+} from "@/game/keep";
+import {
+  beatsRecord,
+  LAIR_SPOT,
+  readRecords,
+  speciesKey,
+  withRecord,
+  type CatchContext,
+  type Records,
+} from "@/game/records";
 import {
   DEVICE_KEY,
   deviceSubset,
@@ -123,6 +158,14 @@ export type Save = {
   /* WP-2 (save v5): where you last fished each water, and how you rigged it there */
   lastSpot: Record<number, string>;
   rig: Record<number, Rig>;
+  /* WP-3 (save v6): your best fish with their story, what you let go, and what that earned */
+  records: Records;
+  released: Released;
+  stewards: Stewards;
+  /** Fights seen per fight style: the first few of each get coaching lines. */
+  coached: Record<string, number>;
+  /** Drag setting for the reel: 0 loose, 1 normal, 2 tight. */
+  drag: Drag;
   /* Expansion (save v3) */
   sigBox: number[];
   sig: number;
@@ -155,7 +198,7 @@ export type LastCatch = {
 
 type Toast = { id: number; text: string };
 
-const SAVE_VERSION = 5;
+const SAVE_VERSION = 6;
 const MARKS = [10, 25, 50, 100, 150, 200, 250, 300, 375];
 
 export const MODE_KEYS: Record<Mode, string> = {
@@ -201,15 +244,6 @@ type Swimmer = { x: number; y: number; v: number; dir: number; species: number; 
 
 export const sim = {
   phase: "idle" as Phase,
-  cp: 50,
-  cd: 1,
-  zc: 50,
-  zone: 18,
-  hits: 0,
-  need: 2,
-  tz: 0,
-  hold: 3,
-  reelSpeed: 0,
   biteLeft: 0,
   biteMax: 1,
   waitLeft: 0,
@@ -236,22 +270,40 @@ export const sim = {
   bny: 0.74,
   particles: [] as Particle[],
   swimmers: [] as Swimmer[],
-  leap: null as null | { t: number; look: Rolled },
+  /** A fish in the air: the landing leap (big) or a jumper's mid-fight leap (small). */
+  leap: null as null | { t: number; look: Rolled; small?: boolean },
   /* WP-1: fight ring and Helping Hand (never saved) */
   cap: 90,
-  trail: [50, 50, 50, 50, 50, 50],
-  trailI: 0,
-  hitAngles: [] as number[],
   spinT: 0,
   bandFlash: 0,
-  baseZone: 18,
-  zoneBonus: 0,
-  speedFactor: 1,
+  /** Helping Hand is on the fight right now (the ring glows). */
+  helpGlow: false,
   misses: 0,
   failedFights: 0,
   wins: 0,
   lastInput: 0,
   hover: null as null | { x: number; y: number },
+  /* WP-3: the tension fight (never saved). `fight` is the pure state; the rest feeds it. */
+  fight: null as null | Fight,
+  /** The reel is held down (mouse, key or finger). */
+  down: false,
+  /** Steps left of a tap's short hold. */
+  tapLeft: 0,
+  /** Player two (local co-op) is holding the reel. */
+  partner: false,
+  partnerTapLeft: 0,
+  /** Seconds of real time not yet turned into fixed 50 ms fight steps. */
+  acc: 0,
+  /** The fight's input trace: alternating released/held run lengths in steps (06 §1.3). */
+  trace: [] as number[],
+  /** Edge counters already reacted to, so each warning, run and strain sounds once. */
+  seen: { warns: 0, runs: 0, jumps: 0, reds: 0, ticks: 0, freeze: false, still: false, surge: false, style: "runner" as FightStyle },
+  /** Show coaching lines in this fight. */
+  coach: false,
+  /** Drag when the fish was hooked (a replay needs it; live changes are casual-play only). */
+  dragAtHook: 1 as Drag,
+  /** Last detail line sent to the UI, so the 60 fps loop writes it only when it changes. */
+  shownDetail: "",
   /* WP-2: where the bobber is aimed and what this cast was made with (never saved) */
   spotId: "",
   /** 0 → 1 while the bobber flies from the rod tip to the spot; 1 = landed. */
@@ -322,6 +374,11 @@ export function fresh(): Save {
     followClock: true,
     lastSpot: {},
     rig: {},
+    records: {},
+    released: {},
+    stewards: noStewards(),
+    coached: {},
+    drag: 1,
     sigBox: [],
     sig: -1,
     baitBox: {},
@@ -465,6 +522,23 @@ function readRigs(v: unknown): Record<number, Rig> {
     const b = Number(k);
     if (b < 0 || b >= BIOMES.length) continue;
     out[b] = readRig(rig);
+  }
+  return out;
+}
+
+function isSpeciesKey(key: string) {
+  return speciesKey(key) !== null;
+}
+
+const STYLES: readonly FightStyle[] = ["runner", "diver", "jumper", "bulldog", "thrasher"];
+
+/** Fights seen per style, clamped; unknown styles dropped. */
+function readCoached(v: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const style of STYLES) {
+    const n = (v as Record<string, unknown>)[style];
+    if (typeof n === "number" && Number.isFinite(n) && n > 0) out[style] = Math.min(99, Math.round(n));
   }
   return out;
 }
@@ -629,6 +703,12 @@ export function sanitize(raw: unknown): Save {
     /* v4 → v5 (WP-2): two new fields, nothing existing changed meaning. Old saves get {}. */
     lastSpot: readLastSpot(o.lastSpot),
     rig: readRigs(o.rig),
+    /* v5 → v6 (WP-3): five new fields, nothing existing changed meaning. Old saves get empty ones. */
+    records: readRecords(o.records),
+    released: readReleased(o.released, isSpeciesKey),
+    stewards: readStewards(o.stewards, isSpeciesKey, BIOMES.length),
+    coached: readCoached(o.coached),
+    drag: int(o.drag, 1, 0, 2) as Drag,
     sigBox,
     sig,
     baitBox,
@@ -681,6 +761,11 @@ export function snapshot(s: Save): Save {
     followClock: s.followClock,
     lastSpot: s.lastSpot,
     rig: s.rig,
+    records: s.records,
+    released: s.released,
+    stewards: s.stewards,
+    coached: s.coached,
+    drag: s.drag,
     sigBox: s.sigBox,
     sig: s.sig,
     baitBox: s.baitBox,
@@ -818,7 +903,11 @@ function pushToast(list: Toast[], text: string) {
   return list.slice(-3);
 }
 
-function withCatch(s: Save & { toasts: Toast[] }, fish: Rolled, o: { auto: boolean; perfect: boolean; frenzy: boolean }) {
+function withCatch(
+  s: Save & { toasts: Toast[] },
+  fish: Rolled,
+  o: { auto: boolean; perfect: boolean; frenzy: boolean; ctx?: CatchContext },
+) {
   let streak = s.streak;
   let bestStreak = s.bestStreak;
   let scale = o.auto ? 0.4 : 1;
@@ -833,6 +922,9 @@ function withCatch(s: Save & { toasts: Toast[] }, fish: Rolled, o: { auto: boole
   const key = `${fish.b}-${fish.i}`;
   const prev = s.dex[key];
   const discovered = !prev?.c;
+  /* Records are set the moment a fish lands, kept or released, with the whole story of the cast. */
+  const isBest = beatsRecord(s.records, key, fish.w, prev?.w || 0);
+  const records = o.ctx ? withRecord(s.records, key, fish.w, o.ctx, Date.now(), prev?.w || 0) : s.records;
   const dex = {
     ...s.dex,
     [key]: { c: (prev?.c || 0) + 1, w: Math.max(prev?.w || 0, fish.w), m: Math.max(prev?.m || 0, fish.m) },
@@ -858,7 +950,7 @@ function withCatch(s: Save & { toasts: Toast[] }, fish: Rolled, o: { auto: boole
     tot += gained;
     contracts = bumpBank(contracts, gained);
   }
-  let xp = s.xp + 3 + fish.t * 8 + fish.m * 5 + fish.b * 2 + (fish.boss ? 12 : 0);
+  let xp = s.xp + catchXp(fish.t, fish.m, fish.b, fish.boss);
   let lv = s.lv;
   let gainedLv = 0;
   while (xp >= xpNeed(lv)) {
@@ -888,10 +980,11 @@ function withCatch(s: Save & { toasts: Toast[] }, fish: Rolled, o: { auto: boole
     boss: fish.boss && !o.auto,
     frenzy: o.frenzy && !o.auto,
     discovered,
-    record: !discovered && fish.w > (prev?.w || 0),
+    record: !discovered && isBest,
   };
   return {
     dex,
+    records,
     inv,
     c,
     tot,
@@ -909,6 +1002,13 @@ function withCatch(s: Save & { toasts: Toast[] }, fish: Rolled, o: { auto: boole
     lastCatch,
     toasts: toasts.slice(-3),
   };
+}
+
+/** What the cast looked like, for the record book. */
+function castContext(): CatchContext | undefined {
+  const c = sim.cast;
+  if (!c) return undefined;
+  return { spot: sim.castLair ? LAIR_SPOT : c.spotId, p: c.p, weather: c.weather, window: c.window };
 }
 
 function burst(x: number, y: number, n: number, kind: Particle["kind"]) {
@@ -940,15 +1040,6 @@ function buzz(ms: number) {
   }
 }
 
-function placeZone() {
-  const z = sim.zone;
-  sim.zc = z / 2 + 5 + rng() * Math.max(8, 90 - z);
-}
-
-function linePct() {
-  return Math.max(0, Math.round(100 * (1 - sim.tz / Math.max(0.01, sim.hold))));
-}
-
 function ensureSwimmers() {
   if (sim.swimmers.length) return;
   for (let i = 0; i < 5; i++) {
@@ -976,31 +1067,37 @@ export function resetSim() {
   sim.particles.length = 0;
   sim.perfect = false;
   sim.bossCast = false;
-  sim.hitAngles.length = 0;
   sim.spinT = 0;
   sim.misses = 0;
   sim.failedFights = 0;
   sim.wins = 0;
-  sim.zoneBonus = 0;
-  sim.speedFactor = 1;
+  sim.fight = null;
+  sim.down = false;
+  sim.tapLeft = 0;
+  sim.partner = false;
+  sim.partnerTapLeft = 0;
+  sim.acc = 0;
+  sim.trace.length = 0;
+  sim.helpGlow = false;
   sim.castT = 1;
   sim.cast = null;
   sim.waited = 0;
   sim.hinted = false;
 }
 
-/** Re-read Helping Hand: the band and the cursor speed follow the player's streak, live. */
+/** Re-read Helping Hand: the green zone, the strain and the warning follow the player's streak, live. */
 function applyAssist() {
-  const h = helpingHand({
+  const F = sim.fight;
+  if (!F) return;
+  const help = fightHelp({
     assist: useGame.getState().assist,
     misses: sim.misses,
     failedFights: sim.failedFights,
     wins: sim.wins,
   });
-  sim.zone = sim.baseZone + h.zoneBonus;
-  sim.zoneBonus = h.zoneBonus;
-  sim.speedFactor = h.speedFactor;
-  const helping = h.zoneBonus > 0;
+  applyHelp(F, help);
+  const helping = isHelping(help);
+  sim.helpGlow = helping;
   if (useGame.getState().helping !== helping) useGame.setState({ helping });
 }
 
@@ -1026,7 +1123,9 @@ function updateBobber(dt: number) {
   let bx: number;
   let by: number;
   if (sim.phase === "reel") {
-    bx = Math.min(0.96, Math.max(0.04, spot.x + (sim.cp / 100 - 0.5) * 0.2));
+    /* The bobber shivers with the load on the line. */
+    const load = sim.fight ? sim.fight.tension : 0;
+    bx = spot.x + Math.sin(sim.t * 31) * 0.003 * load;
     by = spot.y + Math.sin(sim.t * 2.1) * 0.008;
   } else {
     bx = spot.x + Math.sin(sim.t * 1.3) * 0.012;
@@ -1049,10 +1148,12 @@ function updateBobber(dt: number) {
   sim.bny = by + thrash;
 }
 
+const LEAP_SMALL = 0.8;
+
 function tickLeap(dt: number) {
   if (!sim.leap) return;
   sim.leap.t += dt;
-  if (sim.leap.t > 0.95) sim.leap = null;
+  if (sim.leap.t > (sim.leap.small ? LEAP_SMALL : 0.95)) sim.leap = null;
 }
 
 function tickSwimmers(dt: number) {
@@ -1174,6 +1275,7 @@ function beginBite() {
     sig: sigEffect(s.sig),
     bait: sim.castBait,
     match: sim.cast?.ms ?? undefined,
+    sizeMul: sizeMulOf(s.stewards, s.biome),
   });
   sim.fish = fish;
   sim.phase = "bite";
@@ -1186,7 +1288,7 @@ function beginBite() {
   useGame.setState({
     phase: "bite",
     message: fish.boss ? `${fish.name} rises. Hook it!` : "Bite. Hook it.",
-    detail: fish.boss ? "Three phases. Hold the line." : "Early hooks pay more.",
+    detail: fish.boss ? "Three phases. Keep the needle green." : "Early hooks pay more.",
   });
 }
 
@@ -1194,10 +1296,11 @@ function succeed() {
   const s = useGame.getState();
   const fish = sim.fish;
   if (!fish) return;
-  const next = withCatch(s, fish, { auto: false, perfect: sim.perfect, frenzy: sim.frenzyLeft > 0 });
+  const next = withCatch(s, fish, { auto: false, perfect: sim.perfect, frenzy: sim.frenzyLeft > 0, ctx: castContext() });
   sim.phase = "idle";
   sim.leap = { t: 0, look: fish };
   sim.fish = null;
+  endFight();
   sim.trauma = Math.min(1, sim.trauma + (fish.t >= 4 || fish.boss ? 0.55 : 0.2));
   sim.hitstop = fish.t >= 3 || fish.boss ? 0.07 : 0.04;
   if (s.flash) sim.hitFlash = fish.t >= 4 || fish.boss ? 0.4 : 0.16;
@@ -1207,8 +1310,6 @@ function succeed() {
   sim.wins += 1;
   sim.failedFights = 0;
   sim.misses = 0;
-  sim.zoneBonus = 0;
-  sim.hitAngles.length = 0;
   buzz(12);
   const lc = next.lastCatch;
   if (lc && (fish.t >= 3 || lc.discovered || lc.boss)) audio.fanfare();
@@ -1218,7 +1319,7 @@ function succeed() {
     tension: 0,
     celebration: lc ? { catch: lc, at: Date.now() } : null,
     phase: "idle",
-    message: fish.boss ? `${fish.name} landed!` : "Landed.",
+    message: fish.boss ? `${fish.name} landed!` : "Landed. Keep it or let it go?",
     detail: sim.cast && !fish.boss ? (missNote(habitOf(fish.b, fish.i), sim.cast.p) ?? "") : "",
     lair: fish.boss ? !!s.rush : s.lair,
   });
@@ -1257,19 +1358,21 @@ function succeed() {
   persistSoon();
 }
 
-function fail(kind: "slip" | "snap") {
+/** Why a fight was lost: the pill always names the cause (pillar 3). */
+type Why = "bite" | "line" | "jump" | "snap";
+
+function fail(kind: "slip" | "snap", why: Why = kind === "snap" ? "snap" : "bite") {
   const wasLair = sim.castLair;
   sim.phase = "idle";
   sim.fish = null;
   sim.castLair = false;
+  endFight();
   sim.trauma = Math.min(1, sim.trauma + (kind === "snap" ? 0.6 : 0.22));
   burst(sim.bnx, sim.bny, 8, "splash");
   burst(sim.bnx, sim.bny, 24, "spark");
   sim.failedFights += 1;
   sim.wins = 0;
   sim.misses = 0;
-  sim.zoneBonus = 0;
-  sim.hitAngles.length = 0;
   audio.fail(kind);
   buzz(kind === "snap" ? 24 : 10);
   const s = useGame.getState();
@@ -1282,13 +1385,38 @@ function fail(kind: "slip" | "snap") {
     message: wasLair
       ? kind === "snap"
         ? "The boss snapped your line."
-        : "The boss shook free."
+        : why === "jump"
+          ? "The boss threw the hook."
+          : "The boss shook free."
       : kind === "snap"
         ? "The line snapped."
-        : "It shook free.",
-    detail: "",
+        : why === "jump"
+          ? "It jumped and threw the hook."
+          : why === "line"
+            ? "It got away. You gave too much line."
+            : "It shook free.",
+    detail:
+      why === "snap"
+        ? "Too long in the red. Let go when the needle turns red."
+        : why === "jump"
+          ? "Next time ease off when it leaps."
+          : why === "line"
+            ? "Keep reeling when the line goes slack."
+            : "Hook sooner next time.",
   });
   persistSoon();
+}
+
+/** Tidy the fight's loose ends whatever the ending. */
+function endFight() {
+  sim.fight = null;
+  sim.down = false;
+  sim.tapLeft = 0;
+  sim.partner = false;
+  sim.partnerTapLeft = 0;
+  sim.acc = 0;
+  sim.helpGlow = false;
+  sim.spinT = 0;
 }
 
 function autoCatch() {
@@ -1299,12 +1427,137 @@ function autoCatch() {
   const luck = luckTotal(s, castLure);
   /* The auto-reel fishes the spot and rig you set, so knowing fish pays there too. */
   const at = castNow(s, castLure, -1, false);
-  const fish = rollFish(s.biome, luck, { stage: stageOf(s.dex, s.biome), sig: sigEffect(s.sig), match: at.ms ?? undefined });
-  const next = withCatch({ ...s, ...spent }, fish, { auto: true, perfect: false, frenzy: sim.frenzyLeft > 0 });
+  const fish = rollFish(s.biome, luck, {
+    stage: stageOf(s.dex, s.biome),
+    sig: sigEffect(s.sig),
+    match: at.ms ?? undefined,
+    sizeMul: sizeMulOf(s.stewards, s.biome),
+  });
+  const next = withCatch({ ...s, ...spent }, fish, {
+    auto: true,
+    perfect: false,
+    frenzy: sim.frenzyLeft > 0,
+    ctx: { spot: at.spotId, p: at.p, weather: at.weather, window: at.window },
+  });
   burst(at.spot.x, at.spot.y, 6, "splash");
   audio.land(Math.min(2, fish.t));
   useGame.setState({ ...spent, ...next });
   persistSoon();
+}
+
+const TRACE_MAX = 2400;
+
+/** Keep the message pill from being overwritten by the zone line right after an event line. */
+let msgHold = 0;
+
+const ZONE_LINE: Record<string, string> = {
+  slack: "Slack line. Reel it in.",
+  green: "Nice and steady.",
+  high: "Pulling hard. Ease off.",
+  red: "Too tight! Let go!",
+};
+
+/** Turn real frame time into fixed 50 ms fight steps (04 §5.3, 06 §1.4), then react to what happened. */
+function tickFight(dt: number) {
+  const F = sim.fight;
+  if (!F || !sim.fish) return;
+  msgHold = Math.max(0, msgHold - dt);
+  sim.acc = Math.min(sim.acc + dt, FIGHT_STEP * 6);
+  let stepped = false;
+  while (sim.acc >= FIGHT_STEP && !F.result) {
+    sim.acc -= FIGHT_STEP;
+    const held = sim.down || sim.tapLeft > 0;
+    if (sim.tapLeft > 0) sim.tapLeft--;
+    F.partner = sim.partner || sim.partnerTapLeft > 0;
+    if (sim.partnerTapLeft > 0) sim.partnerTapLeft--;
+    if (sim.trace.length < TRACE_MAX) pushTrace(sim.trace, held);
+    stepFight(F, held, FIGHT_STEP);
+    stepped = true;
+  }
+  if (stepped) reactToFight(F);
+}
+
+function say(message: string, detail?: string, hold = 1.3) {
+  msgHold = hold;
+  if (detail !== undefined) sim.shownDetail = "";
+  useGame.setState(detail === undefined ? { message } : { message, detail });
+}
+
+/** Sounds, haptics, coaching and the pill: everything the player feels that is not the rules. */
+function reactToFight(F: Fight) {
+  const fish = sim.fish;
+  if (!fish) return;
+  const seen = sim.seen;
+  if (F.style !== seen.style) {
+    /* Boss phases 2 and 3: the ring spins half a turn so you can see the fake-out coming. */
+    seen.style = F.style;
+    sim.spinT = 0.22;
+    sim.trauma = Math.min(1, sim.trauma + 0.15);
+    buzz(30);
+    say(F.style === "thrasher" ? `${fish.name} thrashes!` : "The run. Hold on!", COACH[F.style].warn, 1.6);
+  }
+  if (F.warns > seen.warns) {
+    seen.warns = F.warns;
+    buzz(30);
+    audio.warn();
+    if (sim.coach) say(COACH[F.warn === "jump" ? "jumper" : "runner"].warn);
+  }
+  if (F.runs > seen.runs) {
+    seen.runs = F.runs;
+    sim.trauma = Math.min(1, sim.trauma + 0.12);
+    burst(sim.bnx, sim.bny, 6, "splash");
+  }
+  if (F.jumps > seen.jumps) {
+    seen.jumps = F.jumps;
+    sim.leap = { t: 0, look: fish, small: true };
+    burst(sim.bnx, sim.bny, 10, "splash");
+    audio.tick();
+    if (sim.coach) say(COACH.jumper.warn, undefined, 1);
+  }
+  if (F.reds > seen.reds) {
+    seen.reds = F.reds;
+    sim.misses += 1;
+    applyAssist();
+    sim.trauma = Math.min(1, sim.trauma + 0.2);
+    audio.miss();
+    buzz(15);
+  }
+  if (F.ticks > seen.ticks) {
+    seen.ticks = F.ticks;
+    sim.bandFlash = 0.08;
+    audio.tick();
+    buzz(10);
+    burst(sim.bnx, sim.bny, 4, "spark");
+  }
+  const frozen = F.freeze > 0;
+  if (frozen && !seen.freeze) say("Frost grips the needle!", "It will thaw. Don't trust it.", 1.2);
+  seen.freeze = frozen;
+  const still = F.still > 0;
+  if (still && !seen.still) say("The Emperor goes still…", "Something is coming.", 1.6);
+  seen.still = still;
+  const surge = F.surge > 0;
+  if (surge && !seen.surge) {
+    sim.trauma = Math.min(1, sim.trauma + 0.3);
+    buzz(30);
+    say("It erupts! Let go!", undefined, 1.2);
+  }
+  seen.surge = surge;
+
+  /* The pill's colour follows the needle: calm · amber · red (09 §3.1). */
+  const zone = zoneOf(F);
+  const bucket: 0 | 1 | 2 = zone === "red" ? 2 : zone === "high" ? 1 : 0;
+  const st = useGame.getState();
+  if (bucket !== st.tension) useGame.setState({ tension: bucket });
+  if (msgHold <= 0 && st.message !== ZONE_LINE[zone]) useGame.setState({ message: ZONE_LINE[zone] });
+  const detail = `Line ${linePercent(F)}% · ${Math.round(progressOf(F) * 100)}% in`;
+  if (msgHold <= 0 && detail !== sim.shownDetail) {
+    sim.shownDetail = detail;
+    useGame.setState({ detail });
+  }
+
+  if (F.result === "landed") succeed();
+  else if (F.result === "snap") fail("snap", "snap");
+  else if (F.result === "slip") fail("slip", F.dist >= 1.3 ? "line" : "jump");
 }
 
 export function frame(dt: number) {
@@ -1405,46 +1658,8 @@ export function frame(dt: number) {
   } else if (sim.phase === "bite") {
     sim.biteLeft -= dt;
     if (sim.biteLeft <= 0) fail("slip");
-  } else if (sim.phase === "reel" && sim.fish) {
-    const fish = sim.fish;
-    let speed = ((70 + fish.t * 28 + fish.i * 1.5) / (1 + sim.reelSpeed * 0.07)) * sim.speedFactor;
-    const stage = stageOf(s.dex, s.biome);
-    if (stage === 2) speed *= 1.3;
-    if (currentMode === "sandbox") speed *= 0.6;
-    const fx = sigEffect(s.sig);
-    if (fx?.kind === "calm") speed *= fx.speed;
-    const bossPhase = fish.boss ? Math.floor((sim.hits / Math.max(1, sim.need)) * 3) : 0;
-    if (fish.boss) {
-      speed *= bossPhase === 1 ? 1.5 : 1.32;
-      /* Phase 2: the boss reverses and throws fake-outs. */
-      if (bossPhase === 1) {
-        sim.fxAcc += dt;
-        if (sim.fxAcc > 0.7) {
-          sim.fxAcc = 0;
-          if (rng() < 0.55) {
-            sim.cd = sim.cd > 0 ? -1 : 1;
-            placeZone();
-            sim.spinT = 0.22;
-            buzz(30);
-            sim.trauma = Math.min(1, sim.trauma + 0.15);
-          }
-        }
-      }
-    }
-    const tf = sim.tz / Math.max(0.01, sim.hold);
-    const bucket: 0 | 1 | 2 = tf >= 0.85 ? 2 : tf >= 0.5 ? 1 : 0;
-    if (bucket !== s.tension) useGame.setState({ tension: bucket });
-    sim.cp += sim.cd * speed * dt;
-    sim.trailI = (sim.trailI + 1) % 6;
-    sim.trail[sim.trailI] = sim.cp;
-    if (sim.cp > 100) {
-      sim.cp = 100;
-      sim.cd = -1;
-    }
-    if (sim.cp < 0) {
-      sim.cp = 0;
-      sim.cd = 1;
-    }
+  } else if (sim.phase === "reel" && sim.fish && sim.fight) {
+    tickFight(dt);
   }
 
   sim.weatherAcc += dt;
@@ -1548,22 +1763,47 @@ function hook() {
   const elapsed = sim.biteMax - sim.biteLeft;
   sim.perfect = elapsed < 0.4;
   sim.phase = "reel";
-  sim.hits = 0;
-  sim.tz = 0;
-  sim.need = fish.boss ? 6 + Math.floor(s.biome / 3) : 2 + fish.t;
-  const calmFx = sigEffect(s.sig);
-  sim.baseZone = RODS[s.rod].zone + (calmFx?.kind === "calm" ? calmFx.zone : 0);
   sim.misses = 0;
-  sim.hitAngles.length = 0;
   sim.spinT = 0;
-  sim.zone = sim.baseZone;
-  sim.hold = LINES[s.line].hold;
-  sim.reelSpeed = REELS[s.reel].speed;
-  sim.cd = rng() < 0.5 ? -1 : 1;
-  sim.cp = 8 + rng() * 84;
-  sim.trail.fill(sim.cp);
+  const habit = habitOf(fish.b, fish.i);
+  const fx = sigEffect(s.sig);
+  /* Gear still matters: a better rod widens the green, a better reel gains line faster, a
+     stronger line takes more strain, and a calm lure takes some fight out of the fish. */
+  let pullMul = 1;
+  if (stageOf(s.dex, s.biome) === 2) pullMul *= 1.1;
+  if (currentMode === "sandbox") pullMul *= 0.75;
+  let bandPad = Math.max(0, RODS[s.rod].zone - 18) * 0.0015;
+  if (fx?.kind === "calm") {
+    pullMul *= Math.sqrt(fx.speed);
+    bandPad += fx.zone * 0.004;
+  }
+  const F = newFight({
+    seed: (rng() * 4294967296) >>> 0,
+    rarity: fish.t,
+    style: habit.fight,
+    stamina: habit.stamina,
+    boss: fish.boss,
+    biome: fish.b,
+    hold: LINES[s.line].hold,
+    reelSpeed: REELS[s.reel].speed,
+    drag: s.drag,
+    pullMul,
+    bandPad,
+  });
+  sim.fight = F;
+  sim.dragAtHook = s.drag;
+  sim.down = false;
+  sim.tapLeft = 0;
+  sim.partner = false;
+  sim.partnerTapLeft = 0;
+  sim.acc = 0;
+  sim.trace.length = 0;
+  sim.seen = { warns: 0, runs: 0, jumps: 0, reds: 0, ticks: 0, freeze: false, still: false, surge: false, style: F.style };
+  sim.shownDetail = "";
+  msgHold = 0;
+  const met = s.coached[habit.fight] ?? 0;
+  sim.coach = fish.boss ? s.bosses < 3 : met < COACH_FIGHTS;
   applyAssist();
-  placeZone();
   if (sim.perfect) {
     sim.hitstop = 0.06;
     sim.trauma = Math.min(1, sim.trauma + 0.4);
@@ -1571,50 +1811,31 @@ function hook() {
   } else audio.hook();
   useGame.setState({
     phase: "reel",
+    coached: fish.boss ? s.coached : { ...s.coached, [habit.fight]: met + 1 },
     message: sim.perfect ? "Perfect hook." : "Hooked.",
-    detail: `0/${sim.need} · line 100%`,
+    detail: sim.coach && !fish.boss ? COACH[habit.fight].start : "Hold to reel. Let go when the needle turns red.",
   });
+  msgHold = 2.2;
+  if (!fish.boss) persistSoon();
 }
 
+/* ── The reel (04 §5.2): hold to reel, let go to give line, a tap is a short hold ─── */
+
+/** Press: the reel is held until `reelUp`. A quick tap still holds for TAP_STEPS steps. */
+export function reelDown() {
+  audio.unlock();
+  if (sim.phase !== "reel") return;
+  sim.down = true;
+  sim.tapLeft = TAP_STEPS;
+}
+
+export function reelUp() {
+  sim.down = false;
+}
+
+/** A tap with no press/release pair (a programmatic nudge): a short hold. */
 function reelTap() {
-  const fish = sim.fish;
-  if (!fish || sim.phase !== "reel") return;
-  if (Math.abs(sim.cp - sim.zc) <= sim.zone / 2) {
-    sim.hits += 1;
-    sim.misses = 0;
-    sim.bandFlash = 0.08;
-    sim.hitAngles.push(sim.cp);
-    applyAssist();
-    sim.trauma = Math.min(1, sim.trauma + 0.12);
-    audio.tick();
-    buzz(10);
-    burst(sim.bnx, sim.bny, 5, "spark");
-    if (sim.hits >= sim.need) {
-      succeed();
-      return;
-    }
-    placeZone();
-    useGame.setState({
-      message: "In the band.",
-      detail: `${sim.hits}/${sim.need} · line ${linePct()}%`,
-    });
-  } else {
-    /* Boss phase 3 (the run): misses strain the line 60% harder. */
-    const phase3 = fish.boss && sim.hits >= Math.ceil(sim.need * (2 / 3));
-    sim.tz += (1 + fish.t * 0.5 + fish.i / 20) * (fish.boss ? 1.15 : 1) * (phase3 ? 1.6 : 1);
-    sim.trauma = Math.min(1, sim.trauma + 0.2);
-    audio.miss();
-    sim.misses += 1;
-    applyAssist();
-    if (sim.tz >= sim.hold) {
-      fail("snap");
-      return;
-    }
-    useGame.setState({
-      message: "Miss. The line strains.",
-      detail: sim.zoneBonus > 0 ? "Helping hand: the band is wider." : `${sim.hits}/${sim.need} · line ${linePct()}%`,
-    });
-  }
+  if (sim.phase === "reel") sim.tapLeft = TAP_STEPS;
 }
 
 export function act() {
@@ -1624,15 +1845,33 @@ export function act() {
   else if (sim.phase === "reel") reelTap();
 }
 
-/** Local co-op: player 2's reel tap (J key / Assist button). Same band,
-    shared glory — a hit landed by either angler counts. */
+/** Local co-op: player 2 holds the reel too (J key / Assist button) and adds 0.2 to the reel. */
+export function partnerDown() {
+  if (sim.phase !== "reel") return;
+  sim.partner = true;
+  sim.partnerTapLeft = TAP_STEPS;
+}
+
+export function partnerUp() {
+  sim.partner = false;
+}
+
+/** A single tap from player 2. */
 export function assistTap() {
   if (sim.phase !== "reel") return;
-  const before = sim.hits;
-  reelTap();
-  if (sim.phase === "reel" && sim.hits > before) {
-    useGame.setState({ message: "Partner assist!", detail: `${sim.hits}/${sim.need} · line ${linePct()}%` });
-  }
+  sim.partnerTapLeft = TAP_STEPS;
+  useGame.setState({ message: "Partner assist!" });
+  msgHold = 0.8;
+}
+
+/** Looser or tighter drag, during a fight or between them ([ and ] keys, the −/+ buttons). */
+export function nudgeDrag(delta: -1 | 1) {
+  const s = useGame.getState();
+  const drag = Math.min(2, Math.max(0, s.drag + delta)) as Drag;
+  if (drag === s.drag) return;
+  if (sim.fight) sim.fight.drag = drag;
+  useGame.setState({ drag });
+  persistSoon();
 }
 
 type Ui = {
@@ -1702,7 +1941,12 @@ type Store = Save &
     wipe: () => void;
     toggleSetting: (key: "sound" | "motion" | "flash" | "assist" | "followClock") => void;
     setGfx: (pref: GfxPref) => void;
+    setDrag: (drag: Drag) => void;
     dismissCelebration: () => void;
+    /** Keep the fish just landed (the default; the card also does this by itself after 6 s). */
+    keepCatch: () => void;
+    /** Let the fish just landed go: no bag, no sale, 20% more XP, and a step toward Steward. */
+    releaseCatch: () => void;
     importSave: (raw: unknown) => boolean;
     exportCode: () => string;
     importCode: (code: string) => boolean;
@@ -1730,12 +1974,52 @@ export const useGame = create<Store>((set, get) => ({
   photo: false,
   helping: false,
   tension: 0,
+  setDrag: (drag) => {
+    if (sim.fight) sim.fight.drag = drag;
+    set({ drag });
+    persistSoon();
+  },
   setGfx: (pref) => {
     const d = readDevice();
     set({ gfx: pref, tier: resolveGfx(pref, formOf(d), d.mem, d.cores) });
     persistSoon();
   },
   dismissCelebration: () => set({ celebration: null }),
+  keepCatch: () => set({ celebration: null }),
+  releaseCatch: () => {
+    const s = get();
+    const cel = s.celebration;
+    if (!cel) return;
+    const lc = cel.catch;
+    const gone = releaseFish(
+      s,
+      { name: lc.name, t: lc.rarity, v: lc.value, w: lc.weight, i: lc.species, b: lc.biome, m: lc.mutation },
+      catchXp(lc.rarity, lc.mutation, lc.biome, lc.boss),
+    );
+    if (!gone.ok) {
+      /* Already sold: it cannot be let go. Just close the card. */
+      set({ celebration: null, toasts: pushToast([...s.toasts], "That one is already sold.") });
+      return;
+    }
+    const note = releaseNote(gone, lc.name, lc.biome);
+    const toasts = [...s.toasts];
+    if (gone.levelsGained) pushToast(toasts, `Level ${gone.lv}. ${rankName(gone.lv)}.`);
+    for (const t of note.toasts) pushToast(toasts, t);
+    audio.release();
+    burst(sim.bnx, sim.bny, 10, "splash");
+    set({
+      inv: gone.inv,
+      xp: gone.xp,
+      lv: gone.lv,
+      released: gone.released,
+      stewards: gone.stewards,
+      celebration: null,
+      toasts: toasts.slice(-3),
+      message: note.message,
+      detail: note.detail,
+    });
+    persistSoon();
+  },
   setTab: (tab) => set({ tab, armRebirth: false, armReset: false }),
   setScreen: (screen) => set({ screen }),
   setLodgeView: (view) => set({ lodgeView: view, tab: "lodge" }),
@@ -2065,6 +2349,11 @@ export const useGame = create<Store>((set, get) => ({
       followClock: s.followClock,
       lastSpot: s.lastSpot,
       rig: s.rig,
+      records: s.records,
+      released: s.released,
+      stewards: s.stewards,
+      coached: s.coached,
+      drag: s.drag,
       tank: { ...s.tank, lastSettle: Date.now() },
       mastered: s.mastered,
       sigBox: s.sigBox,
@@ -2098,6 +2387,7 @@ export const useGame = create<Store>((set, get) => ({
       gfx: s.gfx,
       assist: s.assist,
       followClock: s.followClock,
+      drag: s.drag,
       hydrated: true,
       tab,
       phase: "idle",

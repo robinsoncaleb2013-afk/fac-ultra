@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { helpingHand } from "./assist.ts";
+import { fightHelp, helpingHand, HELP_SHOWN, isHelping } from "./assist.ts";
 
 const base = { assist: true, misses: 0, failedFights: 0, wins: 0 };
 
@@ -54,4 +54,40 @@ test("switched off, nothing changes whatever the streaks are", () => {
 
 test("negative inputs are treated as zero", () => {
   assert.equal(helpingHand({ ...base, misses: -5, failedFights: -1, wins: -2 }).zoneBonus, 0);
+});
+
+/* ── In the tension fight (04 §5.6) ──────────────────────────────────────── */
+
+test("switched off, there is no fight help at all", () => {
+  assert.equal(fightHelp({ assist: false, misses: 9, failedFights: 4, wins: 0 }), null);
+  assert.equal(isHelping(null), false);
+});
+
+test("a fresh start gets moderate help, and the glow shows", () => {
+  const h = fightHelp(base)!;
+  assert.ok(Math.abs(h.strength - 0.4) < 1e-9);
+  assert.equal(h.pullMul, 1);
+  assert.equal(isHelping(h), true);
+});
+
+test("losing more makes the help stronger, up to the widest green; winning fades it", () => {
+  const s = (over: Partial<typeof base>) => fightHelp({ ...base, ...over })!.strength;
+  assert.ok(s({ misses: 2 }) > s({}));
+  assert.ok(s({ failedFights: 2 }) > s({ failedFights: 1 }));
+  assert.equal(s({ misses: 50 }), 1);
+  assert.ok(s({ wins: 2 }) < s({}));
+  assert.ok(s({ wins: 50 }) >= 0.15, "never quite nothing while it is switched on");
+});
+
+test("after a couple of wins the glow and the 'helping hand' line go away", () => {
+  assert.equal(isHelping(fightHelp({ ...base, wins: 1 })), true);
+  assert.equal(isHelping(fightHelp({ ...base, wins: 2 })), false);
+  assert.ok(fightHelp({ ...base, wins: 2 })!.strength < HELP_SHOWN);
+  assert.equal(isHelping(fightHelp({ ...base, wins: 2, misses: 1 })), true, "one strain brings it back");
+});
+
+test("the fish pulls less after losses, never less than 60% or more than 110%", () => {
+  assert.ok(fightHelp({ ...base, misses: 3 })!.pullMul < 1);
+  assert.equal(fightHelp({ ...base, misses: 40 })!.pullMul, 0.6);
+  assert.equal(fightHelp({ ...base, wins: 20 })!.pullMul, 1.1);
 });

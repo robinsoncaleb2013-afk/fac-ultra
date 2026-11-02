@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { act, assistTap, useGame, type Tab } from "@/game/engine";
+import { act, nudgeDrag, partnerDown, partnerUp, reelDown, reelUp, sim, useGame, type Tab } from "@/game/engine";
 
 const NUMBER_TABS: Tab[] = ["cast", "bag", "gear", "lures", "waters", "dex", "lodge"];
 
@@ -12,9 +12,14 @@ export function toggleFullscreen() {
   }
 }
 
-/** Desktop keyboard (03 §8): Space/Enter act, 1–7 tabs, Esc, F, H, M, J. */
+/** Desktop keyboard (03 §8, 04 §5.2): Space/Enter act (hold to reel), 1–7 tabs, Esc, F, H, M, J (partner),
+    [ and ] for drag during a fight, K and R to keep or release the fish just landed. */
 export function useKeys() {
   useEffect(() => {
+    const onUp = (event: KeyboardEvent) => {
+      if (event.code === "Space" || event.code === "Enter") reelUp();
+      else if (event.code === "KeyJ") partnerUp();
+    };
     const onKey = (event: KeyboardEvent) => {
       const state = useGame.getState();
       if (state.screen !== "game") return;
@@ -26,10 +31,18 @@ export function useKeys() {
       }
       if (typing || event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.code === "KeyJ" && state.mode === "coop") {
-        if (!event.repeat) assistTap();
+        if (!event.repeat) partnerDown();
         return;
       }
       if (event.repeat) return;
+      if (event.code === "BracketLeft" || event.code === "BracketRight") {
+        return void nudgeDrag(event.code === "BracketLeft" ? -1 : 1);
+      }
+      if (state.celebration && (event.code === "KeyK" || event.code === "KeyR")) {
+        if (event.code === "KeyK") state.keepCatch();
+        else state.releaseCatch();
+        return;
+      }
       if (event.code === "Escape") {
         if (state.celebration) state.dismissCelebration();
         else if (state.tab !== "cast") state.setTab("cast");
@@ -48,9 +61,17 @@ export function useKeys() {
       if (target?.closest("button, a") && !target.closest("[data-cast]")) return;
       event.preventDefault();
       if (state.celebration) state.dismissCelebration();
-      act();
+      /* In the fight the key is the reel: held down it reels, up it gives line. */
+      if (sim.phase === "reel") reelDown();
+      else act();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", reelUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", reelUp);
+    };
   }, []);
 }

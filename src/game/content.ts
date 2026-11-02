@@ -510,6 +510,8 @@ export type RollOptions = {
   bait?: number;
   /** WP-2: match score (0…9.5) of every species in the water for this spot and presentation. */
   match?: readonly number[];
+  /** WP-3: a Steward's water grows its fish by this much (1.05). Weight only; draws no random numbers. */
+  sizeMul?: number;
 };
 
 /* ── How much a good match is worth (04 §3.5, §4) ────────────────────────
@@ -569,7 +571,7 @@ export function rollFish(biome: number, luck: number, opts: RollOptions = {}): R
   const m = weighted(mw, rng);
   const t = rarityOf(i);
   const bias = opts.match ? sizeBiasOf(opts.match[i] ?? 0) : 0;
-  let w = +((0.4 + i * 0.55 + t * 3) * (1 + biome * 0.5) * (0.5 + bias + rng() * 1.1)).toFixed(1);
+  let w = +((0.4 + i * 0.55 + t * 3) * (1 + biome * 0.5) * (0.5 + bias + rng() * 1.1) * (opts.sizeMul ?? 1)).toFixed(1);
   let v = Math.round((3 + i * i * 0.45 + t * 15) * 2.1 ** biome * (0.8 + rng() * 0.4) * MUTATIONS[m].mult);
   if (sig?.kind === "value") v = Math.round(v * sig.mult);
   if (boss) {

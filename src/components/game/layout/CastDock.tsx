@@ -1,8 +1,9 @@
-import { act, assistTap, useGame } from "@/game/engine";
+import { act, partnerDown, partnerUp, reelDown, reelUp, sim, useGame } from "@/game/engine";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
-const TENSION = ["text-fg", "text-brass", "text-[#e4572e]"] as const;
+/** The pill follows the needle: calm and green, pulling hard (amber), too tight (red). */
+const TENSION = ["text-lagoon", "text-brass", "text-[#e4572e]"] as const;
 
 /** The message pill and the big action button. Bottom-centre on desktop, pinned above the tabs on phones. */
 export function CastDock({ mobile, onCast }: { mobile?: boolean; onCast?: () => void }) {
@@ -17,13 +18,15 @@ export function CastDock({ mobile, onCast }: { mobile?: boolean; onCast?: () => 
     phase === "bite"
       ? "Early hooks pay more."
       : phase === "reel"
-        ? "Tap while the brass dot is in the teal band."
+        ? mobile
+          ? "Press and hold the water to reel. Lift to give line."
+          : "Hold Space or the mouse to reel. Let go to give line."
         : phase === "wait"
           ? "Watch the bobber."
           : mobile
             ? "Tap the water, or the button."
             : "Click the water, or press Space.";
-  const sub = phase === "reel" && helping ? "Helping hand: the band is wider." : detail || hint;
+  const sub = phase === "reel" && helping ? "Helping hand: the green is wider." : detail || hint;
   return (
     <div
       className={cn(
@@ -51,8 +54,13 @@ export function CastDock({ mobile, onCast }: { mobile?: boolean; onCast?: () => 
             event.preventDefault();
             event.stopPropagation();
             onCast?.();
-            act();
+            if (sim.phase === "reel") {
+              event.currentTarget.setPointerCapture?.(event.pointerId);
+              reelDown();
+            } else act();
           }}
+          onPointerUp={reelUp}
+          onPointerCancel={reelUp}
           className={cn(
             "flex-1 font-serif text-lg",
             mobile ? "min-h-14" : "min-h-12",
@@ -68,8 +76,11 @@ export function CastDock({ mobile, onCast }: { mobile?: boolean; onCast?: () => 
             onPointerDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              assistTap();
+              event.currentTarget.setPointerCapture?.(event.pointerId);
+              partnerDown();
             }}
+            onPointerUp={partnerUp}
+            onPointerCancel={partnerUp}
             className={cn("font-serif text-lg", mobile && "min-h-14")}
           >
             Assist (P2)

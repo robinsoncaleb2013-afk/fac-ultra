@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { BIOMES, MUTATIONS, money, multOf, RARITIES, TONE } from "@/game/content";
+import { STEWARD_SPECIES } from "@/game/keep";
+import { recordLine } from "@/game/records";
 import { useGame } from "@/game/engine";
 import { confettiFor, RARITY_COLORS } from "@/game/graphics";
 import { FishPortrait } from "@/components/game/portrait";
@@ -56,47 +58,56 @@ function Confetti({ count, color }: { count: number; color: string }) {
 
 /**
  * Desktop: a card that rises bottom-right. Phone: a bottom sheet, 55 % high.
- * Auto-closes after 6 s (hover on desktop keeps it), click / Space / Esc / swipe down closes it.
+ * Keep or Release (K / R). Nothing stalls: after 6 s it keeps the fish by itself, and a click,
+ * Space, Esc or a swipe down also keeps it (04 §6).
  */
 export function Celebration({ mobile }: { mobile?: boolean }) {
   const cel = useGame((s) => s.celebration);
-  const dismiss = useGame((s) => s.dismissCelebration);
+  const keep = useGame((s) => s.keepCatch);
+  const release = useGame((s) => s.releaseCatch);
+  const records = useGame((s) => s.records);
+  const released = useGame((s) => s.released);
+  const stewards = useGame((s) => s.stewards);
   const motion = useGame((s) => s.motion);
   const tier = useGame((s) => s.tier);
   const mult = useGame((s) => multOf(s.dex, s.rb));
-  const [hover, setHover] = useState(false);
   const at = cel?.at;
   const startY = useRef(0);
 
+  /* Auto-Keep: the fish is already in the bag, so letting the card go is the Keep. */
   useEffect(() => {
-    if (at === undefined || hover) return;
-    const timer = window.setTimeout(dismiss, HOLD_MS);
+    if (at === undefined) return;
+    const timer = window.setTimeout(keep, HOLD_MS);
     return () => window.clearTimeout(timer);
-  }, [at, hover, dismiss]);
+  }, [at, keep]);
 
   if (!cel) return null;
   const c = cel.catch;
   const confetti = motion ? confettiFor(tier, c.rarity) : 0;
   const color = RARITY_COLORS[c.rarity] ?? RARITY_COLORS[0];
+  const key = `${c.biome}-${c.species}`;
+  const rec = records[key];
+  const newBest = c.record && rec && rec.w === c.weight ? rec : null;
+  const gone = released[key] ?? 0;
+  const isSteward = stewards.species.includes(key);
+  const toSteward = Math.max(0, STEWARD_SPECIES - gone);
   return (
     <div
       role="status"
       aria-live="polite"
-      onClick={dismiss}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onClick={keep}
       onTouchStart={(e) => {
         startY.current = e.touches[0].clientY;
       }}
       onTouchEnd={(e) => {
-        if (e.changedTouches[0].clientY - startY.current > 60) dismiss();
+        if (e.changedTouches[0].clientY - startY.current > 60) keep();
       }}
       className={cn(
         "safe-x absolute z-40 overflow-hidden border border-line bg-surface shadow-2xl",
         motion && "fac-rise",
         mobile
           ? "inset-x-0 bottom-0 flex h-[55%] flex-col rounded-t-3xl"
-          : "right-4 bottom-4 flex h-[300px] w-[420px] max-w-[calc(100vw-2rem)] flex-col rounded-3xl",
+          : "right-4 bottom-4 flex h-[392px] w-[420px] max-w-[calc(100vw-2rem)] flex-col rounded-3xl",
       )}
     >
       <div className="relative h-36 shrink-0 bg-surface-2">
@@ -142,11 +153,23 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
           {c.boss ? <Badge>Boss</Badge> : null}
           {c.frenzy ? <Badge>Frenzy</Badge> : null}
         </div>
-        {mobile ? (
-          <Button className="mt-auto min-h-12" onClick={dismiss}>
-            Nice!
-          </Button>
+        {newBest ? (
+          <p className="text-xs leading-snug text-lagoon">New best · {recordLine(newBest, c.biome)}</p>
         ) : null}
+        <div className="mt-auto flex gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
+          <Button className="min-h-12 flex-1" onClick={keep}>
+            Keep{mobile ? null : <kbd className="ml-1.5 text-xs opacity-70">K</kbd>}
+          </Button>
+          <Button variant="ghost" className="min-h-12 flex-1" onClick={release}>
+            Release{mobile ? null : <kbd className="ml-1.5 text-xs opacity-70">R</kbd>}
+          </Button>
+        </div>
+        <p className="text-center text-xs text-muted">
+          {isSteward
+            ? `Release for 20% more XP. You are this fish's Steward.`
+            : `Release for 20% more XP · ${toSteward} more to be its Steward`}
+        </p>
+        {motion ? <span aria-hidden className="fac-drain absolute inset-x-0 bottom-0 h-1 bg-brass/60" /> : null}
       </div>
     </div>
   );

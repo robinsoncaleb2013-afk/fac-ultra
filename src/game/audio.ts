@@ -73,6 +73,17 @@ export const audio = {
     setTimeout(() => tone(659, 0.14, "sawtooth", 0.035), 120);
     setTimeout(() => tone(784, 0.3, "sawtooth", 0.04), 240);
   },
+  /** A warning: the fish is about to run or leap. Two quick rising pips. */
+  warn() {
+    tone(660, 0.05, "square", 0.035);
+    setTimeout(() => tone(880, 0.07, "square", 0.035), 70);
+  },
+  /** A soft splash and a falling note for a fish let go. */
+  release() {
+    noise(0.12, 0.05, 500);
+    tone(520, 0.12, "sine", 0.04);
+    setTimeout(() => tone(390, 0.18, "sine", 0.035), 90);
+  },
   frenzy() {
     tone(520, 0.08, "triangle", 0.04);
     tone(780, 0.14, "sine", 0.04);

@@ -14,6 +14,8 @@ import {
 import { useGame } from "@/game/engine";
 import { habitOf, habitSentences } from "@/game/habits";
 import { whereToFind } from "@/game/match";
+import { STEWARD_SPECIES, STEWARD_WATER, waterReleased } from "@/game/keep";
+import { recordLine } from "@/game/records";
 import { FishPortrait } from "@/components/game/portrait";
 import { cn } from "@/lib/cn";
 
@@ -21,8 +23,24 @@ import { cn } from "@/lib/cn";
 function HabitCard({ biome, index }: { biome: number; index: number }) {
   const lines = habitSentences(habitOf(biome, index));
   const spots = whereToFind(biome, index);
+  const key = `${biome}-${index}`;
+  const rec = useGame((s) => s.records[key]);
+  const best = useGame((s) => s.dex[key]?.w ?? 0);
+  const gone = useGame((s) => s.released[key] ?? 0);
+  const steward = useGame((s) => s.stewards.species.includes(key));
   return (
     <div className="mx-2 mb-2 flex flex-col gap-1 rounded-xl bg-surface-2/50 px-3 py-2 text-sm">
+      <p>
+        <span className="text-brass">Your best: </span>
+        {rec ? recordLine(rec, biome) : `${best} lb`}
+      </p>
+      <p className="text-muted">
+        {steward
+          ? `Steward. You have let ${gone} go.`
+          : gone
+            ? `Let go ${gone} of ${STEWARD_SPECIES} to be its Steward.`
+            : `Let ${STEWARD_SPECIES} go to be its Steward.`}
+      </p>
       {lines.map((line) => (
         <p key={line} className="text-muted">
           {line}
@@ -42,6 +60,8 @@ export function DexPanel() {
   const pins = useGame((s) => s.pins);
   const pin = useGame((s) => s.pin);
   const mastered = useGame((s) => s.mastered);
+  const stewards = useGame((s) => s.stewards);
+  const released = useGame((s) => s.released);
   const n = dexCount(dex);
   return (
     <div className="flex flex-col gap-3">
@@ -70,6 +90,11 @@ export function DexPanel() {
               <h4 className="absolute bottom-2 left-3 font-serif">{place.name}</h4>
               <span className="absolute right-3 bottom-2 text-xs text-muted">
                 {biomeDexCount(dex, biome)}/25
+                {waterReleased(released, biome) > 0
+                  ? stewards.waters.includes(biome)
+                    ? " · Bigger fish"
+                    : ` · let go ${waterReleased(released, biome)}/${STEWARD_WATER}`
+                  : ""}
               </span>
             </div>
             <ul className="flex flex-col">
@@ -102,6 +127,7 @@ export function DexPanel() {
                             </span>
                             <span className="block text-xs text-muted">
                               {entry.w} lb · ×{entry.c}
+                              {stewards.species.includes(key) ? " · Steward" : ""}
                             </span>
                           </>
                         ) : (
@@ -115,7 +141,7 @@ export function DexPanel() {
                           onClick={() => setOpen(open === key ? null : key)}
                           className="min-h-11 rounded-full px-3 text-xs text-lagoon"
                         >
-                          {open === key ? "Hide" : "Habits"}
+                          {open === key ? "Hide" : "Details"}
                         </button>
                       ) : null}
                       <button
