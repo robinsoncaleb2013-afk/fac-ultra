@@ -2,6 +2,7 @@ import { useHubUi } from "@/game/hubstate";
 import { Icon, type IconName } from "@/components/game/hub/icons";
 import { DarkPanel } from "@/components/game/hub/panel-shell";
 import { MasterDetail, type HubItem } from "@/components/game/hub/parts";
+import { TestingLine } from "@/components/game/test-phase";
 import { SETTINGS_SECTIONS } from "@/components/game/hub/settings-sections";
 
 export function SettingsTab({ split }: { split: boolean }) {
@@ -29,6 +30,7 @@ export function SettingsTab({ split }: { split: boolean }) {
             <h2 className="mb-1 font-serif text-2xl">{sec.title}</h2>
             <p className="mb-3 text-sm text-muted">{sec.sub}</p>
             <View />
+            <TestingLine className="mt-4 text-muted" />
           </DarkPanel>
         );
       }}

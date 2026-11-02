@@ -11,6 +11,7 @@ import { Icon, Logo } from "@/components/game/hub/icons";
 import { Motes } from "@/components/game/hub/Hub";
 import { lastPlayed, openCard } from "@/components/game/hub/PlayTab";
 import { Button } from "@/components/ui/button";
+import { TestingLine } from "@/components/game/test-phase";
 
 /** The front door: the current water painted behind the logo, one big Play button, and Continue / Settings underneath. */
 export function TitleScreen({ plan }: { plan: LayoutPlan }) {
@@ -96,6 +97,7 @@ export function TitleScreen({ plan }: { plan: LayoutPlan }) {
         <p className="text-xs text-[#f1e5c9]/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
           <FotdLine />
         </p>
+        <TestingLine className="text-[#f1e5c9]/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]" />
       </main>
       <WhoIsFishing />
     </div>

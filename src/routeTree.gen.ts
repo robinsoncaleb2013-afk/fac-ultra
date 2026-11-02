@@ -14,6 +14,7 @@ import { Route as ApiAccountRouteImport } from './routes/api/account'
 import { Route as ApiBoardRouteImport } from './routes/api/board'
 import { Route as ApiCatchRouteImport } from './routes/api/catch'
 import { Route as ApiEntryRouteImport } from './routes/api/entry'
+import { Route as ApiEpochRouteImport } from './routes/api/epoch'
 import { Route as ApiEventsRouteImport } from './routes/api/events'
 import { Route as ApiFriendsRouteImport } from './routes/api/friends'
 import { Route as ApiGoogleCallbackRouteImport } from './routes/api/google-callback'
@@ -47,6 +48,11 @@ const ApiCatchRoute = ApiCatchRouteImport.update({
 const ApiEntryRoute = ApiEntryRouteImport.update({
   id: '/api/entry',
   path: '/api/entry',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiEpochRoute = ApiEpochRouteImport.update({
+  id: '/api/epoch',
+  path: '/api/epoch',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiEventsRoute = ApiEventsRouteImport.update({
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/api/board': typeof ApiBoardRoute
   '/api/catch': typeof ApiCatchRoute
   '/api/entry': typeof ApiEntryRoute
+  '/api/epoch': typeof ApiEpochRoute
   '/api/events': typeof ApiEventsRoute
   '/api/friends': typeof ApiFriendsRoute
   '/api/google-callback': typeof ApiGoogleCallbackRoute
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/api/board': typeof ApiBoardRoute
   '/api/catch': typeof ApiCatchRoute
   '/api/entry': typeof ApiEntryRoute
+  '/api/epoch': typeof ApiEpochRoute
   '/api/events': typeof ApiEventsRoute
   '/api/friends': typeof ApiFriendsRoute
   '/api/google-callback': typeof ApiGoogleCallbackRoute
@@ -134,6 +142,7 @@ export interface FileRoutesById {
   '/api/board': typeof ApiBoardRoute
   '/api/catch': typeof ApiCatchRoute
   '/api/entry': typeof ApiEntryRoute
+  '/api/epoch': typeof ApiEpochRoute
   '/api/events': typeof ApiEventsRoute
   '/api/friends': typeof ApiFriendsRoute
   '/api/google-callback': typeof ApiGoogleCallbackRoute
@@ -152,6 +161,7 @@ export interface FileRouteTypes {
     | '/api/board'
     | '/api/catch'
     | '/api/entry'
+    | '/api/epoch'
     | '/api/events'
     | '/api/friends'
     | '/api/google-callback'
@@ -168,6 +178,7 @@ export interface FileRouteTypes {
     | '/api/board'
     | '/api/catch'
     | '/api/entry'
+    | '/api/epoch'
     | '/api/events'
     | '/api/friends'
     | '/api/google-callback'
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/api/board'
     | '/api/catch'
     | '/api/entry'
+    | '/api/epoch'
     | '/api/events'
     | '/api/friends'
     | '/api/google-callback'
@@ -201,6 +213,7 @@ export interface RootRouteChildren {
   ApiBoardRoute: typeof ApiBoardRoute
   ApiCatchRoute: typeof ApiCatchRoute
   ApiEntryRoute: typeof ApiEntryRoute
+  ApiEpochRoute: typeof ApiEpochRoute
   ApiEventsRoute: typeof ApiEventsRoute
   ApiFriendsRoute: typeof ApiFriendsRoute
   ApiGoogleCallbackRoute: typeof ApiGoogleCallbackRoute
@@ -247,6 +260,13 @@ declare module '@tanstack/react-router' {
       path: '/api/entry'
       fullPath: '/api/entry'
       preLoaderRoute: typeof ApiEntryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/epoch': {
+      id: '/api/epoch'
+      path: '/api/epoch'
+      fullPath: '/api/epoch'
+      preLoaderRoute: typeof ApiEpochRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/events': {
@@ -321,6 +341,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBoardRoute: ApiBoardRoute,
   ApiCatchRoute: ApiCatchRoute,
   ApiEntryRoute: ApiEntryRoute,
+  ApiEpochRoute: ApiEpochRoute,
   ApiEventsRoute: ApiEventsRoute,
   ApiFriendsRoute: ApiFriendsRoute,
   ApiGoogleCallbackRoute: ApiGoogleCallbackRoute,

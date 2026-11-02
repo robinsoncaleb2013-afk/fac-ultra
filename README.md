@@ -1,3 +1,11 @@
+> ## TEST PHASE: every new build resets all progress and saves
+>
+> While FAC Ultra is being tested, **each update (new build) wipes everyone's progress**: fish, records, cloud saves, tournament results and trophies. Testers always start fresh, and old test data can never break a new build. Accounts, family profiles, friends and device settings (picture quality, sound, Kid Mode, colour-blind colours, full screen) are kept.
+>
+> **To turn this off:** set `FAC_TEST_RESET=0` where the game's server starts (or set `TEST_PHASE_RESET` to `false` in `src/lib/test-phase.ts`). Do this, and finish the short "before real launch" checklist, before real players arrive.
+>
+> Details, what is wiped and kept, and the checklist: **[`docs/TEST-PHASE.md`](docs/TEST-PHASE.md)**.
+
 # FAC Ultra
 
 Painted fishing game. Fifteen waters, 375 species, a live fight on the water, gear, boss lairs, an aquarium that earns while you sleep, contracts and rebirth — plus recreational, co-op, derby and boss-rush modes, with survival fishing and server-scored tournaments on the way.
