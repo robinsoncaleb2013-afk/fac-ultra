@@ -14,11 +14,38 @@ import {
 } from "@/game/presentation";
 import { defaultSpot, resolveSpot, spotById, type Spot } from "@/game/spots";
 import { audio } from "@/game/audio";
+import {
+  fightInitOf,
+  MISSED,
+  rollCast,
+  windowAt,
+  type CastRoll,
+  type Envelope,
+  type ReplayEvent,
+} from "@/game/replay";
+import { scoreEntry } from "@/game/scoring";
+import {
+  api,
+  cantCast,
+  castsLeft,
+  EnvelopeQueue,
+  playerId,
+  queueStore,
+  secondsLeft,
+  serverNow,
+  verdictNote,
+  type CatchReply,
+  type JoinInfo,
+  type TourneyRun,
+} from "@/game/tourney";
+import { weatherAt } from "@/game/weather";
 import { fightHelp, helpingHand, isHelping } from "@/game/assist";
 import {
   canKeep,
   canRelease,
+  isTournament,
   legacyMode,
+  TOURNAMENT_TABS,
   MODE_KEYS,
   MODES,
   mergeDex,
@@ -56,7 +83,7 @@ import {
   summarize,
   SURVIVAL_WATERS,
   toSurvivalSave,
-  windowAt,
+  windowAt as survivalWindowAt,
   type Meal,
   type RecipeId,
   type Step,
@@ -382,6 +409,20 @@ export const sim = {
   hinted: false,
   /* WP-5: when the fish was hooked (sim.t), so a Survival fight can cost game time. -1 = not hooked. */
   hookT: -1,
+  /* WP-7: the tournament cast in the air (never saved). Rolled once at the cast from the event's seed. */
+  troll: null as null | TourneyCast,
+  tAcc: 0,
+};
+
+/** One tournament cast: what was chosen, what the seed rolled, and when the hook went in. */
+export type TourneyCast = {
+  index: number;
+  at: number;
+  spot: string;
+  p: Presentation;
+  roll: CastRoll;
+  /** Milliseconds after the bite began that the fish was hooked (MISSED until it is). */
+  hookMs: number;
 };
 
 /** Everything the fight and the after-catch message need to know about the cast. */
@@ -1282,6 +1323,7 @@ export function resetSim() {
   sim.cast = null;
   sim.waited = 0;
   sim.hinted = false;
+  sim.troll = null;
 }
 
 /** Re-read Helping Hand: the green zone, the strain and the warning follow the player's streak, live. */
@@ -1323,6 +1365,9 @@ export function windowFor(
   s: { trip: Trip | null; followClock: boolean; weather: number },
   now: Date = new Date(),
 ): Window {
+  /* In an event the time of day is the event's: the UTC clock, the same for every angler (06 §2.3). */
+  const run = isTournament(modeRules()) ? useGame.getState().tourney : null;
+  if (run) return windowAt(Math.round(serverNow(run, now.getTime())), s.weather);
   const pick = pickedWindow(s);
   return pick ?? windowNow(s.followClock, s.weather, now);
 }
@@ -1332,7 +1377,7 @@ export function pickedWindow(s: { trip: Trip | null }): Window | null {
   /* Survival: the game clock decides dawn, day, dusk and night (05 §5). */
   if (modeRules().survival) {
     const run = useGame.getState().survival;
-    return run ? windowAt(run.min) : null;
+    return run ? survivalWindowAt(run.min) : null;
   }
   return modeRules().trips && s.trip && s.trip.window !== "clock" ? s.trip.window : null;
 }
@@ -1510,17 +1555,20 @@ function castNow(s: Save, lureIdx: number, baitIdx: number, lair: boolean): Cast
 function beginBite() {
   const s = useGame.getState();
   const luck = luckTotal(s, sim.castLure);
-  const fish = rollFish(s.biome, luck, {
-    boss: sim.castLair,
-    stage: stageOf(s.dex, s.biome),
-    sig: sigEffect(s.sig),
-    bait: sim.castBait,
-    match: sim.cast?.ms ?? undefined,
-    sizeMul: sizeMulOf(s.stewards, s.biome),
-  });
+  /* In an event the fish was rolled at the cast, from the seed (replay.ts); the server rolls the same one. */
+  const fish = sim.troll
+    ? sim.troll.roll.fish
+    : rollFish(s.biome, luck, {
+        boss: sim.castLair,
+        stage: stageOf(s.dex, s.biome),
+        sig: sigEffect(s.sig),
+        bait: sim.castBait,
+        match: sim.cast?.ms ?? undefined,
+        sizeMul: sizeMulOf(s.stewards, s.biome),
+      });
   sim.fish = fish;
   sim.phase = "bite";
-  sim.biteMax = (1300 + RODS[s.rod].zone * 8) / 1000 + assistNow().biteBonus;
+  sim.biteMax = sim.troll ? sim.troll.roll.biteMax : (1300 + RODS[s.rod].zone * 8) / 1000 + assistNow().biteBonus;
   sim.biteLeft = sim.biteMax;
   sim.trauma = Math.min(1, sim.trauma + (fish.boss ? 0.85 : 0.28));
   audio.bite();
@@ -1533,10 +1581,185 @@ function beginBite() {
   });
 }
 
+
+/* ── Tournaments (WP-7, docs/architecture/06) ───────────────────────────────
+   In an event every cast is rolled from the event's seed (replay.ts), the fight is built from the
+   event's tackle, and when the cast ends the inputs go to the server as an envelope. The player never
+   waits for the verdict. Everything that decides a catch lives in replay.ts; this is only the glue. */
+
+/** The envelopes of the run in progress, sent one at a time. Survives leaving the water so nothing is lost. */
+let tqueue: EnvelopeQueue | null = null;
+
+const replayEvent = (run: TourneyRun): ReplayEvent => ({
+  id: run.event.id,
+  seed: run.seed,
+  water: run.water,
+  startsAt: run.event.startsAt,
+});
+
+function startTourneyCast() {
+  const s = useGame.getState();
+  const run = s.tourney;
+  if (!run || sim.phase !== "idle") return;
+  const why = cantCast(run);
+  if (why) {
+    useGame.setState({ message: why, detail: "" });
+    return;
+  }
+  const spot = resolveSpot(s.biome, s.lastSpot[s.biome]);
+  const rig = s.rig[s.biome] ?? DEFAULT_RIG;
+  const p: Presentation = { family: run.family, depth: rig.depth, retrieve: rig.retrieve };
+  const at = Math.round(serverNow(run));
+  const roll = rollCast(replayEvent(run), run.playerId, run.castIndex, spot.id, p, at);
+  if (!roll) return;
+  sim.troll = { index: run.castIndex, at, spot: spot.id, p, roll, hookMs: MISSED };
+  sim.castLure = -1;
+  sim.castLair = false;
+  sim.bossCast = false;
+  sim.castBait = -1;
+  sim.perfect = false;
+  sim.fxAcc = 0;
+  sim.cast = { spotId: spot.id, p, window: roll.window, weather: roll.weather, ms: null, avg: 0 };
+  sim.waitLeft = roll.waitSec;
+  sim.waited = 0;
+  sim.hinted = true; // no spot hints in an event: that is the knowledge being tested
+  sim.introT = 0;
+  sim.phase = "wait";
+  sim.trauma = Math.min(1, sim.trauma + 0.1);
+  sim.castT = s.motion ? 0 : 1;
+  if (!s.motion) burst(spot.x, spot.y, 7, "splash");
+  audio.cast();
+  useGame.setState({ phase: "wait", message: "Line in the water.", detail: "", weather: roll.weather });
+}
+
+/** The cast is over: build its envelope, count it locally, and hand it to the queue. */
+function tourneyEnd(outcome: "landed" | "lost" | "missed", fish: Rolled | null) {
+  const tr = sim.troll;
+  sim.troll = null;
+  const run = useGame.getState().tourney;
+  if (!tr || !run) return;
+  const missed = outcome === "missed";
+  const steps = missed ? 0 : sim.trace.reduce((a, b) => a + b, 0);
+  const env: Envelope = {
+    castIndex: tr.index,
+    at: tr.at,
+    spot: tr.spot,
+    p: tr.p,
+    hook: missed ? MISSED : tr.hookMs,
+    inputs: missed ? [] : [...sim.trace],
+    drag: sim.dragAtHook,
+    released: false,
+    claim:
+      outcome === "landed" && fish
+        ? { out: "landed", i: fish.i, w: fish.w, v: fish.v }
+        : { out: outcome, i: 0, w: 0, v: 0 },
+  };
+  const cost = missed ? tr.roll.waitSec + tr.roll.biteMax : tr.roll.waitSec + tr.hookMs / 1000 + steps * FIGHT_STEP;
+  const mine =
+    outcome === "landed" && fish
+      ? [...run.mine, { castIndex: tr.index, species: fish.i, weight: fish.w, value: fish.v }]
+      : run.mine;
+  useGame.setState({
+    tourney: {
+      ...run,
+      castIndex: tr.index + 1,
+      castsUsed: run.castsUsed + 1,
+      secondsUsed: run.secondsUsed + cost,
+      pending: run.pending + 1,
+      mine,
+      note: outcome === "landed" ? "Checking that catch…" : "",
+    },
+  });
+  tqueue?.push(env);
+}
+
+/** The server has judged one envelope. Its replay is the truth; fix the local picture to match. */
+function tourneyReply(eventId: string, env: Envelope, r: CatchReply) {
+  const cur = useGame.getState().tourney;
+  if (!cur || cur.event.id !== eventId) return;
+  const good = r.verdict === "ok";
+  const pending = Math.max(0, cur.pending - 1);
+  const mine = good ? cur.mine : cur.mine.filter((l) => l.castIndex !== env.castIndex);
+  const settled = pending === 0 && typeof r.nextCast === "number";
+  if (!good && env.claim.out === "landed") useGame.getState().notify("That catch didn't verify, so it doesn't count.");
+  useGame.setState({
+    tourney: {
+      ...cur,
+      pending,
+      mine,
+      score: typeof r.score === "number" ? r.score : cur.score,
+      rank: r.rank ?? cur.rank,
+      entrants: r.entrants ?? cur.entrants,
+      castsUsed: settled ? r.castsUsed : cur.castsUsed,
+      secondsUsed: settled ? r.secondsUsed : cur.secondsUsed,
+      castIndex: settled ? r.nextCast : cur.castIndex,
+      note: verdictNote(r),
+      over: cur.over || r.verdict === "banned",
+    },
+  });
+}
+
+/** Envelopes the server can no longer line up (or a ban): forget them and start again from its count. */
+function tourneyDrop(eventId: string, env: Envelope, r: CatchReply | null) {
+  const cur = useGame.getState().tourney;
+  if (!cur || cur.event.id !== eventId) return;
+  const last = cur.pending <= 1;
+  useGame.setState({
+    tourney: {
+      ...cur,
+      pending: Math.max(0, cur.pending - 1),
+      mine: cur.mine.filter((l) => l.castIndex !== env.castIndex),
+      castIndex: r && last && typeof r.nextCast === "number" ? r.nextCast : cur.castIndex,
+      castsUsed: r && last && typeof r.castsUsed === "number" ? r.castsUsed : cur.castsUsed,
+      secondsUsed: r && last && typeof r.secondsUsed === "number" ? r.secondsUsed : cur.secondsUsed,
+      note: "Some casts could not be counted.",
+    },
+  });
+}
+
+/** A fresh local picture of an event from the server's join answer. */
+export function runFrom(j: JoinInfo, id: string, offset: number, queued: number): TourneyRun {
+  return {
+    event: {
+      id: j.event.id,
+      kind: j.event.kind,
+      title: j.event.title,
+      category: j.event.category,
+      castBudget: j.event.castBudget,
+      fishingSeconds: j.event.fishingSeconds,
+      startsAt: j.startsAt,
+      endsAt: j.endsAt,
+    },
+    seed: j.seed,
+    water: j.water,
+    playerId: id,
+    offset,
+    castIndex: j.nextCast + queued,
+    castsUsed: j.castsUsed + queued,
+    secondsUsed: j.secondsUsed,
+    family: "minnow",
+    pending: queued,
+    mine: [],
+    score: j.score,
+    rank: j.rank,
+    entrants: j.entrants,
+    note: "",
+    over: false,
+  };
+}
+
+/** The score for the HUD: this device's own tally while casts are waiting for a verdict, the server's after. */
+export function tourneyScore(run: TourneyRun): number {
+  return run.pending > 0 ? Math.max(run.score, scoreEntry(run.event.category, run.mine).score) : run.score;
+}
+
+export { castsLeft, secondsLeft };
+
 function succeed() {
   const s = useGame.getState();
   const fish = sim.fish;
   if (!fish) return;
+  tourneyEnd("landed", fish);
   const next = withCatch(s, fish, { auto: false, perfect: sim.perfect, frenzy: sim.frenzyLeft > 0, ctx: castContext() });
   /* Survival: the fish goes in the larder (not a bag to sell from), and the fight costs game time. */
   const sv = modeRules().survival && s.survival ? s.survival : null;
@@ -1616,6 +1839,8 @@ function succeed() {
 type Why = "bite" | "line" | "jump" | "snap" | "gear";
 
 function fail(kind: "slip" | "snap", why: Why = kind === "snap" ? "snap" : "bite", note?: { message: string; detail: string }) {
+  /* An event cast that ends in a loss is still a cast: it goes to the server like any other. */
+  tourneyEnd(sim.fight ? "lost" : "missed", null);
   const wasLair = sim.castLair;
   sim.phase = "idle";
   sim.fish = null;
@@ -1678,7 +1903,7 @@ function endFight() {
 
 function autoCatch() {
   const s = useGame.getState();
-  if (sim.phase !== "idle" || !s.auto || !s.autoOn) return;
+  if (sim.phase !== "idle" || !s.auto || !s.autoOn || isTournament(modeRules())) return;
   const castLure = s.lure;
   const spent = consumeLure(s);
   const luck = luckTotal(s, castLure);
@@ -1919,6 +2144,15 @@ export function frame(dt: number) {
     tickFight(dt);
   }
 
+  /* An event has one sky for everybody: the seeded chain, looked up once a second (06 §2.3). */
+  if (s.tourney) {
+    sim.tAcc += dt;
+    if (sim.tAcc >= 1) {
+      sim.tAcc = 0;
+      const wx = weatherAt(s.tourney.seed, serverNow(s.tourney) - s.tourney.event.startsAt);
+      if (wx !== s.weather && sim.phase === "idle") useGame.setState({ weather: wx });
+    }
+  }
   sim.weatherAcc += dt;
   /* Survival's sky comes from the run's seed (survival.ts), not from this timer. */
   if (sim.weatherAcc >= 45 && !modeRules().survival) {
@@ -1927,7 +2161,7 @@ export function frame(dt: number) {
       sim.weatherAcc = 0;
       const tr = modeRules().trips ? s.trip : null;
       /* A trip can fix the weather. A picked time of day also keeps "Night" weather out of daytime. */
-      if (!tr || tr.weather < 0) useGame.setState({ weather: (rng() * (tr && tr.window !== "clock" ? 4 : 5)) | 0 });
+      if (!s.tourney && (!tr || tr.weather < 0)) useGame.setState({ weather: (rng() * (tr && tr.window !== "clock" ? 4 : 5)) | 0 });
     }
   }
 
@@ -1935,7 +2169,7 @@ export function frame(dt: number) {
     sim.calmAcc += dt;
     if (sim.calmAcc >= 70) {
       sim.calmAcc = 0;
-      if (sim.frenzyLeft <= 0 && !modeRules().survival && rng() < 0.42) {
+      if (!s.tourney && sim.frenzyLeft <= 0 && !modeRules().survival && rng() < 0.42) {
         sim.frenzyLeft = 26;
         sim.shownFrenzy = 26;
         audio.frenzy();
@@ -1960,6 +2194,7 @@ function startCast() {
   const s = useGame.getState();
   if (sim.phase !== "idle") return;
   audio.unlock();
+  if (isTournament(modeRules())) return startTourneyCast();
   /* Survival: no cast in the dark or after the run, and every cast rolls from the run's own seed. */
   if (modeRules().survival) {
     if (survivalBlocksCast()) return;
@@ -2056,19 +2291,23 @@ function hook() {
     pullMul *= Math.sqrt(fx.speed);
     bandPad += fx.zone * 0.004;
   }
-  const F = newFight({
-    seed: (rng() * 4294967296) >>> 0,
-    rarity: fish.t,
-    style: habit.fight,
-    stamina: habit.stamina,
-    boss: fish.boss,
-    biome: fish.b,
-    hold: sv ? LINES[0].hold * holdMulOfGear(sv.gear) : LINES[s.line].hold,
-    reelSpeed: REELS[s.reel].speed,
-    drag: s.drag,
-    pullMul,
-    bandPad: sv ? bandPad + bandPadOfGear(sv.gear) : bandPad,
-  });
+  /* In an event the fight is built from the event's tackle and the cast's seed, exactly as the server builds it. */
+  if (sim.troll) sim.troll.hookMs = Math.max(0, Math.round(elapsed * 1000));
+  const F = sim.troll
+    ? newFight(fightInitOf(sim.troll.roll, s.drag))
+    : newFight({
+        seed: (rng() * 4294967296) >>> 0,
+        rarity: fish.t,
+        style: habit.fight,
+        stamina: habit.stamina,
+        boss: fish.boss,
+        biome: fish.b,
+        hold: sv ? LINES[0].hold * holdMulOfGear(sv.gear) : LINES[s.line].hold,
+        reelSpeed: REELS[s.reel].speed,
+        drag: s.drag,
+        pullMul,
+        bandPad: sv ? bandPad + bandPadOfGear(sv.gear) : bandPad,
+      });
   sim.fight = F;
   sim.dragAtHook = s.drag;
   sim.down = false;
@@ -2149,6 +2388,8 @@ export function nudgeDrag(delta: -1 | 1) {
   const s = useGame.getState();
   const drag = Math.min(2, Math.max(0, s.drag + delta)) as Drag;
   if (drag === s.drag) return;
+  /* The drag a fight began with is the drag it is replayed with (06 §1.3). */
+  if (sim.troll && sim.fight) return;
   if (sim.fight) sim.fight.drag = drag;
   useGame.setState({ drag });
   persistSoon();
@@ -2189,6 +2430,11 @@ type Ui = {
   survival: SurvivalRun | null;
   /** Finished runs and the last water picked. */
   sMeta: SurvivalMeta;
+  /* WP-7 */
+  /** The event being fished (null outside the Tournament mode). Never saved: the server keeps the record. */
+  tourney: TourneyRun | null;
+  /** The event list is open over the menu. */
+  lobby: boolean;
 };
 
 type Store = Save &
@@ -2263,6 +2509,15 @@ type Store = Save &
     keepCatch: () => void;
     /** Let the fish just landed go: no bag, no sale, 20% more XP, and a step toward Steward. */
     releaseCatch: () => void;
+    /** Open or close the event list over the menu. */
+    openLobby: () => void;
+    closeLobby: () => void;
+    /** Go to the water for an event the server just let us join. */
+    enterEvent: (join: JoinInfo, offset: number) => void;
+    /** The tackle for the event (idle only). */
+    setFamily: (family: TourneyRun["family"]) => void;
+    /** Leave the event screen. The server keeps what it has counted. */
+    leaveEvent: () => void;
     importSave: (raw: unknown) => boolean;
     exportCode: () => string;
     importCode: (code: string) => boolean;
@@ -2339,6 +2594,43 @@ export const useGame = create<Store>((set, get) => ({
   campGather: () => runCamp((r) => gatherWood(r)),
   campSleep: () => runCamp((r) => sleep(r), true),
   campCraft: (id) => runCamp((r) => craft(r, id)),
+  tourney: null,
+  lobby: false,
+  openLobby: () => set({ lobby: true }),
+  closeLobby: () => set({ lobby: false }),
+  enterEvent: (j, offset) => {
+    if (sim.phase !== "idle") return;
+    persistNow();
+    const id = playerId();
+    loadSlot("tournament", true);
+    const eventId = j.event.id;
+    tqueue = new EnvelopeQueue({
+      send: (env) => api.submit(eventId, id, env),
+      onReply: (env, r) => tourneyReply(eventId, env, r),
+      onDrop: (env, r) => tourneyDrop(eventId, env, r),
+      store: queueStore(eventId),
+    });
+    const run = runFrom(j, id, offset, tqueue.size);
+    set({
+      tourney: run,
+      lobby: false,
+      tab: "cast",
+      biome: j.water,
+      weather: weatherAt(j.seed, Math.max(0, j.serverNow - run.event.startsAt)),
+      message: "Pick a spot, then cast.",
+      detail: "",
+    });
+    tqueue.resume();
+  },
+  setFamily: (family) => {
+    const run = get().tourney;
+    if (!run || sim.phase !== "idle") return;
+    set({ tourney: { ...run, family } });
+  },
+  leaveEvent: () => {
+    if (sim.phase !== "idle") return;
+    get().setScreen("menu");
+  },
   setKid: (on) => {
     set({ kid: on });
     persistSoon();
@@ -2380,6 +2672,7 @@ export const useGame = create<Store>((set, get) => ({
   },
   dismissTripCard: () => set({ tripCard: null }),
   setDrag: (drag) => {
+    if (sim.troll && sim.fight) return;
     if (sim.fight) sim.fight.drag = drag;
     set({ drag });
     persistSoon();
@@ -2431,7 +2724,10 @@ export const useGame = create<Store>((set, get) => ({
     });
     persistSoon();
   },
-  setTab: (tab) => set({ tab, armRebirth: false, armReset: false, armSell: "" }),
+  setTab: (tab) => {
+    if (isTournament(modeRules()) && !TOURNAMENT_TABS.includes(tab)) return;
+    set({ tab, armRebirth: false, armReset: false, armSell: "" });
+  },
   setScreen: (screen) => {
     /* The main menu is the career's front door: leaving another mode for it saves that mode and
        shows the career again (rank, bosses and locks on the cards are the career's, not the side mode's). */
@@ -2720,7 +3016,7 @@ export const useGame = create<Store>((set, get) => ({
   },
   travel: (index) => {
     const s = get();
-    if (sim.phase !== "idle" || index === s.biome || s.rush) return;
+    if (sim.phase !== "idle" || index === s.biome || s.rush || isTournament(modeRules())) return;
     const owned = s.ub.includes(index);
     const price = BIOMES[index].price;
     if (!owned && s.c < price) return;
@@ -3033,6 +3329,8 @@ function loadSlot(mode: Mode, toGame: boolean) {
     screen: toGame ? "game" : "menu",
     tripCard: null,
     armSell: "",
+    tourney: null,
+    lobby: false,
     phase: "idle",
     message: "Ready to cast.",
     detail: "",

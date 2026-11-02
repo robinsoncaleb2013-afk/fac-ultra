@@ -10,11 +10,36 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiBoardRouteImport } from './routes/api/board'
+import { Route as ApiCatchRouteImport } from './routes/api/catch'
+import { Route as ApiEntryRouteImport } from './routes/api/entry'
+import { Route as ApiEventsRouteImport } from './routes/api/events'
 import { Route as ApiRtcRouteImport } from './routes/api/rtc'
+import { Route as ApiSurvivalBoardRouteImport } from './routes/api/survival-board'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBoardRoute = ApiBoardRouteImport.update({
+  id: '/api/board',
+  path: '/api/board',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCatchRoute = ApiCatchRouteImport.update({
+  id: '/api/catch',
+  path: '/api/catch',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiEntryRoute = ApiEntryRouteImport.update({
+  id: '/api/entry',
+  path: '/api/entry',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiEventsRoute = ApiEventsRouteImport.update({
+  id: '/api/events',
+  path: '/api/events',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiRtcRoute = ApiRtcRouteImport.update({
@@ -22,31 +47,78 @@ const ApiRtcRoute = ApiRtcRouteImport.update({
   path: '/api/rtc',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSurvivalBoardRoute = ApiSurvivalBoardRouteImport.update({
+  id: '/api/survival-board',
+  path: '/api/survival-board',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/board': typeof ApiBoardRoute
+  '/api/catch': typeof ApiCatchRoute
+  '/api/entry': typeof ApiEntryRoute
+  '/api/events': typeof ApiEventsRoute
   '/api/rtc': typeof ApiRtcRoute
+  '/api/survival-board': typeof ApiSurvivalBoardRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/board': typeof ApiBoardRoute
+  '/api/catch': typeof ApiCatchRoute
+  '/api/entry': typeof ApiEntryRoute
+  '/api/events': typeof ApiEventsRoute
   '/api/rtc': typeof ApiRtcRoute
+  '/api/survival-board': typeof ApiSurvivalBoardRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/board': typeof ApiBoardRoute
+  '/api/catch': typeof ApiCatchRoute
+  '/api/entry': typeof ApiEntryRoute
+  '/api/events': typeof ApiEventsRoute
   '/api/rtc': typeof ApiRtcRoute
+  '/api/survival-board': typeof ApiSurvivalBoardRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/rtc'
+  fullPaths:
+    | '/'
+    | '/api/board'
+    | '/api/catch'
+    | '/api/entry'
+    | '/api/events'
+    | '/api/rtc'
+    | '/api/survival-board'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/rtc'
-  id: '__root__' | '/' | '/api/rtc'
+  to:
+    | '/'
+    | '/api/board'
+    | '/api/catch'
+    | '/api/entry'
+    | '/api/events'
+    | '/api/rtc'
+    | '/api/survival-board'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/board'
+    | '/api/catch'
+    | '/api/entry'
+    | '/api/events'
+    | '/api/rtc'
+    | '/api/survival-board'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiBoardRoute: typeof ApiBoardRoute
+  ApiCatchRoute: typeof ApiCatchRoute
+  ApiEntryRoute: typeof ApiEntryRoute
+  ApiEventsRoute: typeof ApiEventsRoute
   ApiRtcRoute: typeof ApiRtcRoute
+  ApiSurvivalBoardRoute: typeof ApiSurvivalBoardRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -58,6 +130,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/board': {
+      id: '/api/board'
+      path: '/api/board'
+      fullPath: '/api/board'
+      preLoaderRoute: typeof ApiBoardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/catch': {
+      id: '/api/catch'
+      path: '/api/catch'
+      fullPath: '/api/catch'
+      preLoaderRoute: typeof ApiCatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/entry': {
+      id: '/api/entry'
+      path: '/api/entry'
+      fullPath: '/api/entry'
+      preLoaderRoute: typeof ApiEntryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/events': {
+      id: '/api/events'
+      path: '/api/events'
+      fullPath: '/api/events'
+      preLoaderRoute: typeof ApiEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/rtc': {
       id: '/api/rtc'
       path: '/api/rtc'
@@ -65,12 +165,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiRtcRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/survival-board': {
+      id: '/api/survival-board'
+      path: '/api/survival-board'
+      fullPath: '/api/survival-board'
+      preLoaderRoute: typeof ApiSurvivalBoardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiBoardRoute: ApiBoardRoute,
+  ApiCatchRoute: ApiCatchRoute,
+  ApiEntryRoute: ApiEntryRoute,
+  ApiEventsRoute: ApiEventsRoute,
   ApiRtcRoute: ApiRtcRoute,
+  ApiSurvivalBoardRoute: ApiSurvivalBoardRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

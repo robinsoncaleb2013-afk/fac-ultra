@@ -128,13 +128,14 @@ test("legacy names still mean something", () => {
   assert.equal(legacyMode("sandbox"), "recreational");
   assert.equal(legacyMode("coop"), "coop");
   assert.equal(legacyMode("recreational"), "recreational");
-  assert.equal(legacyMode("tournament"), null);
+  assert.equal(legacyMode("tournament"), "tournament");
+  assert.equal(legacyMode("nonsense"), null);
   assert.equal(legacyMode(42), null);
   assert.equal(isMode("toString"), false, "prototype names are not modes");
 });
 
 test("menu cards: each opening a real mode, mode cards worded from the table", () => {
-  assert.ok(MENU_CARDS.length >= 8, "Survival joined the seven");
+  assert.ok(MENU_CARDS.length >= 8, "Survival and Tournaments joined the seven");
   assert.equal(new Set(MENU_CARDS.map((c) => c.id)).size, MENU_CARDS.length, "no card twice");
   for (const c of MENU_CARDS) assert.ok(isMode(c.mode), c.id);
   assert.equal(MENU_CARDS[0].title, MODES.expedition.title);

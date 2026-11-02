@@ -119,3 +119,6 @@ It is simple and already respects `motion` (reduced-motion) and `flash` settings
 - `src/lib/app-data/client.server.ts:281` empty catch block fails lint; WP-0 (one-line fix, leave the rest).
 - Relay is single-instance; WP-7.
 - Derby rivals are random-walk numbers; WP-7 replaces Derby with Tournaments and WP-6 gives rivals personality.
+
+## WP-7 additions
+- `src/game/{weather,scoring,schedule,replay,tourney}.ts` (pure/shared), `src/components/game/tournament.tsx` (lobby, ticker, panel, results), `src/lib/tournaments/*.server.ts` (never import from client code), `src/routes/api/{events,entry,catch,board,survival-board,rtc}.ts`, `migrations/0007_tournaments.sql`.

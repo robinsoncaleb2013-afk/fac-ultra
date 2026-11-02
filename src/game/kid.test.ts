@@ -27,7 +27,7 @@ test("Kid Mode is a lens: on only where the mode allows Helping Hand", () => {
   assert.equal(kidActive(true, allows), true);
   assert.equal(kidActive(false, allows), false);
   assert.equal(kidActive(true, forbids), false, "tournaments ignore Kid Mode");
-  for (const m of Object.values(MODES)) assert.equal(kidActive(true, m), true, m.id);
+  for (const m of Object.values(MODES)) assert.equal(kidActive(true, m), m.assistAllowed, m.id);
 });
 
 test("Kid Mode turns Helping Hand on; a mode that forbids it turns it off whatever you chose", () => {

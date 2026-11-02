@@ -1,6 +1,6 @@
 import { Anchor, Backpack, BookOpen, Fish, Map, Store, Tent, Trophy } from "lucide-react";
 import type { Mode } from "@/game/modes";
-import { MODES } from "@/game/modes";
+import { MODES, TOURNAMENT_TABS } from "@/game/modes";
 import type { Tab } from "@/game/engine";
 
 type TabInfo = { id: Tab; label: string; icon: typeof Fish };
@@ -23,7 +23,11 @@ const SURVIVAL_TABS: TabInfo[] = [
   { ...TABS[6], label: "Runs" },
 ];
 
+/** A tournament event shows only Cast (the event panel), Dex and Lodge (WP-7). */
+const TOURNAMENT_TAB_LIST: TabInfo[] = TABS.filter((t) => TOURNAMENT_TABS.includes(t.id));
+
 /** The tabs the rail or bottom bar shows in this mode. The number keys follow this order. */
 export function tabsFor(mode: Mode): TabInfo[] {
+  if (mode === "tournament") return TOURNAMENT_TAB_LIST;
   return MODES[mode].survival ? SURVIVAL_TABS : TABS;
 }

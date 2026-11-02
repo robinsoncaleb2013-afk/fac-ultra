@@ -10,6 +10,7 @@ import { Toasts, WelcomeBack } from "@/components/game/overlays";
 import { useKidAttr } from "@/components/game/use-kid";
 import { TripCard, TripStart } from "@/components/game/trips";
 import { SurvivalEnd, SurvivalStart } from "@/components/game/survival";
+import { TournamentLobby, TournamentTicker } from "@/components/game/tournament";
 
 /** The screen router: menu or game, in the layout this device gets (docs/architecture/03 §1, 09 §2). */
 export function Game() {
@@ -35,6 +36,8 @@ export function Game() {
       ) : (
         <MobileLayout plan={plan} height={height} />
       )}
+      <TournamentTicker />
+      <TournamentLobby />
       <WelcomeBack />
       <TripCard />
       <TripStart />
