@@ -1,4 +1,5 @@
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
+import { pgliteDataDir } from "./db-config.ts";
 
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
@@ -111,7 +112,10 @@ async function createPgliteSql(): Promise<Sql> {
   // data survives source edits (it resets on dev-server restart).
   globalRef.__pgliteInstance__ ??= (async () => {
     const { PGlite } = await import("@electric-sql/pglite");
-    const pg = new PGlite({
+    // FAC_DATA_DIR (self-hosting): keep the database in that folder so it survives a
+    // restart. Unset: in-memory, exactly as before.
+    const dataDir = pgliteDataDir(process.env);
+    const pg = new PGlite(dataDir, {
       parsers: {
         [OID_INT8]: Number,
         [OID_DATE]: identity,

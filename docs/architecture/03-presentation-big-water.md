@@ -5,7 +5,7 @@ Work package **WP-1**. The water fills the screen on PC, the fight happens on th
 ## 1. Layout
 
 ### 1.1 One site, two presentations
-The same URL serves everyone. `src/game/device.ts` (`09-mobile.md` §1) decides at load — and again on rotate/resize — which **form** the player is on (`phone` / `tablet` / `desktop`) and which **graphics tier** to run (`full` / `lite` / `mobile`). Nobody picks a version; Settings lets a player pin a tier.
+The same URL serves everyone. `src/game/device.ts` (`09-mobile.md` §1) decides at load — and again on rotate/resize — which **form** the player is on (`phone` / `tablet` / `desktop`) and which **graphics tier** to run (`full` / `lite` / `mobile`). Nobody picks a version; Settings lets a player pick one of five **graphics levels** (Ultra to Potato) or leave it on Auto. The levels map onto the three tiers (`09-mobile.md` §1.0, amended in WP-10).
 
 - `form === "desktop"`, or a tablet in landscape ≥ 1024 px: the **Big Water** layout below (§1.2).
 - `form === "phone"` in portrait, and tablets in portrait: the **mobile layout** in `09-mobile.md` §2 — a redesigned portrait screen with the water at 52 % of the viewport, not today's 288 px strip.
@@ -66,7 +66,7 @@ Replace the horizontal bar with a **ring around the bobber**, drawn in `paint()`
 
 ## 3. Living water (Canvas 2D only)
 
-All effects are gated by `s.motion`. Quality tier `gfx: "full" | "lite" | "mobile"` is a device setting chosen by `device.ts` (`09` §1.1: desktops start at `full`, tablets `lite`, phones `mobile`); the fps governor steps it down one tier if the loop measures < 45 fps for 3 s (§7) and the player can pin it in Settings. The per-tier table — strip size, particle caps, which effects are skipped — is `09` §1.2 and is the single source of truth for what each tier draws. The descriptions below are the `full` tier.
+All effects are gated by `s.motion`. Quality tier `gfx: "full" | "lite" | "mobile"` is a device setting chosen by `device.ts` (`09` §1.1: desktops start at `full`, tablets `lite`, phones `mobile`); the player sees five levels on top of these tiers (`09` §1.0: Ultra and High use `full`, Medium `lite`, Low and Potato `mobile`); the fps governor steps the level down quickly and, in Auto only, up slowly (§7) and the player can pin a level in Settings. The per-tier table — strip size, particle caps, which effects are skipped — is `09` §1.2 and is the single source of truth for what each tier draws. The descriptions below are the `full` tier.
 
 ### 3.1 Water line
 Each biome gets a `waterY` (0–1, where the painting's waterline is) in a new table `WATER_LINE: number[]` in `content.ts` (eyeball from the paintings; Pond ≈ 0.52, Sky ≈ 0.6 … record all 15). Everything below `waterY·h` is "water".
@@ -143,9 +143,11 @@ Show it honestly: when `zoneBonus > 0`, the ring band gets a soft white outer gl
 - Fonts: keep Google Fonts but add `font-display: swap` (it's in the URL already) and a `<link rel=preload>` for the two faces used above the fold.
 - Target budget (acceptance): first paint < 1.5 s and first biome visible < 2.5 s on a throttled "Fast 3G" Playwright profile; total transfer for the first screen < 1.2 MB.
 
+> **WP-10 note:** the rail and drawer described in §1.2 were replaced by the corner HUD and the pause menu (the Hub). See `09-mobile.md` §2.4. The painting still fills the screen and the cast dock is unchanged.
+
 ## 7. Performance budget and the fps governor
 
-- Measure fps in the loop: a rolling average over 60 frames. If avg < 45 fps for 3 s and the player hasn't pinned the setting, step the tier down one (`full → lite → mobile`) and toast "Switched to lighter graphics for a smoother game — change it in Settings." Never step up automatically. What each tier skips is the table in `09` §1.2.
+- Measure fps in the loop: a rolling average over 60 frames. If avg < 45 fps for 3 s and the player hasn't pinned a level, step the **level** down one (`ultra → high → medium → low → potato`) and toast "Switched to lighter graphics for a smoother game — change it in Settings." Step **up** (Auto only) after 30 s smooth at 57+ fps, once per session, never above the device's Auto ceiling and never after a manual pin (`09` §1.0). The start-up speed test is the main signal; the GPU name is only a hint. What each tier skips is the table in `09` §1.2.
 - Draw calls: keep `paint()` under 1,200 canvas operations per frame at 1080p `high`. Count them in dev with a `window.__facDraw` counter behind `import.meta.env.DEV`.
 - Never allocate in the frame loop: pre-allocate particle arrays, reuse the offscreen buffer, no `.map()` in `paint()`.
 

@@ -8,7 +8,7 @@ A tournament is a **seed plus rules plus a time window**. Everyone fishes the sa
 
 ## 1. Server architecture (WP-7)
 
-### 1.1 Tables (`migrations/tournaments/0002_tournaments.sql`)
+### 1.1 Tables (`migrations/0007_tournaments.sql`)
 ```sql
 create table events (
   id text primary key,                 -- "d-2026-11-02-pond" or "p-ABCD" (private)
@@ -156,3 +156,26 @@ At `ends_at` the client shows a results card (your rank, top 3, your best fish) 
 ## 6. Done when
 - **WP-7**: tables, five routes, Neon-backed relay, envelope recording in the client, replay verification, categories Big Fish / Total / Sprint / Value / Survival, schedule materialisation, deterministic weather in events, rate limits and budgets, tests in §5 green on PGLite, anon identity with name, `tournament` mode in `modes.ts`.
 - **WP-8**: lobby drawer, live board with pinned row and animations, rivals filling empty Quick boards, P2P room per event with 8-peer cap and emotes, team events, results card, trophy shelf, titles, bobber skins, Tournament history in the Lodge.
+
+## 7. As built in WP-7
+- Migration `migrations/0007_tournaments.sql` (numbered high to stay clear of parallel work): events, players, entries, catches, survival_runs, rate_hits, rooms, signals. Everything is `if not exists`.
+- Pure shared code in `src/game/`: `weather.ts` (seeded Markov chain), `scoring.ts`, `schedule.ts`, `replay.ts` (the server and client both call `replayCast`). Server code lives in `src/lib/tournaments/*.server.ts`; the routes `events`, `entry`, `catch`, `board`, `survival-board` and the rewritten `rtc` are thin wrappers.
+- Events use fixed gear (rod 6, reel 4, line 4, boat 0); only the lure family is the player's choice. The client sends one envelope per cast (`castIndex`, spot, presentation, hook time, fight inputs, a `claim`); the server rolls the cast from `seedFrom(eventId, playerId, castIndex)`, replays it, and compares the claim. The server's number is the score either way.
+- Rate limits: one envelope per 2 s per player, 40 writes and 240 reads per minute per IP; three strikes is a one-hour ban. Wall-clock check: seconds fished can never exceed seconds since joining (plus slack). Body caps 8 KB (96 KB survival logs, 48 KB rtc).
+- Survival: WP-7 stores and replays the run log from the daily seed; day-count rules are a placeholder (1 + 3 per landed fish) until WP-5 supplies the real ones.
+- Done afterwards in WP-8: see §8.
+- Self-hosting: `DATABASE_URL` set uses that Postgres; otherwise `FAC_DATA_DIR=/some/folder` keeps PGLite on disk (`src/lib/db-config.ts`); neither set is in-memory as before. Nothing in the tournament code needs Vercel cron: events are materialised idempotently on every `/api/events`, `/api/entry` and `/api/board` call, and old rows are pruned on request.
+
+## 8. As built in WP-8
+- Server: `migrations/0008_social.sql` (friend codes, presence, `friends`, `invites`, `results`, `event_final`, `entries.team`); `friends.server.ts` (`/api/friends`), `awards.server.ts` (`/api/trophies`, lazy finalising: the first look at an ended event writes its results once, no cron). Everything uses `getSql()`.
+- Pure rules: `src/game/safe.ts` (kid-safe names, used by server and client), `social.ts` (emotes, mesh cap, teams, friend codes, medals, titles, skins, trophy merge), `fill.ts` (Regulars on short Quick boards: clock-driven, nothing stored; never on Daily, Weekly, private or Survival).
+- Client: `components/game/{lobby,board,board-state,event-social,trophies,tournament}.tsx`, `eventroom.ts` (one P2P room per event, `t-<eventId>`, mesh cap 4 on phones and tablets, 8 on desktop).
+- Save v9 adds `trophies`, `titles`, `bobberSkin`, `tourneyHistory`; the server's `results` rows are the truth and the client merges them on a trophies sync. `bobberSkin` is also mirrored to the device settings.
+- Decisions: medals only for top three with at least 2 on the board and a score above 0; Regulars count in ranks but never earn trophies for a human sitting behind them in a tie (humans win ties); team events are Total Weight only, 2 to 4 per team; friends are mutual on a typed code and see only presence and the event being fished; a name that trips the filter silently becomes "Angler ABCD".
+
+### WP-10 additions: friend requests, email invites, block
+- Server: `migrations/0010_friend_requests.sql` (`players.tag`, `friend_requests`, `blocks`, `friend_invites`); `friends.server.ts` gains the ops `request`, `accept`, `decline`, `cancel`, `invite_email`, `redeem`, `remove`, `block`, `unblock`, `search`. All use `getSql()`.
+- A player's **handle** is `Name#NNNN` (a four-digit number the server hands out). Friends can be added three ways: by **handle** (type-ahead after three letters, up to five grown-up account players; kid profiles are never suggested), by **email** (we mail a link; the answer is word-for-word identical whether or not that address has an account, and only a hash of the address is stored), or by the **friend code** (still instant and mutual, for people sitting together). Handle and email routes need the other side to **accept**.
+- **Remove** ends a friendship. **Block** removes the friendship and requests, stops that player asking again (their request is dropped without telling them), and hides their boat and emotes in rooms (matched by display name, stored on this device).
+- Emotes only. No typed chat and no parent-approval flows were added.
+- UI: Players tab (`hub/PlayersTab.tsx`, `hub/friends-data.tsx`); the tournament lobby's Friends tab keeps the code add.

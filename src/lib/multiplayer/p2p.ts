@@ -52,6 +52,12 @@ export interface P2PRoomOptions {
   onMessage?: (from: string, data: unknown, channel: "state" | "reliable") => void;
   /** Fires once, on the first successful signaling poll (registration). */
   onConnected?: () => void;
+  /** WP-8: cap the mesh. Given the other peers in the room and the ones already connected, return the
+      ones this device should hold a connection with. Peers left out are never dialled and their offers
+      are ignored, so a big room costs a phone at most a handful of connections. Default: everyone. */
+  pickPeers?: (roster: string[], connected: string[]) => string[];
+  /** WP-8: told every poll how many other peers are in the room (connected or not). */
+  onRoster?: (others: number) => void;
 }
 
 interface PeerSlot {
@@ -220,13 +226,23 @@ export class P2PRoom {
     this.schedulePoll(this.anyPairConnecting() ? FAST_POLL_MS : IDLE_POLL_MS);
   }
 
+  /** Who this device may dial or answer: everybody, unless a mesh cap says otherwise. */
+  private allowed(roster: string[]): Set<string> {
+    const others = roster.filter((id) => id !== this.opts.selfId);
+    return new Set(this.opts.pickPeers ? this.opts.pickPeers(others, [...this.peers.keys()]) : others);
+  }
+
   private reconcileRoster(peers: { id: string; name: string }[]): void {
     const alive = new Set(peers.map((p) => p.id));
+    const allowed = this.allowed(peers.map((p) => p.id));
+    this.opts.onRoster?.(alive.has(this.opts.selfId) ? alive.size - 1 : alive.size);
     for (const p of peers) {
       if (p.id === this.opts.selfId) continue;
       const existing = this.peers.get(p.id);
       if (existing) {
         existing.info.name = p.name;
+      } else if (!allowed.has(p.id)) {
+        continue; // over the mesh cap: stay out of this pair
       } else {
         // Exactly one side dials each pair; the other waits for the offer.
         this.connectTo(p.id, p.name, this.opts.selfId > p.id);
@@ -370,6 +386,7 @@ export class P2PRoom {
       // New peers dial us in the same poll that adds them to the roster.
       // Signals outlive membership, so drop senders the roster doesn't vouch for.
       if (!roster.has(from)) return;
+      if (this.opts.pickPeers && !this.allowed([...roster]).has(from)) return; // over the mesh cap
       const created = this.connectTo(from, "", false);
       if (!created) return;
       slot = created;

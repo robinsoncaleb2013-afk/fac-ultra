@@ -16,6 +16,7 @@ It is written so that an implementing agent — any model, any tool — can pick
 | [`05-game-modes.md`](05-game-modes.md) | Building Recreational, Survival, Kid Mode and the mode framework (WP-4, WP-5, WP-6). |
 | [`06-multiplayer-tournaments.md`](06-multiplayer-tournaments.md) | Building server-scored tournaments and the lobby (WP-7, WP-8). |
 | [`07-data-saves-cloud.md`](07-data-saves-cloud.md) | Save schema v4, migrations, accounts and cloud saves (WP-9). |
+| [`09-mobile.md`](09-mobile.md) §1.0, §2.4, §6.1 | Graphics levels (Ultra to Potato), the pause menu (Hub) and full screen, as built in WP-10. |
 | [`08-work-packages.md`](08-work-packages.md) | **The build order.** Each package: scope, files, acceptance criteria, how to verify. Start here when asked "what should I build next?" |
 
 The older `docs/EXPANSION-DESIGN.md` describes the game as shipped on 2026-11-01 (15 biomes, 375 fish, bosses, Aquarium, co-op, derby). It stays as history. Where the two disagree, **this folder wins**.
@@ -63,5 +64,7 @@ These are not suggestions. A PR that breaks one of them is not done.
 | **Dex** | The species collection. `dex["b-i"] = {c: count, w: best weight, m: best mutation}`. |
 | **Mode** | A save slot with its own rules: Expedition (career), Recreational, Survival, Co-op, Tournament. |
 | **Helping Hand** | Kid-mode difficulty assist (WP-1). |
+| **Hub** | The pause menu and title screen (WP-10): six tabs, list and detail panel, quick wheel, satchel. `src/components/game/hub/`. |
+| **Graphics level** | What players pick: Auto, Ultra, High, Medium, Low, Potato. Maps onto the three tiers (`09` §1.0). |
 | **Form / tier** | `form` = phone / tablet / desktop (how the page is laid out); `gfx` tier = full / lite / mobile (what the water draws). Both chosen by `device.ts` at load. |
 | **Event / Tournament** | A server-scheduled competition with a seed, rules and a server-verified leaderboard (WP-7). |

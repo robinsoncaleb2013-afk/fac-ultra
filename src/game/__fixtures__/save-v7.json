@@ -1,0 +1,610 @@
+{
+  "version": 7,
+  "c": 50,
+  "xp": 87,
+  "lv": 3,
+  "rod": 0,
+  "reel": 0,
+  "line": 0,
+  "boat": 0,
+  "biome": 0,
+  "ub": [
+    0
+  ],
+  "box": {},
+  "lure": -1,
+  "dex": {
+    "0-0": {
+      "c": 3,
+      "w": 0.6,
+      "m": 3
+    },
+    "0-4": {
+      "c": 38,
+      "w": 4.8,
+      "m": 4
+    },
+    "0-1": {
+      "c": 2,
+      "w": 0.8,
+      "m": 0
+    },
+    "0-13": {
+      "c": 1,
+      "w": 7.3,
+      "m": 0
+    },
+    "0-3": {
+      "c": 1,
+      "w": 2,
+      "m": 0
+    }
+  },
+  "inv": [
+    {
+      "name": "Bluegill",
+      "t": 0,
+      "v": 4,
+      "w": 0.5,
+      "i": 0,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 16,
+      "w": 2.5,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 13,
+      "w": 2.2,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Rainbow Crawfish",
+      "t": 0,
+      "v": 268,
+      "w": 2.2,
+      "i": 4,
+      "b": 0,
+      "m": 4
+    },
+    {
+      "name": "Sunfish",
+      "t": 0,
+      "v": 6,
+      "w": 0.5,
+      "i": 1,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 14,
+      "w": 3.7,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 14,
+      "w": 3.1,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Neon Bluegill",
+      "t": 0,
+      "v": 44,
+      "w": 0.3,
+      "i": 0,
+      "b": 0,
+      "m": 3
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 18,
+      "w": 2.8,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 18,
+      "w": 2.9,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Albino Crawfish",
+      "t": 0,
+      "v": 39,
+      "w": 3.6,
+      "i": 4,
+      "b": 0,
+      "m": 1
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 19,
+      "w": 3.3,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 14,
+      "w": 2.3,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 19,
+      "w": 2.9,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Albino Crawfish",
+      "t": 0,
+      "v": 37,
+      "w": 3.6,
+      "i": 4,
+      "b": 0,
+      "m": 1
+    },
+    {
+      "name": "Largemouth",
+      "t": 1,
+      "v": 183,
+      "w": 7.3,
+      "i": 13,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 17,
+      "w": 4.3,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 16,
+      "w": 2.6,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 21,
+      "w": 3.5,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 14,
+      "w": 2.7,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Albino Crawfish",
+      "t": 0,
+      "v": 30,
+      "w": 4.2,
+      "i": 4,
+      "b": 0,
+      "m": 1
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 14,
+      "w": 3.4,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Albino Crawfish",
+      "t": 0,
+      "v": 40,
+      "w": 2.4,
+      "i": 4,
+      "b": 0,
+      "m": 1
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 21,
+      "w": 3.8,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 21,
+      "w": 3.1,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 21,
+      "w": 4.8,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 17,
+      "w": 3.4,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 19,
+      "w": 2.6,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 19,
+      "w": 4,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Albino Crawfish",
+      "t": 0,
+      "v": 35,
+      "w": 3.3,
+      "i": 4,
+      "b": 0,
+      "m": 1
+    },
+    {
+      "name": "Neon Crawfish",
+      "t": 0,
+      "v": 120,
+      "w": 2.5,
+      "i": 4,
+      "b": 0,
+      "m": 3
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 17,
+      "w": 2.8,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 17,
+      "w": 2.1,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Sunfish",
+      "t": 0,
+      "v": 7,
+      "w": 0.8,
+      "i": 1,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Bluegill",
+      "t": 0,
+      "v": 5,
+      "w": 0.6,
+      "i": 0,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Albino Crawfish",
+      "t": 0,
+      "v": 38,
+      "w": 3.1,
+      "i": 4,
+      "b": 0,
+      "m": 1
+    },
+    {
+      "name": "Minnow",
+      "t": 0,
+      "v": 14,
+      "w": 2,
+      "i": 3,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Golden Crawfish",
+      "t": 0,
+      "v": 71,
+      "w": 4.1,
+      "i": 4,
+      "b": 0,
+      "m": 2
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 14,
+      "w": 2.3,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Albino Crawfish",
+      "t": 0,
+      "v": 37,
+      "w": 4.1,
+      "i": 4,
+      "b": 0,
+      "m": 1
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 17,
+      "w": 4.2,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 17,
+      "w": 3.3,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 19,
+      "w": 3.9,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    },
+    {
+      "name": "Golden Crawfish",
+      "t": 0,
+      "v": 61,
+      "w": 3.1,
+      "i": 4,
+      "b": 0,
+      "m": 2
+    },
+    {
+      "name": "Crawfish",
+      "t": 0,
+      "v": 17,
+      "w": 3.5,
+      "i": 4,
+      "b": 0,
+      "m": 0
+    }
+  ],
+  "rb": 0,
+  "tot": 0,
+  "caught": 45,
+  "auto": false,
+  "autoOn": false,
+  "weather": 1,
+  "streak": 45,
+  "bestStreak": 45,
+  "untilBoss": 12,
+  "bosses": 0,
+  "perfects": 45,
+  "taught": true,
+  "contracts": [
+    {
+      "id": "start-count",
+      "kind": "count",
+      "goal": 6,
+      "prog": 6,
+      "reward": 210,
+      "label": "Land 6 fish"
+    },
+    {
+      "id": "start-rare",
+      "kind": "rarity",
+      "goal": 2,
+      "prog": 0,
+      "reward": 280,
+      "label": "Land 2 rare or better",
+      "minRarity": 2
+    },
+    {
+      "id": "start-bank",
+      "kind": "bank",
+      "goal": 150,
+      "prog": 0,
+      "reward": 70,
+      "label": "Sell $150 worth"
+    }
+  ],
+  "pins": [],
+  "sound": true,
+  "motion": true,
+  "flash": true,
+  "gfx": "auto",
+  "assist": true,
+  "followClock": true,
+  "kid": false,
+  "trips": [],
+  "trip": null,
+  "lastSpot": {},
+  "rig": {},
+  "records": {
+    "0-0": {
+      "w": 0.6,
+      "at": 1793632111498,
+      "spot": "pond-open",
+      "p": {
+        "family": "worm",
+        "depth": 1,
+        "retrieve": "medium"
+      },
+      "weather": 1,
+      "window": "day"
+    },
+    "0-4": {
+      "w": 4.8,
+      "at": 1793632111460,
+      "spot": "pond-open",
+      "p": {
+        "family": "worm",
+        "depth": 1,
+        "retrieve": "medium"
+      },
+      "weather": 3,
+      "window": "day"
+    },
+    "0-1": {
+      "w": 0.8,
+      "at": 1793632111493,
+      "spot": "pond-open",
+      "p": {
+        "family": "worm",
+        "depth": 1,
+        "retrieve": "medium"
+      },
+      "weather": 1,
+      "window": "day"
+    },
+    "0-13": {
+      "w": 7.3,
+      "at": 1793632111387,
+      "spot": "pond-open",
+      "p": {
+        "family": "worm",
+        "depth": 1,
+        "retrieve": "medium"
+      },
+      "weather": 2,
+      "window": "day"
+    },
+    "0-3": {
+      "w": 2,
+      "at": 1793632111508,
+      "spot": "pond-open",
+      "p": {
+        "family": "worm",
+        "depth": 1,
+        "retrieve": "medium"
+      },
+      "weather": 3,
+      "window": "day"
+    }
+  },
+  "released": {},
+  "stewards": {
+    "species": [],
+    "waters": []
+  },
+  "coached": {
+    "bulldog": 3,
+    "runner": 41,
+    "jumper": 1
+  },
+  "drag": 1,
+  "sigBox": [],
+  "sig": -1,
+  "baitBox": {},
+  "bait": -1,
+  "lair": false,
+  "mastered": [],
+  "tank": {
+    "tier": 0,
+    "gift": 0,
+    "lights": [],
+    "exhibits": [],
+    "ped": [],
+    "feedUntil": 0,
+    "lastSettle": 1793632111264
+  },
+  "derbiesWon": 0,
+  "derby": {
+    "endsAt": 1793632711544,
+    "score": 0,
+    "rivals": [
+      {
+        "n": "Juno",
+        "s": 0
+      },
+      {
+        "n": "Pike Queen",
+        "s": 0
+      },
+      {
+        "n": "Old Cobb",
+        "s": 0
+      }
+    ]
+  },
+  "rush": null,
+  "rushBest": 0
+}

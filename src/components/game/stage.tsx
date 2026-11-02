@@ -1,367 +1,227 @@
-import { useEffect, useRef, type ReactNode } from "react";
-import { biomeArt, fitCanvas, loadArt } from "@/game/art";
-import { BIOMES, BOSS_INDEX, SPECIES_PER_BIOME, stageOf, STAGE_NAMES, WEATHER } from "@/game/content";
-import { drawFish } from "@/game/fish-draw";
-import { act, frame, sim, useGame } from "@/game/engine";
-import { peerBoats } from "@/game/multiplayer";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { formOf, readDevice } from "@/game/device";
+import { loadArt, wantedSize } from "@/game/art";
+import { biomeSpeciesCaught, BIOMES, BOSS_INDEX, STAGE_NAMES, stageOf, WEATHER } from "@/game/content";
+import { MODES } from "@/game/modes";
+import { creelLine } from "@/game/trips";
+import { act, frame, reelDown, reelUp, sim, useGame, windowFor } from "@/game/engine";
+import { WINDOW_INFO } from "@/game/presentation";
+import { nearestSpot } from "@/game/spots";
+import { freshGovernor, FpsMeter, governorStep, shouldSkipFrame, tierSpec } from "@/game/graphics";
+import { useHubUi } from "@/game/hubstate";
+import { paint } from "@/components/game/stage-paint";
+import { FotdLine, GiftChip } from "@/components/game/fun";
+import { cn } from "@/lib/cn";
 
-const FALLBACK: [string, string][] = [
-  ["#d7b56a", "#1d6a62"], // Pond
-  ["#9eb8c4", "#1a6e78"], // River
-  ["#c9d4c4", "#1c4a55"], // Lake
-  ["#6e8a62", "#163e36"], // Swamp
-  ["#7a9a4e", "#14403a"], // Mangrove
-  ["#e2c48a", "#1a6f88"], // Coast
-  ["#d9905f", "#7a3b2e"], // Canyon
-  ["#7ed0c8", "#0e6a78"], // Reef
-  ["#4e9a6a", "#0d4a34"], // Kelp Forest
-  ["#d5e4ee", "#2a5a68"], // Arctic
-  ["#1a2740", "#071018"], // Deep
-  ["#cbb98a", "#3a4a55"], // Sunken City
-  ["#c45a32", "#1a1818"], // Volcano
-  ["#f0c9a0", "#6a88a8"], // Sky
-  ["#8a7ed0", "#141033"], // Astral Sea
-];
+type StageProps = {
+  /** Menu backdrop: same living water, no line, bobber or ring, and the small painting. */
+  menu?: boolean;
+  /** Bigger fight ring for a thumb (09 §3.1). */
+  big?: boolean;
+  className?: string;
+  /** Show this water instead of the player's (menu preview swipes). */
+  biomeOverride?: number;
+  /** What a tap on the water does when it is not a fight. Default: act() (cast / hook). While reeling, a press always holds the reel. */
+  onWater?: () => void;
+  children?: ReactNode;
+};
 
-export function Stage() {
+const LIGHTER = "Switched to lighter graphics for a smoother game — change it in Settings.";
+const BETTER = "The game is running smoothly, so the graphics went up a notch — change it in Settings.";
+
+/* One governor for the whole session (it survives the menu and the game swapping the stage). */
+let gov = freshGovernor();
+
+export function Stage({ menu = false, big = false, className, biomeOverride, onWater, children }: StageProps) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const playerBiome = useGame((s) => s.biome);
+  const biome = biomeOverride ?? playerBiome;
+  const tier = useGame((s) => s.tier);
+  const idle = useGame((s) => s.phase === "idle");
+  const view = useRef({ tier, big, menu, biome });
+  view.current = { tier, big, menu, biome };
+
+  /* Paintings: the water you are in first, then its neighbours when idle. */
+  useEffect(() => {
+    const canvas = ref.current;
+    const width = canvas?.clientWidth || window.innerWidth;
+    const dpr = Math.min(tierSpec(tier).dprCap, window.devicePixelRatio || 1);
+    const size = menu ? 800 : wantedSize(width, dpr, tierSpec(tier).art);
+    void loadArt(biome, { size, neighbors: !menu, unlocked: useGame.getState().ub });
+  }, [biome, tier, menu]);
+
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    let raf = 0;
+    let last = performance.now();
+    let frameNo = 0;
+    let form = formOf(readDevice());
+    const onSize = () => {
+      form = formOf(readDevice());
+    };
+    window.addEventListener("resize", onSize);
+    const meter = new FpsMeter();
+    const hidden = () => document.hidden || document.visibilityState === "hidden";
+    const loop = (now: number) => {
+      raf = requestAnimationFrame(loop);
+      const st = useGame.getState();
+      frameNo++;
+      if (shouldSkipFrame(st.tier, now - sim.lastInput, st.phase, frameNo)) return;
+      const real = (now - last) / 1000;
+      last = now;
+      const dt = Math.min(0.05, real);
+      /* The pause menu freezes the water (not in a tournament: the clock there is the server's). The painting keeps drawing. */
+      const paused = !menu && useHubUi.getState().open && st.mode !== "tournament";
+      if (!paused) frame(dt);
+      paint(canvas, { ...view.current, dt: paused ? 0 : dt });
+      meter.push(Math.min(0.25, real));
+      const step = governorStep(gov, {
+        fps: meter.fps,
+        dt: real,
+        ready: meter.full,
+        pinned: st.gfx !== "auto",
+        level: st.level,
+        form,
+      });
+      gov = step.gov;
+      if (step.change) {
+        meter.reset();
+        st.governLevel(step.change);
+        st.notify(step.why === "smooth" ? BETTER : LIGHTER);
+      }
+    };
+    const start = () => {
+      cancelAnimationFrame(raf);
+      last = performance.now();
+      if (!hidden()) raf = requestAnimationFrame(loop);
+    };
+    /* A hidden tab runs nothing at all; coming back gets one capped dt, no catch-up. */
+    const onVisibility = () => {
+      if (hidden()) cancelAnimationFrame(raf);
+      else start();
+    };
+    const touch = () => {
+      sim.lastInput = performance.now();
+    };
+    sim.lastInput = performance.now();
+    start();
+    /* Lifting the finger anywhere gives line, even if it slid off the water. */
+    window.addEventListener("pointerup", reelUp);
+    window.addEventListener("pointercancel", reelUp);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pointerdown", touch);
+    window.addEventListener("keydown", touch);
+    return () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("resize", onSize);
+      window.removeEventListener("pointerup", reelUp);
+      window.removeEventListener("pointercancel", reelUp);
+      window.removeEventListener("pointerdown", touch);
+      window.removeEventListener("keydown", touch);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={box}
+      className={cn(
+        "touch-manipulation select-none overflow-hidden",
+        !menu && idle && "cursor-pointer",
+        className,
+      )}
+      onPointerDown={
+        menu
+          ? undefined
+          : (e) => {
+              /* Aim first: a tap on a spot's ring picks that spot, then the tap does its usual job. */
+              const st = useGame.getState();
+              if (st.phase === "idle") {
+                const r = e.currentTarget.getBoundingClientRect();
+                const spot = nearestSpot(st.biome, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r.width, r.height, big);
+                if (spot) st.setSpot(spot.id);
+              }
+              /* In the fight, press and hold anywhere on the water is the reel (09 §3.1). */
+              if (st.phase === "reel") {
+                e.currentTarget.setPointerCapture?.(e.pointerId);
+                reelDown();
+              } else if (onWater) onWater();
+              else act();
+            }
+      }
+      onPointerMove={(e) => {
+        if (menu || e.pointerType !== "mouse") return;
+        const r = e.currentTarget.getBoundingClientRect();
+        sim.hover = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+      }}
+      onPointerLeave={() => {
+        sim.hover = null;
+      }}
+    >
+      <canvas ref={ref} data-stage={menu ? undefined : ""} className="absolute inset-0 h-full w-full touch-none" />
+      {children}
+    </div>
+  );
+}
+
+/** The time-of-day window the fish are feeding in, kept fresh once a minute. */
+function useWindow() {
+  const weather = useGame((s) => s.weather);
+  const follow = useGame((s) => s.followClock);
+  const trip = useGame((s) => s.trip);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+  return windowFor({ trip, followClock: follow, weather }, now);
+}
+
+export function StageChips({ className, style }: { className?: string; style?: CSSProperties }) {
   const biome = useGame((s) => s.biome);
   const weather = useGame((s) => s.weather);
   const frenzy = useGame((s) => s.frenzyLeft);
   const stage = useGame((s) => stageOf(s.dex, s.biome));
   const lair = useGame((s) => s.lair);
-
-  useEffect(() => {
-    loadArt();
-    const canvas = ref.current;
-    if (!canvas) return;
-    let raf = 0;
-    let last = performance.now();
-    const loop = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      frame(dt);
-      paint(canvas);
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
+  const boss = useGame((s) => biomeSpeciesCaught(s.dex, s.biome));
+  const slot = useWindow();
+  const inCreel = useGame((s) => (MODES[s.mode].trips && s.trip ? s.inv : null));
   return (
-    <div className="relative aspect-video w-full max-h-72 shrink-0 overflow-hidden sm:max-h-80">
-      <canvas
-        ref={ref}
-        className="absolute inset-0 h-full w-full touch-none"
-        onPointerDown={() => act()}
-      />
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap gap-1.5 p-3">
-        <Chip>{WEATHER[weather].name}</Chip>
-        <Chip>{BIOMES[biome].name}</Chip>
-        <Chip>{lair ? "Boss Lair" : STAGE_NAMES[stage]}</Chip>
-        {frenzy > 0 ? <Chip brass>Frenzy {Math.ceil(frenzy)}s</Chip> : null}
-      </div>
+    <div style={style} className={cn("pointer-events-none flex flex-wrap gap-1.5", className)}>
+      <Chip>{WEATHER[weather].name}</Chip>
+      <Chip>{WINDOW_INFO[slot].label}</Chip>
+      <Chip>{BIOMES[biome].name}</Chip>
+      <Chip>{lair ? "Boss Lair" : STAGE_NAMES[stage]}</Chip>
+      <Chip>
+        {BIOMES[biome].fish[BOSS_INDEX]} {boss}/{BOSS_INDEX}
+      </Chip>
+      {inCreel ? <Chip>{creelLine(inCreel.length, inCreel.reduce((n, f) => n + f.w, 0))}</Chip> : null}
+      {frenzy > 0 ? <Chip brass>Frenzy {Math.ceil(frenzy)}s</Chip> : null}
+      <FotdChip />
+      <GiftChip />
     </div>
+  );
+}
+
+function FotdChip() {
+  return (
+    <span className="rounded-full border border-line bg-bg/70 px-2.5 py-1 text-xs text-fg backdrop-blur-sm empty:hidden">
+      <FotdLine />
+    </span>
   );
 }
 
 function Chip({ children, brass }: { children: ReactNode; brass?: boolean }) {
   return (
     <span
-      className={
-        "rounded-full border border-line bg-bg/80 px-2.5 py-1 text-xs backdrop-blur-sm " +
-        (brass ? "text-brass" : "text-fg")
-      }
+      className={cn(
+        "rounded-full border border-line bg-bg/70 px-2.5 py-1 text-xs backdrop-blur-sm",
+        brass ? "text-brass" : "text-fg",
+      )}
     >
       {children}
     </span>
   );
-}
-
-/* 0 while the reel cursor sits in the zone, growing as it strays outside. */
-function reelStrain() {
-  const half = Math.max(1, sim.zone / 2);
-  return Math.min(1.5, Math.max(0, (Math.abs(sim.cp - sim.zc) - half) / half));
-}
-
-function paint(canvas: HTMLCanvasElement) {
-  const box = fitCanvas(canvas);
-  if (!box) return;
-  const { ctx, w, h } = box;
-  const s = useGame.getState();
-  const amp = s.motion ? sim.trauma * sim.trauma : 0;
-  ctx.fillStyle = "#0c1a22";
-  ctx.fillRect(0, 0, w, h);
-  ctx.save();
-  if (amp) ctx.translate(Math.sin(sim.t * 53) * 7 * amp, Math.cos(sim.t * 41) * 5 * amp);
-
-  const img = biomeArt(s.biome);
-  if (img && img.complete && img.naturalWidth) drawCover(ctx, img, w, h, s.motion ? sim.t : 0);
-  else {
-    const [sky, water] = FALLBACK[s.biome] ?? FALLBACK[0];
-    const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, sky);
-    g.addColorStop(0.46, sky);
-    g.addColorStop(0.46, water);
-    g.addColorStop(1, "#07141c");
-    ctx.fillStyle = g;
-    ctx.fillRect(-20, -20, w + 40, h + 40);
-  }
-
-  if (s.weather === 4) {
-    ctx.fillStyle = "rgba(4, 10, 18, 0.38)";
-    ctx.fillRect(-20, -20, w + 40, h + 40);
-  } else if (s.weather === 2) {
-    ctx.fillStyle = "rgba(8, 16, 28, 0.22)";
-    ctx.fillRect(-20, -20, w + 40, h + 40);
-  } else if (s.weather === 3) {
-    ctx.fillStyle = "rgba(210, 220, 224, 0.2)";
-    ctx.fillRect(-20, -20, w + 40, h + 40);
-  }
-
-  /* Animated air, motion permitting: fog banks drift through, and cold
-     night waters (Arctic, Sky, Astral Sea) get a slow aurora shimmer. */
-  if (s.motion && s.weather === 3) {
-    ctx.fillStyle = "rgba(216,226,228,0.10)";
-    for (let i = 0; i < 3; i++) {
-      const fx = (((sim.t * (0.008 + i * 0.004) + i * 0.37) % 1.3) - 0.15) * w;
-      ctx.beginPath();
-      ctx.ellipse(fx, h * (0.3 + i * 0.16), w * 0.34, h * 0.075, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  if (s.motion && s.weather === 4 && (s.biome === 9 || s.biome === 13 || s.biome === 14)) {
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    for (let i = 0; i < 3; i++) {
-      ctx.strokeStyle = "hsla(" + [152, 190, 268][i] + " 85% 68% / 0.13)";
-      ctx.lineWidth = 9 - i * 2.5;
-      ctx.beginPath();
-      for (let x = 0; x <= w; x += 16) {
-        const y = h * (0.1 + i * 0.07) + Math.sin(x * 0.012 + sim.t * (0.5 + i * 0.13) + i * 2.1) * h * 0.035;
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  ctx.save();
-  ctx.globalAlpha = 0.18;
-  ctx.strokeStyle = "#e7f3f1";
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 4; i++) {
-    const y = h * (0.68 + i * 0.06) + Math.sin(sim.t * 1.4 + i) * 2;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.bezierCurveTo(w * 0.3, y - 4, w * 0.6, y + 4, w, y);
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  const shade = ctx.createLinearGradient(0, h * 0.55, 0, h);
-  shade.addColorStop(0, "rgba(12,26,34,0)");
-  shade.addColorStop(1, "rgba(12,26,34,0.28)");
-  ctx.fillStyle = shade;
-  ctx.fillRect(0, h * 0.55, w, h * 0.45);
-
-  for (const fish of sim.swimmers) {
-    const len = 28 * fish.sc;
-    drawFish(ctx, fish.x * w, fish.y * h, len, fish.dir, {
-      biome: s.biome,
-      species: (s.biome * 2 + fish.species) % SPECIES_PER_BIOME,
-      rarity: fish.species % 5 === 0 ? 1 : 0,
-      mutation: 0,
-      wag: Math.sin(sim.t * 7 + fish.phase) * 0.4,
-      alpha: 0.9,
-    });
-  }
-
-  /* Ambient plankton: slow motes drifting on the current, every water. */
-  if (s.motion) {
-    ctx.fillStyle = "rgba(231,243,241,0.35)";
-    for (let i = 0; i < 14; i++) {
-      const px = ((i * 0.173 + sim.t * 0.008 * (1 + (i % 3) * 0.4)) % 1) * w;
-      const py = h * (0.52 + ((i * 37) % 40) / 100) + Math.sin(sim.t * 0.7 + i * 1.9) * 3;
-      ctx.beginPath();
-      ctx.arc(px, py, 1 + (i % 3) * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  /* Online co-op: guest boats fishing the same water. */
-  for (const boat of peerBoats(s.biome, sim.t)) {
-    drawFish(ctx, boat.x * w, boat.y * h, 30, boat.dir, {
-      biome: s.biome,
-      species: 3,
-      rarity: 1,
-      mutation: 0,
-      wag: Math.sin(sim.t * 6) * 0.35,
-      alpha: 0.95,
-    });
-    ctx.fillStyle = "rgba(12,26,34,0.65)";
-    const label = boat.name.slice(0, 14);
-    ctx.font = "11px Outfit, sans-serif";
-    const tw = ctx.measureText(label).width + 10;
-    ctx.beginPath();
-    ctx.roundRect(boat.x * w - tw / 2, boat.y * h - 34, tw, 16, 8);
-    ctx.fill();
-    ctx.fillStyle = "#e7f3f1";
-    ctx.textAlign = "center";
-    ctx.fillText(label, boat.x * w, boat.y * h - 22);
-  }
-
-  /* Boss intro: while the chum works, a huge shadow crosses the deep. */
-  if (sim.introT > 0 && sim.phase === "wait") {
-    const p = Math.min(1, Math.max(0, 1 - sim.introT / 2.6));
-    const sx = (0.15 + p * 0.7) * w;
-    ctx.save();
-    ctx.globalAlpha = 0.4;
-    drawFish(ctx, sx, h * 0.82, Math.min(w, h) * 0.62, 1, {
-      biome: s.biome,
-      species: BOSS_INDEX,
-      rarity: 4,
-      mutation: 5,
-      wag: Math.sin(sim.t * 3) * 0.2,
-      alpha: 0.55,
-    });
-    ctx.restore();
-  }
-
-  const bobx = sim.bnx * w;
-  const boby = sim.bny * h;
-  if ((sim.phase === "bite" || sim.phase === "reel") && sim.fish) {
-    const f = sim.fish;
-    /* A hooked fish fights: it darts and dives against the bobber, harder
-       the further the cursor strays from the zone and the bigger it is. */
-    const strain = sim.phase === "reel" ? reelStrain() : 0;
-    const fight = s.motion ? strain * (0.6 + f.t * 0.2 + (f.boss ? 0.4 : 0)) : 0;
-    const sph = (f.b * 37 + f.i * 13) % 6.28;
-    const dart = Math.sin(sim.t * 11 + sph) * fight * w * 0.02;
-    const dive = Math.max(0, Math.sin(sim.t * 5.7 + sph * 2)) * fight * h * 0.05;
-    drawFish(ctx, bobx - 10 + dart, boby + 8 + dive, 48 + f.t * 8, Math.sign(sim.cd) || -1, {
-      biome: f.b,
-      species: f.i,
-      rarity: f.t,
-      mutation: f.m,
-      wag: Math.sin(sim.t * (sim.phase === "bite" ? 20 : 8)) * 0.45,
-      glow: f.boss || f.t >= 3,
-    });
-  }
-
-  if (sim.leap) {
-    const f = sim.leap.look;
-    const p = sim.leap.t / 0.95;
-    const arc = Math.sin(Math.min(1, p) * Math.PI);
-    drawFish(ctx, w * (0.42 + p * 0.06), h * (0.68 - arc * 0.32), 64 + f.t * 10, -1, {
-      biome: f.b,
-      species: f.i,
-      rarity: f.t,
-      mutation: f.m,
-      wag: Math.sin(p * 12) * 0.3,
-      glow: true,
-      alpha: 1 - p * 0.25,
-    });
-  }
-
-  const tipx = w * 0.78;
-  const tipy = h * 0.4;
-  ctx.strokeStyle = "#3d2a1c";
-  ctx.lineWidth = 4;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(w + 10, h * 0.16);
-  ctx.quadraticCurveTo(w * 0.94, h * 0.12, tipx, tipy);
-  ctx.stroke();
-  /* The line tells the truth about tension: pale and slack in the zone,
-     amber then red and thrumming as the cursor strays and the line strains. */
-  const strainNow = sim.phase === "reel" ? reelStrain() : 0;
-  ctx.strokeStyle =
-    strainNow <= 0 ? "rgba(231,243,241,0.8)" : strainNow < 0.75 ? "rgba(226,162,58,0.9)" : "rgba(228,87,46,0.95)";
-  ctx.lineWidth = 1.25 + strainNow * 0.8;
-  ctx.beginPath();
-  ctx.moveTo(tipx, tipy);
-  if (strainNow > 0.05 && s.motion) {
-    ctx.quadraticCurveTo((tipx + bobx) / 2, (tipy + boby) / 2 + Math.sin(sim.t * 47) * 2.2 * strainNow, bobx, boby);
-  } else ctx.lineTo(bobx, boby);
-  ctx.stroke();
-
-  ctx.strokeStyle = "rgba(231,243,241,0.4)";
-  for (let i = 0; i < 2; i++) {
-    const p = (sim.t * 0.65 + i * 0.5) % 1;
-    ctx.beginPath();
-    ctx.ellipse(bobx, boby + 2, 6 + p * 18, 2.5 + p * 5, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.fillStyle = "#e2a23a";
-  ctx.beginPath();
-  ctx.arc(bobx, boby, sim.phase === "bite" ? 7.5 : 6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#f4f7f6";
-  ctx.beginPath();
-  ctx.arc(bobx, boby, sim.phase === "bite" ? 7.5 : 6, Math.PI, 0);
-  ctx.fill();
-
-  for (const p of sim.particles) {
-    const x = p.x * w;
-    const y = p.y * h;
-    const a = Math.max(0, p.life / p.max);
-    if (p.kind === "rain") {
-      ctx.strokeStyle = `rgba(231,243,241,${0.4 * a})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x - 4, y + p.size);
-      ctx.stroke();
-    } else if (p.kind === "ember" || p.kind === "spark") {
-      ctx.fillStyle = `rgba(226,162,58,${0.85 * a})`;
-      ctx.beginPath();
-      ctx.arc(x, y, p.size, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (p.kind === "snow") {
-      ctx.fillStyle = `rgba(244,247,246,${0.8 * a})`;
-      ctx.beginPath();
-      ctx.arc(x, y, p.size, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.strokeStyle = `rgba(231,243,241,${0.45 * a})`;
-      ctx.beginPath();
-      ctx.arc(x, y, p.size + 1, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  }
-
-  ctx.restore();
-  if (s.flash && sim.hitFlash > 0) {
-    ctx.fillStyle = `rgba(244,247,246,${sim.hitFlash * 0.28})`;
-    ctx.fillRect(0, 0, w, h);
-  }
-  if (s.flash && sim.flashA > 0) {
-    ctx.fillStyle = `rgba(226,236,255,${sim.flashA * 0.22})`;
-    ctx.fillRect(0, 0, w, h);
-  }
-  if (s.frenzyLeft > 0) {
-    ctx.strokeStyle = "rgba(226,162,58,0.85)";
-    ctx.lineWidth = 3;
-    ctx.strokeRect(2, 2, w - 4, h - 4);
-  }
-}
-
-function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, w: number, h: number, t: number) {
-  const breathe = t ? 1 + Math.sin(t * 0.18) * 0.012 : 1;
-  const ir = img.width / img.height;
-  const cr = w / h;
-  let dw: number;
-  let dh: number;
-  if (ir > cr) {
-    dh = h * breathe;
-    dw = dh * ir;
-  } else {
-    dw = w * breathe;
-    dh = dw / ir;
-  }
-  const ox = (w - dw) / 2;
-  const oy = (h - dh) * 0.42;
-  ctx.drawImage(img, ox, oy, dw, dh);
 }

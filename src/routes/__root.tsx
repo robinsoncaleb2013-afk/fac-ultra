@@ -13,6 +13,9 @@ export const Route = createRootRoute({
       { title: APP_NAME },
       { name: "description", content: "Cast across ten waters, fill the dex, and land a tide beast." },
       { name: "theme-color", content: "#0c1a22" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },

@@ -42,6 +42,23 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
+  // docs/architecture/04 §1: the fishing model draws from the seeded rng() so a
+  // tournament can replay a cast. Only rng.ts may touch Math.random (it seeds the
+  // default stream). Particles and other visuals in components/ may still use it.
+  {
+    files: ["src/game/**/*.{ts,tsx}"],
+    ignores: ["src/game/rng.ts"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "Math",
+          property: "random",
+          message: "Use rng() from src/game/rng.ts (model) or loose() (ids, cosmetics). See docs/architecture/04 §1.",
+        },
+      ],
+    },
+  },
   // Disable rules that conflict with Prettier formatting.
   prettier,
 );

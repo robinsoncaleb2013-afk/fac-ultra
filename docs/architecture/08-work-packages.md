@@ -85,6 +85,11 @@ Spec: `07`. **Done when:** `07` §6.
 
 ---
 
+## WP-10 · High-end menu system, graphics levels, full screen
+Spec: `09-mobile.md` §1.0 (five graphics levels), §2.3 and §6 ("as built" notes), `02` (the Hub files), `06` §3.3 (friend requests, block). **Done when:** a title screen and a single-row pause menu (Play, Tackle, Lodge, Waters, Players, Settings) reach every old feature on a PC, phone and landscape phone; the quick wheel and satchel open on hold; Auto/Ultra/High/Medium/Low/Potato work with a governor that steps down fast and up slowly; full screen works from the HUD, Settings and the F key; friends can be added by name, email or code, removed and blocked; touch targets are at least 44 px (`scripts/check-touch-targets.mjs`).
+
+---
+
 ## PR description template
 
 ```

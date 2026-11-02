@@ -19,6 +19,9 @@ src/
     ui/button.tsx       The one shared UI primitive. (Radix is installed but mostly unused in the game.)
   game/
     content.ts          THE DATA. Biomes, species names, rarity bands, gear ladders, lures, signature lures, baits, weather, tank tiers, formulas (luck, value, weight, rollFish).
+    modes.ts            The mode rules table (Expedition, Recreational, Co-op …), menu cards, career-collection merge. Pure.
+    trips.ts            Recreational trips, creel and logbook helpers, photo caption. Pure.
+    kid.ts              Kid Mode helpers (confirmations, hints, number words). Pure.
     engine.ts           THE RULES + STATE. Save type, sanitize/migrate, Zustand store + actions, the per-frame `sim`, cast → wait → bite → reel → catch, contracts, derby, rush, persistence.
     fish-draw.ts        Procedural fish artist: 12 archetypes × pattern layer. drawFish(ctx, x, y, len, dir, look).
     art.ts              Loads the 15 biome paintings (eagerly — fixed in WP-1), fitCanvas() for DPR-correct canvases.
@@ -103,7 +106,7 @@ It is simple and already respects `motion` (reduced-motion) and `flash` settings
 | Add a store action | Add to the `Store` type and the `create<Store>` body in `engine.ts`. Call `persistSoon()` if it changes saved fields. |
 | Add a saved field | `Save` type → `fresh()` → `sanitize()` (with bounds) → `snapshot()` → bump `SAVE_VERSION` → migration note in `07`. |
 | Add a UI tab/panel | New file under `components/game/panels/` (WP-1 creates the folder), register in `Tab` and `TABS`. |
-| Add a sound | New method on `audio` in `audio.ts`, synthesized. No audio files until WP-6 (ambient loops) says so. |
+| Add a sound | New method on `audio` in `audio.ts`, synthesized. The only audio files are the five ambient loops in `public/audio/` (WP-6, `scripts/ambience-build.mjs`); keep them under 1.25 MB in all. |
 | Add a mode | `Mode` union + `MODE_KEYS` + mode rules table in `05-game-modes.md` → `modeRules()` in `engine.ts` (WP-4 creates it). |
 | Add server logic | Route handler in `src/routes/api/<name>.ts` with `createFileRoute(...).server.handlers`, SQL via `getSql()`. |
 
@@ -115,4 +118,30 @@ It is simple and already respects `motion` (reduced-motion) and `flash` settings
 - The 14 tests that need `.grok/` fail outside the sandbox; WP-0.
 - `src/lib/app-data/client.server.ts:281` empty catch block fails lint; WP-0 (one-line fix, leave the rest).
 - Relay is single-instance; WP-7.
-- Derby rivals are random-walk numbers; WP-7 replaces Derby with Tournaments and WP-6 gives rivals personality.
+- ~~Derby rivals are random-walk numbers~~ Done in WP-6: the twelve Regulars (`rivals.ts`).
+
+## WP-7 additions
+- `src/game/{weather,scoring,schedule,replay,tourney}.ts` (pure/shared), `src/components/game/tournament.tsx` (lobby, ticker, panel, results), `src/lib/tournaments/*.server.ts` (never import from client code), `src/routes/api/{events,entry,catch,board,survival-board,rtc}.ts`, `migrations/0007_tournaments.sql`.
+
+## WP-6 additions
+- `src/game/{rivals,pet,stickers,fotd,rarity,ambience,fun}.ts` (pure), `components/game/{fun.tsx,fun-hooks.ts,rarity-mark.tsx,pet-fx.ts}`, the sticker-book `panels/DexPanel.tsx`, `public/audio/*.ogg`, `scripts/ambience-build.mjs`. Save v8. `audio.ts` gained the lazy ambience player (`audio.ambient`, `audio.duck`).
+- This branch also carries WP-7 (tournaments) merged in: `Mode` is `expedition | recreational | survival | coop | tournament`, `tabsFor(mode)` in `tabs.ts` returns the tabs for all of them, the menu has nine cards.
+
+## WP-8 additions
+- `src/game/{safe,social,fill}.ts` (pure), `src/game/eventroom.ts` (P2P room store), `src/components/game/{lobby,lobby-text,board,board-state,event-social,trophies,use-tick}`, `src/lib/tournaments/{friends,awards}.server.ts` (never import from client code), `src/routes/api/{friends,trophies}.ts`, `migrations/0008_social.sql`, `src/game/__fixtures__/save-v8.json`.
+- `tournament.tsx` now holds the ticker, panel and results; the lobby moved to `lobby.tsx`.
+
+## WP-9 additions
+- `src/game/cloud.ts` (pure: sync modes, `decideSync`, `summarize`, fingerprints; shared by server and browser), `src/lib/accounts/*.server.ts` (accounts, sessions, profiles, saves, Google, mail; never import from client code), `src/lib/accounts/client.ts` (the browser's sign-in and sync engine, no React), `src/components/game/account.tsx` (menu chip, sign-in sheet, profile picker, conflict chooser, Settings section), `src/routes/api/{account,profiles,save,google-start,google-callback}.ts`, `migrations/0009_accounts.sql`, `src/game/__fixtures__/save-v9.json`.
+- `engine.ts` gained three small exports for the cloud layer: `onPersisted(fn)`, `flushSave()` and `reloadActiveSlot()`. The save format is unchanged (version 9). Sync state lives in `localStorage["fac-cloud"]`, not in the `Save`.
+- `src/lib/auth/*` and `src/lib/app-data/*` are untouched. The game's accounts are separate from the platform's Better Auth.
+- The original biome JPGs live in `art-src/`; `public/art/biomes/` holds only the WebP set.
+
+## As built in WP-10 (menu, graphics levels, full screen)
+- **Removed:** `components/game/menu.tsx` (old main menu), `tabs.ts`, `layout/Rail.tsx`, `Drawer.tsx`, `MenuSheet.tsx`, `HudBar.tsx`. `tabsFor(mode)` is now `tabsForMode(mode)` in `src/game/hubnav.ts` and returns Hub tabs.
+- **Hub** (`src/components/game/hub/`): `TitleScreen`, `Hub` (frame, tab strip, hint bar), `PlayTab`, `TackleTab`, `LodgeTab`, `WatersTab`, `PlayersTab`, `SettingsTab` + `settings-sections`, `CornerHud`, `Wheel`, `Satchel`, `HubKeys` (keyboard + gamepad), `parts` (list/detail layout), `panel-shell` (wraps older dark panels), `art` (paintings and placeholder art), `icons` (original SVG icons), `actions`, `friends-data`. Small separate store: `src/game/hubstate.ts` (`useHubUi`: open, tab, item, detail, wheel, satchel). Pure helpers with tests: `hubnav.ts`, `hubcopy.ts`, `spatial.ts`.
+- **Graphics levels:** `device.ts` (`Level`, `LEVEL_TIER`, `resolveLevel`, `autoCeiling`), `graphics.ts` (`tierSpec`, `LEVEL_INFO`, governor), `probe.ts` (start-up speed test). See `09` §1.0.
+- **Full screen:** `fullscreen.ts` (pure), `components/game/fullscreen.tsx`.
+- **Layouts:** `DesktopLayout` and `MobileLayout` now show only the water, the corner HUD, the cast dock and (portrait phones) the inline cast panel.
+- **Self-hosting fix:** `scripts/copy-pglite-assets.mjs` runs at the end of `npm run build` and copies PGLite's `pglite.data`, `pglite.wasm` and `initdb.wasm` next to a node-server bundle (`.output/server/_libs/`); it does nothing on the Vercel build. Without it a `node-server` build with no `DATABASE_URL` answered every database route with 500.
+- **Touch-target check:** `node scripts/check-touch-targets.mjs [url]` (needs `playwright` installed and a running build).

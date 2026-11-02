@@ -33,6 +33,8 @@ export function rules(): ModeRules;    // current mode's rules
 
 Migration: `career → expedition`, `sandbox → recreational` (same save key `fac-ultra-sandbox`, new title), `coop` unchanged. Replace every `currentMode === …` check in `engine.ts` with a `rules().x` lookup. Mode cards on the menu come from `MODES`.
 
+> **As built (WP-4).** `src/game/modes.ts` holds the rules table (`MODES`, `MODE_KEYS`, `rulesOf`), the seven menu cards (`MENU_CARDS`) and the career-collection merge; `modeRules()` in `engine.ts` is the single lookup every mode branch reads. The union is `Mode = "expedition" | "recreational" | "coop"` (the spec's `ModeId` names); WP-5 and WP-7 add `survival` and `tournament` to the union and the table. Beyond the table in this section the rules also carry `trips`, `photo` and `twoPlayer`. Trips live in `src/game/trips.ts`, Kid Mode helpers in `src/game/kid.ts`. Save v7 adds `kid`, `trips` and `trip` (the trip in progress); `kid` is mirrored to `fac-ultra-device`.
+
 ## 2. Expedition (exists; renamed in copy only)
 The career. Everything on. Unchanged by WP-4 apart from the rules refactor.
 
@@ -134,3 +136,24 @@ Expedition · Recreational · Survival · Tournaments · Co-op (local + online) 
 - **WP-4**: `modes.ts` rules table drives every mode branch; Recreational with creel, trip log, Logbook view, photo mode; Kid Mode profile with every row in §4; menu cards from `MODES`; migration from `sandbox` keeps old sandbox saves; tests for `rules()` and trip summaries.
 - **WP-5**: Survival on 8 waters with meters, camp, crafting, larder, seeded weather forecast, daily seed vs free run, death screen; `survival.test.ts` thresholds; phone layout works.
 - **WP-6**: 12 rivals replacing derby numbers; pet with hourly gift; sticker dex pages with peel/foil/shiny; Fish of the Day; 5 ambient loops with crossfade and volume; rarity shapes + CB palette; all gated by `motion`/`sound` settings.
+
+## 9. As built: WP-5 Survival
+
+- Rules live in `src/game/survival.ts` (pure, seeded, no Math.random). The store hooks are small and additive in `engine.ts`.
+- Own save slot `fac-ultra-survival` with its own dex and run history. Career `SAVE_VERSION` is unchanged. Survival save has its own `sanitizeSurvival` / `migrateSurvival` (fixture: `src/game/__fixtures__/survival-v1.json`).
+- Waters: Pond, Creek, Lake, River, Reservoir, Arctic, Bayou, Delta (ids 0,1,2,3,5,9,4,8). Rescue arrives on day 15.
+- Tests: `survival.test.ts` (thresholds: competent player lasts 12+ days on Pond with the 2026-01-01 seed, do-nothing dies on day 2, raw-only eating gives 1+ bad fish per 20) and `survival-flow.test.ts` (real store, slot separation, reload).
+
+## 10. As built: WP-6 fun layer
+
+Rules are pure and seeded in `src/game/` (`rivals.ts`, `pet.ts`, `stickers.ts`, `fotd.ts`, `rarity.ts`, `ambience.ts`, `fun.ts`); the screens are `components/game/fun.tsx` (+ `fun-hooks.ts`, `rarity-mark.tsx`, `pet-fx.ts`) and the sticker-book `DexPanel`. Career `SAVE_VERSION` is **8**.
+
+- **Where it runs.** Expedition, Recreational and local co-op (`funModeOn()` in `fun.ts`). **Tournaments** are scored on the server from a seed, so the whole layer is off there (no shiny, Fish of the Day, pet, stickers; ambience is muted). **Survival** keeps its own slot and shape, so the layer is off there too, except ambience (camp and water sounds are welcome).
+- **Replay safety.** Rival casts run on their own `makeRng(seedFrom("rival", id, derbySeed, k))` and put the live `rng()` back afterwards. Shiny rolls use `loose()`. Neither ever draws from the stream a tournament replays (tests assert the live stream is untouched).
+- **Rivals (§6.1).** Twelve Regulars (Tilly 0.40 up to Pike Queen 0.95). A Derby holds the seed, the water, your luck, stage, sky and window when it began; each rival makes one simulated cast every 14 to 26 s (skill decides), with a skill-based miss chance, a few tries at picking spot, lure family, depth and pace (they keep the best match), then `rollFish` with the real match vector. A rival's favourite water makes them three times as likely to be picked. Derby results are filed in `rivalRecord`. A v7 Derby (names and scores only) is converted on load and keeps its scores. Tournaments will use `rivalCast` to fill empty Quick boards in WP-8.
+- **Pet (§6.2).** Opens at level 5. Gift: five lures of a family a not-yet-caught fish at your last spot likes (only families that exist as lures), at most one per real hour, first one ready on adoption. Cosmetic: otter claps, heron tilts, dog wags (3-frame canvas sprite).
+- **Sticker dex (§6.3).** One page per water: 5 by 5 cells, silhouette until caught, 300 ms peel on first fill, foil edge for mutations, star on shiny cells, page sticker on completing all 25 (boss included) with the fanfare. Shiny: 2 % of any caught fish, listed once per species.
+- **Fish of the Day (§6.4).** `seedFrom("fotd", date)` over your open waters, species slots 0 to 15 only (always rollable). First catch of the day: double XP and a gold frame sticker. Shown on the menu, the water chips and the Cast tab. Claims are shared by Expedition and Recreational, so the day is claimed once.
+- **Ambience (§6.5).** Five 30-second OGG loops in `public/audio/` (about 770 KB in all, none over 250 KB), built by `node scripts/ambience-build.mjs` (synthesized offline, reproducible). Fetched lazily after the first tap, only the loop for the water you are in, 2 s crossfade on travel. Rain and wind come from the WebAudio synth. Volume slider in Settings (default 35 %), Sound off mutes everything, Kid Mode speech ducks it. The spec lists no canyon group; canyon plays the fire/sky loop.
+- **Colour-blind rarity (§6.6).** `RarityMark` shows dot, diamond, star, hexagon, crown beside every rarity colour (celebration, last catch, bag, dex cells). Settings toggle swaps r1 to r4 for the deuteranopia-safe palette.
+- **Save v8.** `pet`, `stickers`, `shiny`, `fotdClaimed`, `rivalRecord`, plus the device settings `volume` and `cb` (mirrored to `fac-ultra-device`). Fixture `save-v7.json` is a real v7 session with a Derby running.
