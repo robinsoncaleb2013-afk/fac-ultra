@@ -3,15 +3,21 @@
 Status: **Approved by Chris (dad) on 2026-11-02, built and live the same day.**
 The game serves at **https://fac-ultra.tail41d4fa.ts.net** — final topology and
 proofs are recorded in the runbook below ("As built" notes, corrected
-2026-11-02 after the first live deployment). Written by Vivienne (Chris's
+2026-11-02 after the first live deployment, and again the same day after
+the WP-17 documentation audit, so the runbook matches the setup as it
+actually runs — durable data folder, sign-in settings, test-phase reset off). Written by Vivienne (Chris's
 assistant) at his direction, for Caleb (repo owner) and the agents building the game.
 
-Coordination note: a builder agent is actively implementing the WP stack
-(WP-0…WP-9 in `docs/architecture/`). This plan is **documentation only** — it adds
-no code, changes no architecture contract, and touches no WP branch. Where it
-overlaps `docs/architecture/`, the architecture folder wins; in particular, the
-per-device graphics tiers below **adopt WP-1's automatic device/graphics tiers**
-(09-mobile) rather than replacing them.
+Coordination note: the builder's WP stack (`docs/architecture/`) is fully
+merged — WP-1…WP-17, including accounts, cloud saves, tournaments and the
+WP-17 documentation audit. This plan is **documentation only** — it adds no
+code and changes no architecture contract. Where it overlaps
+`docs/architecture/`, the architecture folder wins; in particular, the
+per-device graphics tiers below **adopt WP-1's automatic device/graphics
+tiers** (09-mobile) rather than replacing them. This document is maintained
+by Vivienne (the hosting operator); the game's docs guard
+(`scripts/docs-check.mjs`) deliberately leaves it to her, because the live
+setup details below exist only on the hub, not in the repo.
 
 ## Decision
 
@@ -49,9 +55,10 @@ GPU load on the hub.
 
 - Host load is small: static files plus a lightweight relay. Chris's work and his
   own gaming keep priority; the container runs with modest CPU/RAM caps and can be
-  paused instantly (`docker pause`) without losing anyone's save — saves are
-  client-side save codes, and the server database is an in-process runtime store
-  at this stage.
+  paused instantly (`docker pause`) without losing anyone's progress —
+  accounts, cloud saves, tournaments and friends live server-side in a
+  durable data folder on the hub (see §2, `FAC_DATA_DIR`), and players also
+  keep local save slots plus save-code export/import in their browsers.
 - If Chris plays in his own browser, his RTX 4070 Ti gives him the top tier
   locally — the same as any strong client machine.
 
@@ -61,20 +68,22 @@ Quality is **per device**, decided by the game on each player's machine:
 
 - **Detect:** WebGL renderer string (GPU class), `devicePixelRatio`,
   `hardwareConcurrency`, plus a short FPS sampling window at session start.
-- **Tiers:** Ultra / High / Medium / Low / Potato, with dynamic resolution scaling
-  and automatic step-down if FPS sags, step-up when there is headroom.
+- **Tiers:** Ultra / High / Medium / Low / Potato, with automatic step-down if
+  FPS sags and step-up when there is headroom. (There is no dynamic resolution
+  scaling; the tier itself is what changes.)
 - **Override:** a per-device Settings choice (Auto / Ultra / … / Potato),
   remembered on that device.
 - **Floor guarantee:** the Potato tier targets weak integrated GPUs and cards at
   or below a GTX 1080, so the brothers' PCs stay playable. Tiers are independent —
   nobody is dragged down to the weakest machine's settings.
 
-## What dropping the free tiers unlocks (future roadmap notes)
+## What dropping the free tiers now runs
 
-- **Cloud saves + optional accounts (WP-9)** can run on a self-hosted Postgres on
-  the hub instead of Neon's free tier.
-- **Server-replay-verified tournaments (WP-7/WP-8)** can use that same local
-  database.
+- **Cloud saves + optional accounts (WP-9)** run on the game's embedded
+  database on the hub, persisted to the durable data folder — no Neon, no
+  external Postgres.
+- **Server-replay-verified tournaments (WP-7/WP-8)** use that same local
+  store.
 - Asset and world size no longer need to fit Vercel's free bandwidth.
 
 ## Operations
@@ -86,8 +95,9 @@ Quality is **per device**, decided by the game on each player's machine:
   hardcoded config preset beats the `NITRO_PRESET` env var — env-only attempts
   still emitted the Vercel shape (proven 2026-11-02). The recipe in §2 rewrites
   the preset to `node-server` in the build image only; the repo is untouched.
-  No `DATABASE_URL` is set, so the game's embedded PGlite fallback applies —
-  no external database needed at this stage.
+  No `DATABASE_URL` is set, so the game's embedded PGlite database applies —
+  persisted to the hub's durable data folder via `FAC_DATA_DIR` (§2). No
+  external database is needed.
 - Deploy = pull `main` → build the container → restart it. A first container
   recipe was drafted and test-built on potato on 2026-11-02; the production copy
   lives on the hub with the hosting files kept outside the repo's own workflow.
@@ -186,9 +196,12 @@ checks run Node 22, but this exact recipe (install → build → serve) is prove
 green on 24, as was the builder's bench verification — treat 24 as a pinned
 decision, not an accident.
 `npm run build` also runs `db:migrate`, which **skips itself when no
-`DATABASE_URL` is set** — that is what we want: the game then uses its embedded
-PGlite fallback (in-memory runtime store; player saves are client-side save
-codes, so a container restart loses no one's save).
+`DATABASE_URL` is set** — that is what we want: the embedded PGlite database
+is the store. It persists because compose sets `FAC_DATA_DIR` to a folder on
+the hub's disk and mounts that folder into the container (see the compose
+file below): accounts, cloud saves, tournaments and friends survive container
+restarts and redeploys. Without that setting the database would live and die
+with the container — do not remove it.
 
 Compose (caps keep Chris's machine his — the server is light):
 
@@ -199,11 +212,33 @@ services:
     image: fac-ultra:latest
     container_name: fac-ultra
     restart: unless-stopped
-    environment: ["PORT=3000", "HOST=0.0.0.0"]
+    env_file: ["/root/hosting/fac-secrets.env"]
+    environment:
+      - "PORT=3000"
+      - "HOST=0.0.0.0"
+      - "FAC_DATA_DIR=/data/fac"
+      - "FAC_TEST_RESET=0"
+    volumes: ["/root/hosting/fac-data:/data"]
     network_mode: host
     mem_limit: 2g
     cpus: "2.0"
 ```
+
+The hosting settings that matter:
+
+- `FAC_DATA_DIR` + the volume: where the game's database lives on the hub's
+  disk (`/root/hosting/fac-data`). This is what makes accounts, cloud saves,
+  tournaments and friends survive restarts and redeploys.
+- `FAC_PUBLIC_URL` (carried in the secrets file): the game's public address,
+  `https://fac-ultra.tail41d4fa.ts.net` — sign-in links, invite links and
+  the Google return address are built from it.
+- `FAC_TEST_RESET=0`: WP-13's test-phase reset is OFF on this host. Left on,
+  every new build would wipe all player progress (see `docs/TEST-PHASE.md`).
+  Do not deploy a build here without this set.
+- The secrets file (`/root/hosting/fac-secrets.env`, owner-only, never in
+  the repo) also carries the mail and Google sign-in values:
+  `RESEND_API_KEY`, `FAC_EMAIL_FROM`, `GOOGLE_CLIENT_ID`,
+  `GOOGLE_CLIENT_SECRET`.
 
 Host networking is deliberate: the port only has to exist **inside the distro**
 — the Funnel node (§5) proxies from there, so no port publishing toward
@@ -271,25 +306,42 @@ dedicated Tailscale node runs **inside the hub's WSL**, next to the game:
 
 - Hub: pull `main` in the clone → rebuild → `docker compose up -d` → repeat
   step 3. A reference `deploy.sh` implementing exactly this (bundle refresh →
-  build → up → health check) travels with the hosting files.
+  build → up → health check) travels with the hosting files. Two gotchas,
+  both proven: the hub clone must be ON `main` or the pull silently does
+  nothing, and builds started from an SSH session need
+  `DOCKER_CONFIG=/root/hosting/.docker-anon` (the default Docker config
+  points at the Windows credential store, which SSH sessions cannot use).
 - Pause anytime with `docker compose stop` or `docker pause fac-ultra`;
   Chris's use of his PC always wins. Rollback = check out the previous `main`
-  commit and rebuild; there is no server-side save state to migrate.
+  commit and rebuild; the data folder is untouched by rebuilds, so accounts
+  and progress carry across. Back the data folder up before any deploy (a
+  dated copy lives in `/root/hosting/backups/`).
 - **Reboot survival:** scheduled task `FleetKit-WakeWSL-Hosting` (runs at
   Development's logon) boots the WSL distro; `docker` and `tailscaled-fac` are
   systemd-enabled, the container is `restart: unless-stopped`, and the Funnel
   config persists — the game returns unattended after a reboot.
-- **Tournament persistence (WP-7/8):** the in-memory store is correct until
-  tournaments land. Then either add a Postgres service to the compose file and
-  set `DATABASE_URL` on the game service (the game already switches backends
-  on that variable), or mount a folder volume if the tournament work adds a
-  file-storage option. Player saves are unaffected either way (client-side
-  save codes).
+- **The distro must never be left session-less (learned the hard way,
+  2026-11-02):** this WSL distro powers itself off about a minute after the
+  LAST WSL session closes — running services do not hold it open. Scheduled
+  task `FleetKit-WSL-KeepAlive` therefore holds a permanent session open
+  (`wsl.exe -d Ubuntu -u root --exec sleep infinity`, also at logon). If the
+  game ever flaps up and down minute by minute, check that task is Running
+  before suspecting the game. Deploys and other long jobs run as systemd
+  units (`systemd-run`), never as children of an SSH session — session
+  children die when the session ends.
+- **Persistence (WP-7/8/9, as built):** tournaments, accounts and cloud saves
+  run on the embedded database in the durable data folder (§2) — the
+  folder-volume route is what was chosen; no Postgres service, no
+  `DATABASE_URL`. Player saves live both in the browser (local slots, save
+  codes) and in cloud saves tied to their account.
 
 ### 7. Secrets rule
 
-No credentials in this repo, in the game container, or in FleetShare — ever.
-The FleetShare password exists only in the hub's vault handoff file
+No credential values in this repo or in FleetShare — ever. The game's own
+secrets (mail sending key, Google sign-in secret) live only in
+`/root/hosting/fac-secrets.env` on the hub — owner-only permissions, outside
+the repo, wired into the container through compose's `env_file` — and in the
+providers' own dashboards. The FleetShare password exists only in the hub's vault handoff file
 (`C:\ProgramData\FleetKit\vault-handoff\fleetshare-DESKTOP-OL64ACP.json`) and is
 read machine-side by the mount helper. The same pattern applies to any future
 node: credentials move as vault handoffs, never as chat text or shared files.
