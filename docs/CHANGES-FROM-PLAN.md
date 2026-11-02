@@ -1,12 +1,12 @@
 # What was built, and where it differs from the plan
 
-Written for Caleb. Five minutes to read. Everything below is in open pull requests, all with green checks, none merged yet.
+Written for Caleb. Five minutes to read. Everything below has now been merged into `main` (nine packages plus the menu redesign). Each part was checked and green before it merged.
 
 ## The short version
 
 The architecture documents in `docs/architecture/` were followed package by package (WP-1 to WP-9). Each pull request is one package from `08-work-packages.md`. Rules kept: one package = one PR, no heavy dependencies, Canvas 2D only, pure game rules in `src/game/`, saves with versioned fixtures, server logic through `getSql()` only.
 
-## Merge order (each PR is stacked on the one before)
+## What went in (it was built as a stack; merged together as PR #15)
 
 | Order | PR | Package | What it adds |
 |---|---|---|---|
@@ -18,9 +18,9 @@ The architecture documents in `docs/architecture/` were followed package by pack
 | 6 | #11 | WP-6 + WP-7 | Fun layer; server-verified Tournaments (PR #9 is included here) |
 | 7 | #12 | WP-8 | Lobby, live board, friends, teams, trophies |
 | 8 | #13 | WP-9 | Optional sign-in, cloud saves, family profiles |
-| 9 | next | extra | Menu redesign, graphics levels, full-screen |
+| 9 | #15 | extra | Menu redesign, graphics levels, full-screen; also fixes the self-hosted database build |
 
-Docs-only PRs #7 (self-hosting plan) and #10 (project page record) go straight to main.
+Docs-only PRs #7 (self-hosting plan) and #10 (project page record) were merged too. The earlier stacked PRs (#4 to #13) are closed because their work is in main.
 
 ## Where this differs from, or goes beyond, the plan
 
@@ -46,4 +46,4 @@ Recreational mode also fills the career collection and records. Do you want that
 
 ## How to undo any part
 
-Most additions are separate screens or settings. Each PR can be reverted on its own, from the top of the stack down.
+Most additions are separate screens or settings. The work is in one merge (PR #15), so the cleanest undo is reverting that merge; individual parts can be backed out by hand, newest first.
