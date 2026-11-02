@@ -17,6 +17,21 @@ import { audio } from "@/game/audio";
 import { clampVolume, DEFAULT_VOLUME } from "@/game/ambience";
 import { addClaim, claimsFotd, FOTD_XP_MULT, fotdFor, today } from "@/game/fotd";
 import { funModeOn, readFun } from "@/game/fun";
+import {
+  activeEvent,
+  catchLine,
+  countLanded,
+  eventModeOn,
+  eventOfMutation,
+  eventTitle,
+  mutateFish,
+  noEvents,
+  readEvents,
+  stepEvents,
+  type EventsSave,
+} from "@/game/events";
+import { IDLE_MS } from "@/game/event-data";
+import { emitEventEnded, emitEventStarted, emitMutatedCatch } from "@/game/event-hooks";
 import { adopt, chooseGift, giftReady, isPetKind, noPet, PETS, takeGift, petUnlocked, type Pet, type PetKind } from "@/game/pet";
 import { derbyEndLine, newDerby, readDerby, recordDerby, stepDerby, derbyRank, rivalById, derbyWindow, type DerbyRun, type RivalRecord } from "@/game/rivals";
 import { frameId, newPages, pageId, rollShiny } from "@/game/stickers";
@@ -193,8 +208,11 @@ import {
   GEAR,
   type GearKind,
   GIFT_PRICES,
+  FIRST_EVENT_MUTATION,
   LIGHT_PRICE,
   LINES,
+  MUTATIONS,
+  betterMutation,
   luckTotal,
   LURES,
   money,
@@ -221,7 +239,7 @@ export type Tab = "cast" | "bag" | "gear" | "lures" | "waters" | "dex" | "lodge"
 export type Phase = "idle" | "wait" | "bite" | "reel";
 export type { Mode } from "@/game/modes";
 export { MODE_KEYS } from "@/game/modes";
-export type LodgeView = "record" | "logbook" | "tank" | "derby" | "regulars" | "pet" | "crew" | "trophies" | "settings";
+export type LodgeView = "record" | "logbook" | "tank" | "derby" | "regulars" | "pet" | "crew" | "trophies" | "events" | "settings";
 
 /** WP-6: the Derby is fished against the Regulars (rivals.ts); old random-walk Derbies are converted on load. */
 export type DerbyState = DerbyRun | null;
@@ -311,6 +329,8 @@ export type Save = {
   titles: string[];
   bobberSkin: SkinId;
   tourneyHistory: History[];
+  /* WP-15 (save v10): the long-play events. The streak clock, the event running, the events seen and the mutated fish landed. */
+  events: EventsSave;
 };
 
 export type LastCatch = {
@@ -337,7 +357,7 @@ export type LastCatch = {
 
 type Toast = { id: number; text: string };
 
-const SAVE_VERSION = 9;
+const SAVE_VERSION = 10;
 const MARKS = [10, 25, 50, 100, 150, 200, 250, 300, 375];
 
 let currentMode: Mode = "expedition";
@@ -398,6 +418,9 @@ export const sim = {
   calmAcc: 0,
   autoAcc: 0,
   settleAcc: 0,
+  evAcc: 0,
+  evSave: 0,
+  lastActive: 0,
   fxAcc: 0,
   castBait: -1,
   castLair: false,
@@ -560,6 +583,7 @@ export function fresh(): Save {
     titles: [],
     bobberSkin: "plain",
     tourneyHistory: [],
+    events: noEvents(),
   };
 }
 
@@ -736,7 +760,7 @@ export function sanitize(raw: unknown): Save {
       dex[key] = {
         c: (prev?.c || 0) + c,
         w: Math.max(prev?.w || 0, num(e?.w, 0, 0, 1e6)),
-        m: Math.max(prev?.m || 0, int(e?.m, 0, 0, 5)),
+        m: betterMutation(prev?.m || 0, int(e?.m, 0, 0, MUTATIONS.length - 1)),
       };
     }
   }
@@ -753,7 +777,7 @@ export function sanitize(raw: unknown): Save {
         w: num(it.w, 1, 0, 1e6),
         i: mapI(int(it.i, 0, 0, SPECIES_PER_BIOME - 1)),
         b: mapB(int(it.b, 0, 0, BIOMES.length - 1)),
-        m: int(it.m, 0, 0, 5),
+        m: int(it.m, 0, 0, MUTATIONS.length - 1),
       });
     }
   }
@@ -891,6 +915,8 @@ export function sanitize(raw: unknown): Save {
     titles: readTitles(o.titles),
     bobberSkin: isSkinId(o.bobberSkin) ? o.bobberSkin : "plain",
     tourneyHistory: readHistory(o.tourneyHistory),
+    /* v9 → v10 (WP-15): one new field, nothing existing changed meaning. Old saves start with no streak and no events seen. */
+    events: readEvents(o.events),
   };
 }
 
@@ -962,6 +988,7 @@ export function snapshot(s: Save): Save {
     titles: s.titles,
     bobberSkin: s.bobberSkin,
     tourneyHistory: s.tourneyHistory,
+    events: s.events,
   };
 }
 
@@ -1113,6 +1140,58 @@ function survivalFightCost(realSeconds: number) {
   if (run) commitRun(advance(run, fightMinutes(realSeconds)));
 }
 
+/* ── Long-play events (WP-15, docs/architecture/11) ── */
+
+/** The player is here: a tap, a key or a cast. Resets the idle timer of the events clock. */
+export function noteActivity(now = Date.now()) {
+  sim.lastActive = now;
+}
+
+/** Advance the events clock to now. Called about once a second from frame(); the pure rules live in events.ts. */
+export function stepEventsLive(now = Date.now()) {
+  const s = useGame.getState();
+  const on = eventModeOn(modeRules());
+  /* Tournaments and Survival never run the events clock, and never touch its dice. */
+  if (!on) return;
+  const base = s.events.seed ? s.events : { ...s.events, seed: ((loose() * 4294967295) | 0) >>> 0 || 1 };
+  const night = windowFor(s) === "night";
+  const res = stepEvents(base, {
+    now,
+    on,
+    visible: typeof document === "undefined" || document.visibilityState !== "hidden",
+    active: s.screen === "game" && now - sim.lastActive <= IDLE_MS,
+    night,
+    biome: s.biome,
+  });
+  const patch: Partial<Store> = { events: res.state };
+  const toasts = [...s.toasts];
+  const kid = kidOn(s);
+  if (res.ended) {
+    pushToast(toasts, `${eventTitle(res.ended, kid)} is over.`);
+    emitEventEnded(res.ended);
+  }
+  if (res.started) {
+    pushToast(toasts, res.started.announce);
+    patch.eventBanner = { id: res.started.id, at: now };
+    audio.event(res.started.rarity);
+    emitEventStarted(res.started);
+  }
+  if (res.ended || res.started) patch.toasts = toasts.slice(-3);
+  useGame.setState(patch);
+  if (res.ended || res.started) persistSoon();
+}
+
+/** Give the fish the running event's mutation, if the dice say so. Off in Tournaments (server replay) and Survival. */
+function eventMutate(fish: Rolled): Rolled {
+  const s = useGame.getState();
+  if (!eventModeOn(modeRules())) return fish;
+  const act = activeEvent(s.events, Date.now());
+  if (!act) return fish;
+  const res = mutateFish(s.events, fish, act.def, BIOMES[fish.b].fish[fish.i]);
+  useGame.setState({ events: res.state });
+  return res.fish;
+}
+
 function persistSoon() {
   window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(persistNow, 400);
@@ -1126,6 +1205,10 @@ function bindLifecycle() {
   };
   document.addEventListener("visibilitychange", flush);
   window.addEventListener("pagehide", persistNow);
+  /* Any tap or key counts as "still here" for the events clock (it never reads what was pressed). */
+  const here = () => noteActivity();
+  window.addEventListener("pointerdown", here, { passive: true });
+  window.addEventListener("keydown", here, { passive: true });
   audio.bind();
 }
 
@@ -1252,7 +1335,7 @@ function withCatch(
   const records = o.ctx ? withRecord(s.records, key, fish.w, o.ctx, Date.now(), prev?.w || 0) : s.records;
   const dex = {
     ...s.dex,
-    [key]: { c: (prev?.c || 0) + 1, w: Math.max(prev?.w || 0, fish.w), m: Math.max(prev?.m || 0, fish.m) },
+    [key]: { c: (prev?.c || 0) + 1, w: Math.max(prev?.w || 0, fish.w), m: betterMutation(prev?.m || 0, fish.m) },
   };
   const item = {
     name: fish.boss ? `Tide ${fish.name}` : fish.name,
@@ -1304,6 +1387,13 @@ function withCatch(
   const count = dexCount(dex);
   if (discovered && MARKS.includes(count)) pushToast(toasts, `Dex ${count} of ${TOTAL_SPECIES}.`);
   if (fish.boss && !o.auto) pushToast(toasts, `${BIOMES[fish.b].name} mastered. The boss is yours.`);
+  if (fish.m >= FIRST_EVENT_MUTATION && fish.m < MUTATIONS.length) {
+    const ev = eventOfMutation(fish.m);
+    if (ev) {
+      pushToast(toasts, catchLine(fish.m, kidOn(s)));
+      emitMutatedCatch({ event: ev, mutation: fish.m, species: fish.i, biome: fish.b, value: v, boss: false });
+    }
+  }
   if (shiny) pushToast(toasts, `A shiny ${BIOMES[fish.b].fish[fish.i]}! That is a rare sparkle.`);
   if (claim) pushToast(toasts, "Fish of the Day! Double XP and a gold frame.");
   for (const b of donePages) pushToast(toasts, `${BIOMES[b].name} page complete! You earned a page sticker.`);
@@ -1343,6 +1433,7 @@ function withCatch(
     stickers,
     shiny: shinyList,
     fotdClaimed,
+    events: countLanded(s.events, fish.m),
     taught: s.taught || !o.auto,
     lastCatch,
     toasts: toasts.slice(-3),
@@ -1666,14 +1757,16 @@ function beginBite() {
   /* In an event the fish was rolled at the cast, from the seed (replay.ts); the server rolls the same one. */
   const fish = sim.troll
     ? sim.troll.roll.fish
-    : rollFish(s.biome, luck, {
-        boss: sim.castLair,
-        stage: stageIn(modeRules(), s.dex, s.biome),
-        sig: sigEffect(s.sig),
-        bait: sim.castBait,
-        match: sim.cast?.ms ?? undefined,
-        sizeMul: sizeMulOf(s.stewards, s.biome),
-      });
+    : eventMutate(
+        rollFish(s.biome, luck, {
+          boss: sim.castLair,
+          stage: stageIn(modeRules(), s.dex, s.biome),
+          sig: sigEffect(s.sig),
+          bait: sim.castBait,
+          match: sim.cast?.ms ?? undefined,
+          sizeMul: sizeMulOf(s.stewards, s.biome),
+        }),
+      );
   sim.fish = fish;
   sim.phase = "bite";
   sim.biteMax = sim.troll ? sim.troll.roll.biteMax : (1300 + RODS[s.rod].zone * 8) / 1000 + assistNow().biteBonus;
@@ -1883,6 +1976,7 @@ function succeed() {
   burst(sim.bnx, sim.bny, 18, "splash");
   burst(sim.bnx, sim.bny, 24, "spark");
   audio.land(fish.t);
+  if (fish.m >= FIRST_EVENT_MUTATION) audio.mutant();
   sim.wins += 1;
   sim.failedFights = 0;
   sim.misses = 0;
@@ -2019,12 +2113,14 @@ function autoCatch() {
   const luck = luckTotal(s, castLure);
   /* The auto-reel fishes the spot and rig you set, so knowing fish pays there too. */
   const at = castNow(s, castLure, -1, false);
-  const fish = rollFish(s.biome, luck, {
-    stage: stageIn(modeRules(), s.dex, s.biome),
-    sig: sigEffect(s.sig),
-    match: at.ms ?? undefined,
-    sizeMul: sizeMulOf(s.stewards, s.biome),
-  });
+  const fish = eventMutate(
+    rollFish(s.biome, luck, {
+      stage: stageIn(modeRules(), s.dex, s.biome),
+      sig: sigEffect(s.sig),
+      match: at.ms ?? undefined,
+      sizeMul: sizeMulOf(s.stewards, s.biome),
+    }),
+  );
   const next = withCatch({ ...s, ...spent }, fish, {
     auto: true,
     perfect: false,
@@ -2170,6 +2266,16 @@ export function frame(dt: number) {
   if (sim.introT > 0) sim.introT = Math.max(0, sim.introT - dt);
 
   /* Aquarium settlement every ~30s of play (offline time settles at hydrate). */
+  sim.evAcc += dt;
+  if (sim.evAcc >= 1) {
+    sim.evAcc = 0;
+    stepEventsLive();
+    sim.evSave += 1;
+    if (sim.evSave >= 20) {
+      sim.evSave = 0;
+      persistSoon();
+    }
+  }
   sim.settleAcc += dt;
   if (sim.settleAcc >= 30) {
     sim.settleAcc = 0;
@@ -2295,6 +2401,7 @@ export function frame(dt: number) {
 function startCast() {
   const s = useGame.getState();
   if (sim.phase !== "idle") return;
+  noteActivity();
   audio.unlock();
   if (isTournament(modeRules())) return startTourneyCast();
   /* Survival: no cast in the dark or after the run, and every cast rolls from the run's own seed. */
@@ -2549,6 +2656,8 @@ type Ui = {
   mode: Mode;
   lodgeView: LodgeView;
   welcomeBack: { gain: number; hours: number } | null;
+  /** WP-15: the "something is happening" announcement, shown for a few seconds when an event starts. */
+  eventBanner: { id: string; at: number } | null;
   /* WP-1 */
   tier: Gfx;
   /** WP-10: the named quality level in force (the tier above is what it draws with). */
@@ -2601,6 +2710,7 @@ type Store = Save &
     setLodgeView: (view: LodgeView) => void;
     switchMode: (mode: Mode) => void;
     dismissWelcome: () => void;
+    dismissEventBanner: () => void;
     dismissToast: (id: number) => void;
     notify: (text: string) => void;
     buyGear: (kind: GearKind, index: number) => void;
@@ -2694,6 +2804,7 @@ export const useGame = create<Store>((set, get) => ({
   mode: "expedition",
   lodgeView: "record",
   welcomeBack: null,
+  eventBanner: null,
   tier: "full",
   level: "ultra",
   celebration: null,
@@ -2973,6 +3084,7 @@ export const useGame = create<Store>((set, get) => ({
     syncHub("lodge", view);
   },
   dismissWelcome: () => set({ welcomeBack: null }),
+  dismissEventBanner: () => set({ eventBanner: null }),
   switchMode: (mode) => {
     if (mode === currentMode) {
       set({ screen: "game" });
@@ -3361,6 +3473,7 @@ export const useGame = create<Store>((set, get) => ({
       titles: s.titles,
       bobberSkin: s.bobberSkin,
       tourneyHistory: s.tourneyHistory,
+      events: s.events,
       tab: s.tab,
       phase: "idle",
       message: "The ledger turns. Dex and level stay.",
@@ -3585,7 +3698,9 @@ function loadSlot(mode: Mode, toGame: boolean) {
     lastCatch: null,
     pull: "",
     welcomeBack,
+    eventBanner: null,
   });
+  noteActivity();
   persistNow();
 }
 

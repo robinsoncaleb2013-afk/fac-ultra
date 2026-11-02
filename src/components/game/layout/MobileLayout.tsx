@@ -1,3 +1,4 @@
+import { EventLayer } from "@/components/game/events";
 import { useEffect, useRef, useState } from "react";
 import { mobileWaterHeight, peekCollapsed, type LayoutPlan } from "@/game/device";
 import { act, useGame } from "@/game/engine";
@@ -44,6 +45,7 @@ export function MobileLayout({ plan, height }: { plan: LayoutPlan; height: numbe
           }}
         />
         <CornerHud compact />
+        <EventLayer className="bottom-12" />
         <DragButtons className="top-1/2 -translate-y-1/2" />
         {collapsed ? null : <StageChips className="absolute top-16 left-3 z-10 pr-3" />}
         {collapsed ? null : <SpotBar className="absolute inset-x-0 bottom-1" />}

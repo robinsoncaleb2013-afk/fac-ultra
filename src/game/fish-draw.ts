@@ -1,4 +1,5 @@
-import { archetypeOf, BIOMES, SPECIES_PER_BIOME, type Arch } from "@/game/content";
+import { archetypeOf, BIOMES, FIRST_EVENT_MUTATION, SPECIES_PER_BIOME, type Arch } from "@/game/content";
+import { EVENTS, type EventDef, type MutationShape } from "@/game/event-data";
 
 export type { Arch };
 
@@ -50,6 +51,8 @@ export function traitsOf(biome: number, species: number): Traits {
   return t;
 }
 
+type EventLook = EventDef["look"];
+
 export type FishLook = {
   biome: number;
   species: number;
@@ -73,6 +76,7 @@ export function drawFish(
   look: FishLook,
 ) {
   const t = traitsOf(look.biome, look.species);
+  const evLook = look.mutation >= FIRST_EVENT_MUTATION ? EVENTS[look.mutation - FIRST_EVENT_MUTATION]?.look : undefined;
   const baseH = [78, 162, 205, 348, 36][look.rarity] ?? 78;
   let h = baseH + t.hueJ;
   let s = [34, 48, 30, 54, 66][look.rarity] ?? 34;
@@ -96,6 +100,11 @@ export function drawFish(
     h = 232;
     s = 42;
     l = 20;
+  } else if (evLook) {
+    /* An event mutation (WP-15): its own tint, plus a shape drawn around the fish (see drawEventMark) so colour is never the only clue. */
+    h = evLook.hue;
+    s = evLook.sat;
+    l = evLook.light;
   }
 
   const alpha = look.alpha ?? 1;
@@ -564,5 +573,89 @@ export function drawFish(
     ctx.stroke();
   }
 
+  if (evLook) drawEventMark(ctx, len, fat, evLook, alpha);
+
+  ctx.restore();
+}
+
+/** Trace one mutation shape of radius r around (0, 0). Each event has its own, so the mutations can be told apart without colour. */
+function shapePath(ctx: CanvasRenderingContext2D, shape: MutationShape, r: number) {
+  ctx.beginPath();
+  const poly = (pts: number[][]) => {
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x * r, y * r) : ctx.moveTo(x * r, y * r)));
+    ctx.closePath();
+  };
+  switch (shape) {
+    case "star":
+      poly(Array.from({ length: 10 }, (_, i) => [Math.sin((i * Math.PI) / 5) * (i % 2 ? 0.45 : 1), -Math.cos((i * Math.PI) / 5) * (i % 2 ? 0.45 : 1)]));
+      break;
+    case "sparkle":
+      poly([[0, -1], [0.22, -0.22], [1, 0], [0.22, 0.22], [0, 1], [-0.22, 0.22], [-1, 0], [-0.22, -0.22]]);
+      break;
+    case "shard":
+      poly([[0, -1], [0.6, 0], [0, 1], [-0.6, 0]]);
+      break;
+    case "bolt":
+      poly([[0.3, -1], [-0.55, 0.1], [-0.05, 0.1], [-0.3, 1], [0.6, -0.15], [0.1, -0.15]]);
+      break;
+    case "cross":
+      poly([[-0.3, -1], [0.3, -1], [0.3, -0.3], [1, -0.3], [1, 0.3], [0.3, 0.3], [0.3, 1], [-0.3, 1], [-0.3, 0.3], [-1, 0.3], [-1, -0.3], [-0.3, -0.3]]);
+      break;
+    case "crown":
+      poly([[-1, 0.8], [-1, -0.6], [-0.4, 0], [0, -1], [0.4, 0], [1, -0.6], [1, 0.8]]);
+      break;
+    case "flame":
+      poly([[0, -1], [0.55, -0.2], [0.7, 0.4], [0.3, 1], [-0.3, 1], [-0.7, 0.4], [-0.45, -0.1], [-0.15, 0.1]]);
+      break;
+    case "drop":
+      ctx.moveTo(0, -1);
+      ctx.quadraticCurveTo(1, 0.2, 0, 1);
+      ctx.quadraticCurveTo(-1, 0.2, 0, -1);
+      break;
+    case "ring":
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.moveTo(r * 0.45, 0);
+      ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2, true);
+      break;
+    case "eye":
+      ctx.ellipse(0, 0, r, r * 0.55, 0, 0, Math.PI * 2);
+      ctx.moveTo(r * 0.3, 0);
+      ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2, true);
+      break;
+    case "flake":
+      for (let i = 0; i < 3; i++) {
+        const a = (i * Math.PI) / 3;
+        ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        ctx.lineTo(-Math.cos(a) * r, -Math.sin(a) * r);
+      }
+      break;
+  }
+}
+
+/** A halo and four marks of the mutation's shape around the fish. */
+function drawEventMark(ctx: CanvasRenderingContext2D, len: number, fat: number, look: EventLook, alpha: number) {
+  const colour = hsl(look.hue, Math.max(60, look.sat), Math.max(58, look.light), 0.95);
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.4;
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = Math.max(1.5, len * 0.03);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, len * 0.42, len * fat * 1.15, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = colour;
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = Math.max(1.2, len * 0.025);
+  ctx.lineCap = "round";
+  const r = Math.max(2.5, len * 0.07);
+  const spots = [[-0.3, -1.25], [0.12, -1.45], [0.34, 1.3], [-0.18, 1.45]];
+  for (const [fx, fy] of spots) {
+    ctx.save();
+    ctx.translate(len * fx, len * fat * fy);
+    shapePath(ctx, look.shape, r);
+    if (look.shape === "flake") ctx.stroke();
+    else ctx.fill("evenodd");
+    ctx.restore();
+  }
   ctx.restore();
 }

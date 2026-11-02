@@ -118,7 +118,7 @@ Replace Derby's random-walk numbers (`engine.ts` derby tick) with **12 named ang
 Unlocked at level 5: choose an otter, a heron or a dog. The pet sits on the dock/boat (drawn in `paint()` as a 3-frame sprite from `fish-draw`-style procedural shapes), reacts to catches (otter claps, heron tilts, dog wags), and once per real hour "brings you something": a random lure of a family that matches the current spot's best uncaught fish (teaching the match system). Pets are cosmetic + one hint; no power.
 
 ### 6.3 Sticker dex
-The dex becomes **pages per water**: a 5×5 grid, each cell the species' silhouette in grey until caught, then the full painted portrait with a sticker-peel animation on first fill (300 ms, CSS). Mutations add a foil edge (`conic-gradient` border). Completing a page drops a **page sticker** (the boss art) and plays `audio.fanfare()`. A **Shiny** variant: a 2 % roll on any catch (not a mutation; cosmetic sparkle on the portrait and a star on the cell) so a finished page still has a chase.
+The dex becomes **pages per water**: a 5×5 grid, each cell the species' silhouette in grey until caught, then the full painted portrait with a sticker-peel animation on first fill (300 ms, CSS). Mutations add a foil edge (`conic-gradient` border; event mutations from WP-15 use a border in the mutation's own colour, see `11`). Completing a page drops a **page sticker** (the boss art) and plays `audio.fanfare()`. A **Shiny** variant: a 2 % roll on any catch (not a mutation; cosmetic sparkle on the portrait and a star on the cell) so a finished page still has a chase.
 
 ### 6.4 Daily cast
 One free "Fish of the Day" per real day: a species chosen by `seedFrom("fotd", date)` from your unlocked waters; catching it today gives double XP and a sticker-frame cosmetic. Shows on the menu card and the HUD bar.
@@ -179,3 +179,7 @@ Decision (owner, 2026-11-02): Recreational, the old Sandbox, is a super-easy, ev
 - **Survival:** Camp (eat, smoke, make things, sleep), Larder (the fish you keep; nothing sells), Waters (a map to read; you stay on your run's water), Log (best runs, every run, fish book).
 - **Tournaments:** Event (clock, standing, board, room, emotes, the bait family), Lodge (trophies, records, book), Players (friends and events). Nothing that changes the tackle.
 - **Main menu mode select** shows `MODE_SELECT_IDS`; Kid-friendly play is a switch (the old Kid card still works as an id for old links). Entering a mode loads its own save slot; leaving saves, drops any line in the water and goes back to the title with the career loaded behind it (`leaveToMenu` in the engine). Tests: `menu-levels.test.ts` (tab lists, no shop on the main menu, leave rules, collections peek) and `menu-flow.test.ts` (enter, menu, leave, continue; the saved slot is unchanged).
+
+## Events and mutations by mode (WP-15)
+
+Long-play events run in Expedition, Local Co-op and Recreational (each with its own streak and book), are friendlier in Kid Mode, and are off in Survival and Tournament. Details: `11-events-and-mutations.md` §5.

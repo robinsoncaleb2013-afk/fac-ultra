@@ -1,5 +1,7 @@
+import { CatchEventLine } from "@/components/game/events";
+import { useMutationText } from "@/components/game/use-mutation";
 import { useEffect, useRef } from "react";
-import { BIOMES, MUTATIONS, money, multOf, RARITIES, TONE } from "@/game/content";
+import { BIOMES, money, multOf, RARITIES, TONE } from "@/game/content";
 import { STEWARD_SPECIES } from "@/game/keep";
 import { recordLine } from "@/game/records";
 import { useGame } from "@/game/engine";
@@ -69,6 +71,7 @@ function Confetti({ count, color }: { count: number; color: string }) {
  */
 export function Celebration({ mobile }: { mobile?: boolean }) {
   const cel = useGame((s) => s.celebration);
+  const mut = useMutationText();
   const keep = useGame((s) => s.keepCatch);
   const release = useGame((s) => s.releaseCatch);
   const eatNow = useGame((s) => s.campEat);
@@ -157,9 +160,10 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
         <p className={cn("text-xs font-semibold tracking-wide uppercase", TONE[c.rarity])}>
           <RarityMark rarity={c.rarity} className="mr-1" />
           {RARITIES[c.rarity].name}
-          {c.mutation ? ` · ${MUTATIONS[c.mutation].name}` : ""}
+          {c.mutation ? ` · ${mut.name(c.mutation)}` : ""}
         </p>
         <h2 className="font-serif text-[32px] leading-tight">{c.name}</h2>
+        <CatchEventLine mutation={c.mutation} />
         <p className="text-sm text-muted">
           {BIOMES[c.biome].name} · {c.weight} lb
           {rules.economy ? (

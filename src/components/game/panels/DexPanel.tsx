@@ -1,3 +1,5 @@
+import { useMutationText } from "@/components/game/use-mutation";
+import { eventOfMutation } from "@/game/events";
 import { useState } from "react";
 import { ArtThumb } from "@/components/game/panels/shared";
 import {
@@ -5,7 +7,6 @@ import {
   BOSS_INDEX,
   dexCount,
   SPECIES_PER_BIOME,
-  MUTATIONS,
   rarityOf,
   TONE,
   TOTAL_SPECIES,
@@ -71,6 +72,7 @@ function Cell({
   onPick: () => void;
 }) {
   const key = `${biome}-${index}`;
+  const mut = useMutationText();
   const entry = useGame((s) => s.dex[key]);
   const shiny = useGame((s) => s.shiny.includes(key));
   const framed = useGame((s) => s.stickers.includes(frameId(key)));
@@ -78,14 +80,16 @@ function Cell({
   const boss = index === BOSS_INDEX;
   const rarity = rarityOf(index);
   const foil = !!entry && entry.m > 0;
-  const label = entry ? `${BIOMES[biome].fish[index]}${shiny ? ", shiny" : ""}${foil ? ", " + MUTATIONS[entry.m].name : ""}` : "Not found yet";
+  const evFoil = entry ? eventOfMutation(entry.m) : undefined;
+  const label = entry ? `${BIOMES[biome].fish[index]}${shiny ? ", shiny" : ""}${foil ? ", " + mut.name(entry.m) : ""}` : "Not found yet";
   return (
     <button
       type="button"
       aria-label={label}
       aria-pressed={selected}
       onClick={onPick}
-      className={cn("relative aspect-square min-h-11 rounded-xl p-[2px]", foil ? "fac-foil" : "bg-transparent")}
+      className={cn("relative aspect-square min-h-11 rounded-xl p-[2px]", foil && !evFoil ? "fac-foil" : "bg-transparent")}
+      style={evFoil ? { background: `conic-gradient(from 20deg, hsl(${evFoil.look.hue} 85% 62%), hsl(${evFoil.look.hue} 70% 30%), hsl(${evFoil.look.hue} 85% 62%))` } : undefined}
     >
       <span
         className={cn(
@@ -231,6 +235,7 @@ function Detail({
   stewards: boolean;
 }) {
   const key = `${biome}-${index}`;
+  const mut = useMutationText();
   const entry = useGame((s) => s.dex[key]);
   const shiny = useGame((s) => s.shiny.includes(key));
   const framed = useGame((s) => s.stickers.includes(frameId(key)));
@@ -249,7 +254,7 @@ function Detail({
       <div className="flex items-center gap-2 px-2 py-1">
         <span className="min-w-0 flex-1">
           <span className={cn("block truncate text-sm", TONE[boss ? 4 : rarityOf(index)])}>
-            {entry.m ? `${MUTATIONS[entry.m].name} ` : ""}
+            {entry.m ? `${mut.name(entry.m)} ` : ""}
             {BIOMES[biome].fish[index]}
             {shiny ? " ✦" : ""}
           </span>
