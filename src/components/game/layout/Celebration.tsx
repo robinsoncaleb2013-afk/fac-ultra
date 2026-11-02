@@ -7,7 +7,9 @@ import { moneyWords } from "@/game/kid";
 import { canKeep, canRelease, MODES } from "@/game/modes";
 import { SpeakButton } from "@/components/game/kid";
 import { useKidOn } from "@/components/game/use-kid";
-import { confettiFor, RARITY_COLORS } from "@/game/graphics";
+import { confettiFor } from "@/game/graphics";
+import { rarityColors } from "@/game/rarity";
+import { RarityMark } from "@/components/game/rarity-mark";
 import { FishPortrait } from "@/components/game/portrait";
 import { ArtThumb, Badge } from "@/components/game/panels/shared";
 import { Button } from "@/components/ui/button";
@@ -76,6 +78,7 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
   const stewards = useGame((s) => s.stewards);
   const motion = useGame((s) => s.motion);
   const tier = useGame((s) => s.tier);
+  const cb = useGame((s) => s.cb);
   const mult = useGame((s) => multOf(s.dex, s.rb));
   const rules = useGame((s) => MODES[s.mode]);
   const kid = useKidOn();
@@ -92,7 +95,7 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
   if (!cel) return null;
   const c = cel.catch;
   const confetti = motion ? confettiFor(tier, c.rarity) : 0;
-  const color = RARITY_COLORS[c.rarity] ?? RARITY_COLORS[0];
+  const color = rarityColors(cb)[c.rarity] ?? rarityColors(cb)[0];
   const key = `${c.biome}-${c.species}`;
   const rec = records[key];
   const newBest = c.record && rec && rec.w === c.weight ? rec : null;
@@ -138,6 +141,11 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
             NEW!
           </span>
         ) : null}
+        {c.shiny ? (
+          <span aria-hidden className={cn("absolute bottom-3 left-4 text-3xl text-brass", motion && "fac-twinkle")}>
+            ✦
+          </span>
+        ) : null}
         {c.record ? (
           <span className="absolute top-3 left-0 bg-lagoon px-3 py-1 text-xs font-bold tracking-wider text-bg uppercase">
             Personal best
@@ -147,6 +155,7 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-1 p-4">
         <p className={cn("text-xs font-semibold tracking-wide uppercase", TONE[c.rarity])}>
+          <RarityMark rarity={c.rarity} className="mr-1" />
           {RARITIES[c.rarity].name}
           {c.mutation ? ` · ${MUTATIONS[c.mutation].name}` : ""}
         </p>
@@ -166,6 +175,9 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
           {c.record ? <Badge>Record</Badge> : null}
           {c.boss ? <Badge>Boss</Badge> : null}
           {c.frenzy ? <Badge>Frenzy</Badge> : null}
+          {c.shiny ? <Badge>Shiny</Badge> : null}
+          {c.fotd ? <Badge>Fish of the Day: double XP</Badge> : null}
+          {c.page ? <Badge>Page sticker</Badge> : null}
         </div>
         {newBest ? (
           <p className="text-xs leading-snug text-lagoon">New best · {recordLine(newBest, c.biome)}</p>

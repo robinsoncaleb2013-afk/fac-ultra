@@ -123,10 +123,13 @@ export type DeviceSettings = {
   followClock: boolean;
   /** Kid Mode (WP-4): the person at this screen, so it follows them into every mode. */
   kid: boolean;
+  /** WP-6: ambience volume 0 to 100 (default 35) and the colour-blind rarity palette. */
+  volume: number;
+  cb: boolean;
 };
 
 export function deviceSubset(s: DeviceSettings): DeviceSettings {
-  return { gfx: s.gfx, sound: s.sound, motion: s.motion, flash: s.flash, followClock: s.followClock, kid: s.kid };
+  return { gfx: s.gfx, sound: s.sound, motion: s.motion, flash: s.flash, followClock: s.followClock, kid: s.kid, volume: s.volume, cb: s.cb };
 }
 
 /** Read the shared device record; unknown or hostile shapes are ignored field by field. */
@@ -138,6 +141,8 @@ export function readDeviceSettings(raw: unknown): Partial<DeviceSettings> {
   for (const k of ["sound", "motion", "flash", "followClock", "kid"] as const) {
     if (typeof o[k] === "boolean") out[k] = o[k];
   }
+  if (typeof o.cb === "boolean") out.cb = o.cb;
+  if (typeof o.volume === "number" && Number.isFinite(o.volume)) out.volume = Math.min(100, Math.max(0, Math.round(o.volume)));
   return out;
 }
 

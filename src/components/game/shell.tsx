@@ -8,6 +8,8 @@ import { useForm } from "@/components/game/layout/use-form";
 import { MainMenu } from "@/components/game/menu";
 import { Toasts, WelcomeBack } from "@/components/game/overlays";
 import { useKidAttr } from "@/components/game/use-kid";
+import { Ambience } from "@/components/game/fun";
+import { useCbAttr } from "@/components/game/fun-hooks";
 import { TripCard, TripStart } from "@/components/game/trips";
 import { SurvivalEnd, SurvivalStart } from "@/components/game/survival";
 import { TournamentLobby, TournamentTicker } from "@/components/game/tournament";
@@ -22,6 +24,7 @@ export function Game() {
   }, []);
   useKeys();
   useKidAttr();
+  useCbAttr();
 
   if (!ready) return <div className="h-dvh bg-bg" />;
   return (
@@ -36,6 +39,7 @@ export function Game() {
       ) : (
         <MobileLayout plan={plan} height={height} />
       )}
+      <Ambience />
       <TournamentTicker />
       <TournamentLobby />
       <WelcomeBack />

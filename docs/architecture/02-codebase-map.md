@@ -106,7 +106,7 @@ It is simple and already respects `motion` (reduced-motion) and `flash` settings
 | Add a store action | Add to the `Store` type and the `create<Store>` body in `engine.ts`. Call `persistSoon()` if it changes saved fields. |
 | Add a saved field | `Save` type → `fresh()` → `sanitize()` (with bounds) → `snapshot()` → bump `SAVE_VERSION` → migration note in `07`. |
 | Add a UI tab/panel | New file under `components/game/panels/` (WP-1 creates the folder), register in `Tab` and `TABS`. |
-| Add a sound | New method on `audio` in `audio.ts`, synthesized. No audio files until WP-6 (ambient loops) says so. |
+| Add a sound | New method on `audio` in `audio.ts`, synthesized. The only audio files are the five ambient loops in `public/audio/` (WP-6, `scripts/ambience-build.mjs`); keep them under 1.25 MB in all. |
 | Add a mode | `Mode` union + `MODE_KEYS` + mode rules table in `05-game-modes.md` → `modeRules()` in `engine.ts` (WP-4 creates it). |
 | Add server logic | Route handler in `src/routes/api/<name>.ts` with `createFileRoute(...).server.handlers`, SQL via `getSql()`. |
 
@@ -118,7 +118,11 @@ It is simple and already respects `motion` (reduced-motion) and `flash` settings
 - The 14 tests that need `.grok/` fail outside the sandbox; WP-0.
 - `src/lib/app-data/client.server.ts:281` empty catch block fails lint; WP-0 (one-line fix, leave the rest).
 - Relay is single-instance; WP-7.
-- Derby rivals are random-walk numbers; WP-7 replaces Derby with Tournaments and WP-6 gives rivals personality.
+- ~~Derby rivals are random-walk numbers~~ Done in WP-6: the twelve Regulars (`rivals.ts`).
 
 ## WP-7 additions
 - `src/game/{weather,scoring,schedule,replay,tourney}.ts` (pure/shared), `src/components/game/tournament.tsx` (lobby, ticker, panel, results), `src/lib/tournaments/*.server.ts` (never import from client code), `src/routes/api/{events,entry,catch,board,survival-board,rtc}.ts`, `migrations/0007_tournaments.sql`.
+
+## WP-6 additions
+- `src/game/{rivals,pet,stickers,fotd,rarity,ambience,fun}.ts` (pure), `components/game/{fun.tsx,fun-hooks.ts,rarity-mark.tsx,pet-fx.ts}`, the sticker-book `panels/DexPanel.tsx`, `public/audio/*.ogg`, `scripts/ambience-build.mjs`. Save v8. `audio.ts` gained the lazy ambience player (`audio.ambient`, `audio.duck`).
+- This branch also carries WP-7 (tournaments) merged in: `Mode` is `expedition | recreational | survival | coop | tournament`, `tabsFor(mode)` in `tabs.ts` returns the tabs for all of them, the menu has nine cards.

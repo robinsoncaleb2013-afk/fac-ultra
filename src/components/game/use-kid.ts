@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { audio } from "@/game/audio";
 import { useGame } from "@/game/engine";
 import { kidActive, SPEECH_RATE } from "@/game/kid";
 import { MODES } from "@/game/modes";
@@ -37,6 +38,9 @@ export function speak(text: string) {
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.rate = SPEECH_RATE;
+    u.onstart = () => audio.duck(true);
+    u.onend = () => audio.duck(false);
+    u.onerror = () => audio.duck(false);
     window.speechSynthesis.speak(u);
   } catch {
     /* no voice available */

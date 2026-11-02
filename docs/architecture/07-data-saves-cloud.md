@@ -23,7 +23,7 @@ Field inventory planned by this chapter (so names don't collide):
 | `records`, `released`, `stewards` | WP-3 | see `04` §6–7 |
 | `trips` | WP-4 | `Trip[]` (last 50) |
 | `survival` | WP-5 | `SurvivalRun \| null` (own save key) |
-| `pet`, `stickers`, `shiny`, `fotdClaimed`, `rivalRecord` | WP-6 | see `05` §6 |
+| `pet`, `stickers`, `shiny`, `fotdClaimed`, `rivalRecord` (+ device `volume`, `cb`) | WP-6 | save v8, see `05` §6 and §10 |
 | `trophies`, `titles`, `bobberSkin`, `tourneyHistory` | WP-8 | arrays |
 | `cloud` | WP-9 | `{ userId, lastSync, rev }` |
 

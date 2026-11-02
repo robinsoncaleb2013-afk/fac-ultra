@@ -24,6 +24,8 @@ import {
 import { downloadSave, sim, useGame } from "@/game/engine";
 import { MODES } from "@/game/modes";
 import { Logbook } from "@/components/game/trips";
+import { PetView, RegularsView } from "@/components/game/fun";
+import { useFunOn } from "@/components/game/fun-hooks";
 import { RunsLog } from "@/components/game/survival";
 import { useKidOn } from "@/components/game/use-kid";
 import { createRoom, joinRoom, leaveRoom, useCrew } from "@/game/multiplayer";
@@ -40,6 +42,7 @@ export function LodgePanel() {
   const setView = useGame((s) => s.setLodgeView);
   const trips = useGame((s) => MODES[s.mode].trips);
   const survival = useGame((s) => !!MODES[s.mode].survival);
+  const fun = useFunOn();
   const views = (survival
     ? ([
         ["record", "Record"],
@@ -52,10 +55,12 @@ export function LodgePanel() {
       ["logbook", "Logbook"],
       ["tank", "Aquarium"],
       ["derby", "Derby"],
+      ["regulars", "Regulars"],
+      ["pet", "Buddy"],
       ["crew", "Crew"],
       ["settings", "Settings"],
     ] as const
-      ).filter(([id]) => id !== "logbook" || trips));
+      ).filter(([id]) => (id !== "logbook" || trips) && ((id !== "regulars" && id !== "pet") || fun)));
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-1 overflow-x-auto">
@@ -78,6 +83,8 @@ export function LodgePanel() {
       {view === "logbook" && survival ? <RunsLog /> : null}
       {view === "tank" && !survival ? <Aquarium /> : null}
       {view === "derby" && !survival ? <DerbyView /> : null}
+      {view === "regulars" && fun ? <RegularsView /> : null}
+      {view === "pet" && fun ? <PetView /> : null}
       {view === "crew" && !survival ? <CrewView /> : null}
       {view === "settings" ? <Settings /> : null}
     </div>
@@ -563,6 +570,9 @@ function Settings() {
   const sound = useGame((s) => s.sound);
   const motion = useGame((s) => s.motion);
   const flash = useGame((s) => s.flash);
+  const volume = useGame((s) => s.volume);
+  const setVolume = useGame((s) => s.setVolume);
+  const cb = useGame((s) => s.cb);
   const assist = useGame((s) => s.assist);
   const kidSetting = useGame((s) => s.kid);
   const setKid = useGame((s) => s.setKid);
@@ -595,6 +605,29 @@ function Settings() {
       </Toggle>
       <Toggle on={flash} onClick={() => toggle("flash")}>
         Flashes
+      </Toggle>
+      <div className="rounded-2xl border border-line bg-surface p-3">
+        <label htmlFor="ambience-volume" className="flex items-center justify-between">
+          <h4 className="font-serif">Water sounds</h4>
+          <span className="text-sm text-brass">{sound ? `${volume}%` : "Sound is off"}</span>
+        </label>
+        <p className="mt-1 text-sm text-muted">
+          Quiet music of the water you are fishing: frogs, waves, wind and rain. It starts after your first tap. Turn Sound off above to
+          hush everything.
+        </p>
+        <input
+          id="ambience-volume"
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={volume}
+          onChange={(e) => setVolume(Number(e.target.value))}
+          className="mt-2 h-11 w-full accent-[var(--color-brass)]"
+        />
+      </div>
+      <Toggle on={cb} onClick={() => toggle("cb")}>
+        Colour-blind colours (rarity shapes always show)
       </Toggle>
       <div className="rounded-2xl border border-line bg-surface p-3">
         <Toggle on={kidSetting} onClick={() => setKid(!kidSetting)}>

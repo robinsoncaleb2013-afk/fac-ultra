@@ -1,3 +1,4 @@
+import { RarityMark } from "@/components/game/rarity-mark";
 import { useState } from "react";
 import {
   BIOMES,
@@ -93,7 +94,10 @@ export function BagPanel() {
                 className="size-12 shrink-0"
               />
               <span className="min-w-0 flex-1">
-                <span className={cn("block truncate", TONE[fish.t])}>{fish.name}</span>
+                <span className={cn("block truncate", TONE[fish.t])}>
+                  <RarityMark rarity={fish.t} className="mr-1" />
+                  {fish.name}
+                </span>
                 <span className="block text-xs text-muted">
                   {BIOMES[fish.b].name} · {fish.w} lb
                 </span>

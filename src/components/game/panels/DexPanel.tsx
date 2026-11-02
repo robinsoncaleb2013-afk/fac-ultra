@@ -2,10 +2,9 @@ import { useState } from "react";
 import { ArtThumb } from "@/components/game/panels/shared";
 import {
   BIOMES,
-  biomeDexCount,
-  biomeSpeciesCaught,
   BOSS_INDEX,
   dexCount,
+  SPECIES_PER_BIOME,
   MUTATIONS,
   rarityOf,
   TONE,
@@ -19,6 +18,9 @@ import { whereToFind } from "@/game/match";
 import { STEWARD_SPECIES, STEWARD_WATER, waterReleased } from "@/game/keep";
 import { recordLine } from "@/game/records";
 import { FishPortrait } from "@/components/game/portrait";
+import { RarityMark } from "@/components/game/rarity-mark";
+import { useFunOn } from "@/components/game/fun-hooks";
+import { frameId, pageFill, pageId, PAGE_CELLS } from "@/game/stickers";
 import { cn } from "@/lib/cn";
 
 /** What a species does and where to find it, in plain sentences (04 §3.6). */
@@ -56,16 +58,84 @@ function HabitCard({ biome, index }: { biome: number; index: number }) {
   );
 }
 
+/** One cell of a water's sticker page: a grey silhouette until the species is caught, then its painted sticker. */
+function Cell({
+  biome,
+  index,
+  selected,
+  onPick,
+}: {
+  biome: number;
+  index: number;
+  selected: boolean;
+  onPick: () => void;
+}) {
+  const key = `${biome}-${index}`;
+  const entry = useGame((s) => s.dex[key]);
+  const shiny = useGame((s) => s.shiny.includes(key));
+  const framed = useGame((s) => s.stickers.includes(frameId(key)));
+  const fresh = useGame((s) => s.motion && s.lastCatch?.discovered === true && `${s.lastCatch.biome}-${s.lastCatch.species}` === key);
+  const boss = index === BOSS_INDEX;
+  const rarity = rarityOf(index);
+  const foil = !!entry && entry.m > 0;
+  const label = entry ? `${BIOMES[biome].fish[index]}${shiny ? ", shiny" : ""}${foil ? ", " + MUTATIONS[entry.m].name : ""}` : "Not found yet";
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={selected}
+      onClick={onPick}
+      className={cn("relative aspect-square min-h-11 rounded-xl p-[2px]", foil ? "fac-foil" : "bg-transparent")}
+    >
+      <span
+        className={cn(
+          "relative block h-full w-full overflow-hidden rounded-[10px] border",
+          boss ? "border-brass/70" : "border-line",
+          framed && "ring-2 ring-brass",
+          selected && "outline-2 outline-offset-1 outline-lagoon",
+          entry ? "bg-surface-2" : "bg-surface",
+          fresh && "fac-peel",
+        )}
+      >
+        {entry || !boss ? (
+          <FishPortrait
+            biome={biome}
+            species={index}
+            rarity={rarity}
+            mutation={entry?.m ?? 0}
+            className={cn("h-full w-full", entry ? "" : "brightness-0 opacity-30")}
+          />
+        ) : (
+          <span className="grid h-full w-full place-items-center font-serif text-xl text-muted">?</span>
+        )}
+        {entry ? <RarityMark rarity={boss ? 4 : rarity} className="absolute top-1 left-1 size-3" /> : null}
+        {shiny ? (
+          <span aria-hidden className="fac-twinkle absolute top-0.5 right-1 text-sm text-brass">
+            ✦
+          </span>
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
 export function DexPanel() {
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<number | null>(null);
+  const [pick, setPick] = useState<string | null>(null);
   const dex = useGame((s) => s.dex);
   const pins = useGame((s) => s.pins);
   const pin = useGame((s) => s.pin);
   const mastered = useGame((s) => s.mastered);
   const stewards = useGame((s) => s.stewards);
+  const stickers = useGame((s) => s.stickers);
   const released = useGame((s) => s.released);
+  const shinyCount = useGame((s) => s.shiny.length);
+  const here = useGame((s) => s.biome);
   const n = dexCount(dex);
   const survival = useGame((s) => !!MODES[s.mode].survival);
+  const fun = useFunOn();
+  const shown = open ?? here;
+  const pages = stickers.filter((x) => x.startsWith("page-")).length;
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -75,138 +145,128 @@ export function DexPanel() {
         <p className="text-sm text-muted">
           {survival
             ? "Your own collection, just for Survival. It does not touch your career dex. Tap a fish to see where to find it."
-            : "Each species adds 1% to sale prices and 0.1 luck. Pin up to eight favorites. Catch all 24 others in a water and its boss wakes."}
+            : "Each water has a page of 25 stickers. Catch a fish to stick it in. Finish a page for a page sticker. Each species adds 1% to sale prices and 0.1 luck."}
         </p>
+        {fun ? (
+          <p className="mt-1 text-sm text-brass">
+            Page stickers {pages}/{BIOMES.length} · Shiny fish {shinyCount}
+          </p>
+        ) : null}
       </div>
       {BIOMES.map((place, biome) => {
         if (survival && !SURVIVAL_WATERS.includes(biome)) return null;
-        const caught = biomeSpeciesCaught(dex, biome);
-        const bossEntry = dex[`${biome}-${BOSS_INDEX}`];
-        const bossName = place.fish[BOSS_INDEX];
+        const isOpen = shown === biome;
+        const fill = pageFill(dex, biome);
+        const done = stickers.includes(pageId(biome));
         const isMastered = mastered.includes(biome);
         return (
-          <section
-            key={place.id}
-            className="overflow-hidden rounded-2xl border border-line bg-surface"
-          >
-            <div className="relative h-16">
+          <section key={place.id} className="overflow-hidden rounded-2xl border border-line bg-surface">
+            <button
+              type="button"
+              aria-expanded={isOpen}
+              onClick={() => {
+                setOpen(isOpen ? -1 : biome);
+                setPick(null);
+              }}
+              className="relative block h-16 min-h-11 w-full text-left"
+            >
               <ArtThumb id={place.id} className="h-full w-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-r from-bg/80 to-transparent" />
               <h4 className="absolute bottom-2 left-3 font-serif">{place.name}</h4>
-              <span className="absolute right-3 bottom-2 text-xs text-muted">
-                {biomeDexCount(dex, biome)}/25
+              <span className="absolute right-3 bottom-2 text-xs text-fg">
+                {done && !survival ? "Page sticker · " : ""}
+                {isMastered ? "Mastered · " : ""}
                 {waterReleased(released, biome) > 0
                   ? stewards.waters.includes(biome)
-                    ? " · Bigger fish"
-                    : ` · let go ${waterReleased(released, biome)}/${STEWARD_WATER}`
+                    ? "Bigger fish · "
+                    : `let go ${waterReleased(released, biome)}/${STEWARD_WATER} · `
                   : ""}
+                {fill}/25
               </span>
-            </div>
-            <ul className="flex flex-col">
-              {place.fish.map((name, index) => {
-                if (index === BOSS_INDEX) return null;
-                const key = `${biome}-${index}`;
-                const entry = dex[key];
-                const rarity = rarityOf(index);
-                const kept = pins.includes(key);
-                return (
-                  <li key={key} className="border-t border-line">
-                    <div className="flex items-center gap-2 px-2 py-1.5">
-                      {entry ? (
-                        <FishPortrait
-                          biome={biome}
-                          species={index}
-                          rarity={rarity}
-                          mutation={entry.m}
-                          className="size-10"
-                        />
-                      ) : (
-                        <span className="grid size-10 place-items-center text-muted">—</span>
-                      )}
-                      <span className="min-w-0 flex-1">
-                        {entry ? (
-                          <>
-                            <span className={cn("block truncate text-sm", TONE[rarity])}>
-                              {entry.m ? `${MUTATIONS[entry.m].name} ` : ""}
-                              {name}
-                            </span>
-                            <span className="block text-xs text-muted">
-                              {entry.w} lb · ×{entry.c}
-                              {stewards.species.includes(key) ? " · Steward" : ""}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-sm text-muted">Undiscovered</span>
-                        )}
-                      </span>
-                      {entry ? (
-                        <button
-                          type="button"
-                          aria-expanded={open === key}
-                          onClick={() => setOpen(open === key ? null : key)}
-                          className="min-h-11 rounded-full px-3 text-xs text-lagoon"
-                        >
-                          {open === key ? "Hide" : "Details"}
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        disabled={!entry}
-                        onClick={() => pin(key)}
-                        className={cn(
-                          "min-h-11 rounded-full px-3 text-xs",
-                          kept ? "bg-brass text-brass-ink" : "text-muted",
-                        )}
-                      >
-                        {kept ? "Kept" : "Keep"}
-                      </button>
-                    </div>
-                    {entry && open === key ? <HabitCard biome={biome} index={index} /> : null}
-                  </li>
-                );
-              })}
-              <li className="flex items-center gap-2 border-t border-brass/50 bg-surface-2/40 px-2 py-1.5">
-                {bossEntry ? (
-                  <FishPortrait
-                    biome={biome}
-                    species={BOSS_INDEX}
-                    rarity={4}
-                    mutation={bossEntry.m}
-                    className="size-10"
-                  />
+            </button>
+            {isOpen ? (
+              <div className="p-2">
+                <div className="grid grid-cols-5 gap-1.5">
+                  {PAGE_CELLS.map((index) => (
+                    <Cell
+                      key={index}
+                      biome={biome}
+                      index={index}
+                      selected={pick === `${biome}-${index}`}
+                      onPick={() => setPick(pick === `${biome}-${index}` ? null : `${biome}-${index}`)}
+                    />
+                  ))}
+                </div>
+                {pick && pick.startsWith(`${biome}-`) ? (
+                  <Detail biome={biome} index={Number(pick.split("-")[1])} kept={pins.includes(pick)} pin={pin} stewards={stewards.species.includes(pick)} />
                 ) : (
-                  <span className="grid size-10 place-items-center font-serif text-lg text-muted">
-                    ?
-                  </span>
+                  <p className="px-1 pt-2 text-xs text-muted">
+                    Tap a sticker to read about the fish.
+                    {done && !survival ? " This page is complete!" : ` ${SPECIES_PER_BIOME - fill} still hiding.`}
+                  </p>
                 )}
-                <span className="min-w-0 flex-1">
-                  {bossEntry ? (
-                    <>
-                      <span className="block truncate text-sm text-r4">
-                        {bossEntry.m ? `${MUTATIONS[bossEntry.m].name} ` : ""}
-                        {bossName}
-                      </span>
-                      <span className="block text-xs text-muted">
-                        Boss · {bossEntry.w} lb · ×{bossEntry.c}
-                        {isMastered ? " · Mastered" : ""}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="block truncate text-sm text-muted">
-                        ??? — the boss of {place.name}
-                      </span>
-                      <span className="block text-xs text-muted">
-                        {caught} / 24 — the water is still hiding {24 - caught} fish
-                      </span>
-                    </>
-                  )}
-                </span>
-              </li>
-            </ul>
+              </div>
+            ) : null}
           </section>
         );
       })}
+    </div>
+  );
+}
+
+function Detail({
+  biome,
+  index,
+  kept,
+  pin,
+  stewards,
+}: {
+  biome: number;
+  index: number;
+  kept: boolean;
+  pin: (key: string) => void;
+  stewards: boolean;
+}) {
+  const key = `${biome}-${index}`;
+  const entry = useGame((s) => s.dex[key]);
+  const shiny = useGame((s) => s.shiny.includes(key));
+  const framed = useGame((s) => s.stickers.includes(frameId(key)));
+  const boss = index === BOSS_INDEX;
+  if (!entry) {
+    return (
+      <p className="px-1 pt-2 text-sm text-muted">
+        {boss
+          ? `??? The boss of ${BIOMES[biome].name}. Catch the other 24 to wake it.`
+          : "Undiscovered. Catch one to stick it in the book."}
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2 rounded-xl bg-surface-2/50 py-1">
+      <div className="flex items-center gap-2 px-2 py-1">
+        <span className="min-w-0 flex-1">
+          <span className={cn("block truncate text-sm", TONE[boss ? 4 : rarityOf(index)])}>
+            {entry.m ? `${MUTATIONS[entry.m].name} ` : ""}
+            {BIOMES[biome].fish[index]}
+            {shiny ? " ✦" : ""}
+          </span>
+          <span className="block text-xs text-muted">
+            {boss ? "Boss · " : ""}
+            {entry.w} lb · ×{entry.c}
+            {stewards ? " · Steward" : ""}
+            {shiny ? " · Shiny" : ""}
+            {framed ? " · Gold frame" : ""}
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={() => pin(key)}
+          className={cn("min-h-11 rounded-full px-3 text-xs", kept ? "bg-brass text-brass-ink" : "text-muted")}
+        >
+          {kept ? "Kept" : "Keep"}
+        </button>
+      </div>
+      <HabitCard biome={biome} index={index} />
     </div>
   );
 }

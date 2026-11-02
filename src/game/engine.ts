@@ -14,6 +14,12 @@ import {
 } from "@/game/presentation";
 import { defaultSpot, resolveSpot, spotById, type Spot } from "@/game/spots";
 import { audio } from "@/game/audio";
+import { clampVolume, DEFAULT_VOLUME } from "@/game/ambience";
+import { addClaim, claimsFotd, FOTD_XP_MULT, fotdFor, today } from "@/game/fotd";
+import { funModeOn, mergeFun, readFun, type Fun } from "@/game/fun";
+import { adopt, chooseGift, giftReady, isPetKind, noPet, PETS, takeGift, petUnlocked, type Pet, type PetKind } from "@/game/pet";
+import { derbyEndLine, newDerby, readDerby, recordDerby, stepDerby, derbyRank, rivalById, derbyWindow, type DerbyRun, type RivalRecord } from "@/game/rivals";
+import { frameId, newPages, pageId, rollShiny } from "@/game/stickers";
 import {
   fightInitOf,
   MISSED,
@@ -197,13 +203,10 @@ export type Tab = "cast" | "bag" | "gear" | "lures" | "waters" | "dex" | "lodge"
 export type Phase = "idle" | "wait" | "bite" | "reel";
 export type { Mode } from "@/game/modes";
 export { MODE_KEYS } from "@/game/modes";
-export type LodgeView = "record" | "logbook" | "tank" | "derby" | "crew" | "settings";
+export type LodgeView = "record" | "logbook" | "tank" | "derby" | "regulars" | "pet" | "crew" | "settings";
 
-export type DerbyState = {
-  endsAt: number;
-  score: number;
-  rivals: { n: string; s: number }[];
-} | null;
+/** WP-6: the Derby is fished against the Regulars (rivals.ts); old random-walk Derbies are converted on load. */
+export type DerbyState = DerbyRun | null;
 
 export type RushState = {
   list: number[];
@@ -275,6 +278,15 @@ export type Save = {
   derby: DerbyState;
   rush: RushState;
   rushBest: number;
+  /* WP-6 (save v8): the fun layer. Pet, sticker book, shiny list, days the Fish of the Day was caught,
+     lifetime head-to-head against the Regulars. Plus two device settings: ambience volume and the colour-blind palette. */
+  pet: Pet;
+  stickers: string[];
+  shiny: string[];
+  fotdClaimed: string[];
+  rivalRecord: RivalRecord;
+  volume: number;
+  cb: boolean;
 };
 
 export type LastCatch = {
@@ -291,11 +303,17 @@ export type LastCatch = {
   discovered: boolean;
   /** Heavier than this species' previous best (and not the first one caught). */
   record: boolean;
+  /* WP-6 */
+  shiny: boolean;
+  /** Today's Fish of the Day, first one: double XP and a gold frame. */
+  fotd: boolean;
+  /** This catch filled the last cell of the water's page. */
+  page: boolean;
 };
 
 type Toast = { id: number; text: string };
 
-const SAVE_VERSION = 7;
+const SAVE_VERSION = 8;
 const MARKS = [10, 25, 50, 100, 150, 200, 250, 300, 375];
 
 let currentMode: Mode = "expedition";
@@ -409,6 +427,8 @@ export const sim = {
   hinted: false,
   /* WP-5: when the fish was hooked (sim.t), so a Survival fight can cost game time. -1 = not hooked. */
   hookT: -1,
+  /* WP-6: seconds left of the pet's cheer after a catch (cosmetic, never saved). */
+  petT: 0,
   /* WP-7: the tournament cast in the air (never saved). Rolled once at the cast from the event's seed. */
   troll: null as null | TourneyCast,
   tAcc: 0,
@@ -505,6 +525,13 @@ export function fresh(): Save {
     derby: null,
     rush: null,
     rushBest: 0,
+    pet: noPet(),
+    stickers: [],
+    shiny: [],
+    fotdClaimed: [],
+    rivalRecord: {},
+    volume: DEFAULT_VOLUME,
+    cb: false,
   };
 }
 
@@ -750,20 +777,8 @@ export function sanitize(raw: unknown): Save {
     ? [...new Set(o.mastered.map((n) => mapB(int(n, -1, 0, BIOMES.length - 1))).filter((n) => n >= 0))]
     : [];
   const tank = readTank(o.tank, dex);
-  let derby: DerbyState = null;
-  if (o.derby && typeof o.derby === "object") {
-    const d = o.derby as Record<string, unknown>;
-    if (Array.isArray(d.rivals)) {
-      derby = {
-        endsAt: num(d.endsAt, 0, 0, 1e16),
-        score: num(d.score, 0, 0, 1e15),
-        rivals: d.rivals.slice(0, 4).map((r) => {
-          const row = (r ?? {}) as Record<string, unknown>;
-          return { n: typeof row.n === "string" ? row.n.slice(0, 24) : "Rival", s: num(row.s, 0, 0, 1e15) };
-        }),
-      };
-    }
-  }
+  /* v7 → v8 (WP-6): a Derby saved with names and scores only becomes a Regulars Derby that keeps its scores. */
+  const derby: DerbyState = readDerby(o.derby, ub.includes(biome) ? biome : ub[0]);
   let rush: RushState = null;
   if (o.rush && typeof o.rush === "object") {
     const r = o.rush as Record<string, unknown>;
@@ -839,6 +854,10 @@ export function sanitize(raw: unknown): Save {
     derby,
     rush,
     rushBest: num(o.rushBest, 0, 0, 1e16),
+    /* v7 → v8 (WP-6): seven new fields, nothing existing changed meaning. Old saves get no pet, an empty book, 35% ambience. */
+    ...readFun(o),
+    volume: o.volume === undefined ? DEFAULT_VOLUME : clampVolume(num(o.volume, DEFAULT_VOLUME, 0, 100)),
+    cb: bool(o.cb, false),
   };
 }
 
@@ -899,6 +918,13 @@ export function snapshot(s: Save): Save {
     derby: s.derby,
     rush: s.rush,
     rushBest: s.rushBest,
+    pet: s.pet,
+    stickers: s.stickers,
+    shiny: s.shiny,
+    fotdClaimed: s.fotdClaimed,
+    rivalRecord: s.rivalRecord,
+    volume: s.volume,
+    cb: s.cb,
   };
 }
 
@@ -961,13 +987,23 @@ function readCareer(): Save | null {
 
 /** Recreational still fills the collection (05 §3): its dex and records are merged into the career slot.
     Money, level and everything else in the career are never touched. */
+function funOf(s: Save): Fun {
+  return { pet: s.pet, stickers: s.stickers, shiny: s.shiny, fotdClaimed: s.fotdClaimed, rivalRecord: s.rivalRecord };
+}
+
 function shareWithCareer(st: Save) {
   const career = readCareer();
   const base = career ?? fresh();
   const dex = mergeDex(base.dex, st.dex);
   const records = mergeRecords(base.records, st.records);
-  if (JSON.stringify(dex) === JSON.stringify(base.dex) && JSON.stringify(records) === JSON.stringify(base.records)) return;
-  localStorage.setItem(MODE_KEYS.expedition, JSON.stringify(snapshot({ ...base, dex, records })));
+  const fun = mergeFun(funOf(base), funOf(st));
+  if (
+    JSON.stringify(dex) === JSON.stringify(base.dex) &&
+    JSON.stringify(records) === JSON.stringify(base.records) &&
+    JSON.stringify(fun) === JSON.stringify(funOf(base))
+  )
+    return;
+  localStorage.setItem(MODE_KEYS.expedition, JSON.stringify(snapshot({ ...base, dex, records, ...fun })));
 }
 
 /* ── Survival (WP-5): the store side. The rules are pure and live in survival.ts. ───────────── */
@@ -1143,6 +1179,12 @@ function pushToast(list: Toast[], text: string) {
   return list.slice(-3);
 }
 
+/** The fun layer (pet, stickers, shiny, Fish of the Day, Regulars) runs in the career and Recreational. Tournaments
+    score on the server and Survival keeps its own slot, so both leave it out (05 §6). */
+function funOn() {
+  return funModeOn(modeRules());
+}
+
 function withCatch(
   s: Save & { toasts: Toast[] },
   fish: Rolled,
@@ -1190,7 +1232,18 @@ function withCatch(
     tot += gained;
     contracts = bumpBank(contracts, gained);
   }
-  let xp = s.xp + catchXp(fish.t, fish.m, fish.b, fish.boss);
+  /* WP-6: shiny, Fish of the Day and sticker pages. Cosmetic rolls use the unseeded stream, so they never move a bite. */
+  const fun = funOn();
+  const date = today();
+  const claim = fun && !o.auto && claimsFotd(fotdFor(date, s.ub), key, s.fotdClaimed, date);
+  const shiny = fun && !o.auto && rollShiny(loose);
+  const shinyList = shiny && !s.shiny.includes(key) ? [...s.shiny, key] : s.shiny;
+  let stickers = s.stickers;
+  if (claim && !stickers.includes(frameId(key))) stickers = [...stickers, frameId(key)];
+  const donePages = fun ? newPages(dex, stickers) : [];
+  if (donePages.length) stickers = [...stickers, ...donePages.map(pageId)];
+  const fotdClaimed = claim ? addClaim(s.fotdClaimed, date) : s.fotdClaimed;
+  let xp = s.xp + catchXp(fish.t, fish.m, fish.b, fish.boss) * (claim ? FOTD_XP_MULT : 1);
   let lv = s.lv;
   let gainedLv = 0;
   while (xp >= xpNeed(lv)) {
@@ -1208,6 +1261,9 @@ function withCatch(
   const count = dexCount(dex);
   if (discovered && MARKS.includes(count)) pushToast(toasts, `Dex ${count} of ${TOTAL_SPECIES}.`);
   if (fish.boss && !o.auto) pushToast(toasts, `${BIOMES[fish.b].name} mastered. The boss is yours.`);
+  if (shiny) pushToast(toasts, `A shiny ${BIOMES[fish.b].fish[fish.i]}! That is a rare sparkle.`);
+  if (claim) pushToast(toasts, "Fish of the Day! Double XP and a gold frame.");
+  for (const b of donePages) pushToast(toasts, `${BIOMES[b].name} page complete! You earned a page sticker.`);
   const lastCatch: LastCatch = {
     name: item.name,
     rarity: fish.t,
@@ -1221,6 +1277,9 @@ function withCatch(
     frenzy: o.frenzy && !o.auto,
     discovered,
     record: !discovered && isBest,
+    shiny,
+    fotd: claim,
+    page: donePages.length > 0,
   };
   return {
     dex,
@@ -1238,11 +1297,17 @@ function withCatch(
     perfects: s.perfects + (o.perfect && !o.auto ? 1 : 0),
     mastered,
     derby,
+    stickers,
+    shiny: shinyList,
+    fotdClaimed,
     taught: s.taught || !o.auto,
     lastCatch,
     toasts: toasts.slice(-3),
   };
 }
+
+/** The catch bookkeeping (dex, XP, stickers, shiny, Fish of the Day), exported so tests can drive it without a fight. */
+export { withCatch as applyCatch };
 
 /** What the cast looked like, for the record book. */
 function castContext(): CatchContext | undefined {
@@ -1779,7 +1844,8 @@ function succeed() {
   sim.misses = 0;
   buzz(12);
   const lc = next.lastCatch;
-  if (lc && (fish.t >= 3 || lc.discovered || lc.boss)) audio.fanfare();
+  if (lc && (fish.t >= 3 || lc.discovered || lc.boss || lc.page || lc.shiny || lc.fotd)) audio.fanfare();
+  if (s.pet.kind && funOn()) sim.petT = 1.4;
   useGame.setState({
     ...next,
     ...(sv ? { inv: s.inv, toasts: next.lastCatch?.discovered ? pushToast([...s.toasts], `New species. ${fish.name}.`) : s.toasts } : {}),
@@ -2071,47 +2137,39 @@ export function frame(dt: number) {
     }
   }
 
-  /* Derby: rivals land fish over time; expiry pays the purse. */
+  /* Derby: the Regulars cast over time (seeded, real fishing model); expiry pays the purse and files the head-to-head. */
   if (s.derby) {
     const now = Date.now();
     if (now >= s.derby.endsAt) {
-      const rank = 1 + s.derby.rivals.filter((r) => r.s > s.derby!.score).length;
+      const done = stepDerby(s.derby, s.derby.endsAt);
+      const rank = derbyRank(done.score, done.rivals);
       const won = rank === 1;
       const reward = won ? 400 + 60 * s.lv : 0;
+      const fun = funOn();
       useGame.setState((st) => ({
         derby: null,
         derbiesWon: st.derbiesWon + (won ? 1 : 0),
         c: st.c + reward,
         tot: st.tot + reward,
+        rivalRecord: fun ? recordDerby(st.rivalRecord, done.score, done.rivals) : st.rivalRecord,
         toasts: pushToast(
-          [...st.toasts],
-          won ? `Derby won! ${money(reward)} purse.` : `Derby over — you placed #${rank}.`,
+          pushToast([...st.toasts], won ? `Derby won! ${money(reward)} purse.` : `Derby over. You placed #${rank}.`),
+          derbyEndLine(done.score, done.rivals),
         ),
       }));
+      persistSoon();
     } else {
       sim.fxAcc += dt;
       if (sim.fxAcc >= 1) {
         sim.fxAcc = 0;
-        const pace = 14 + s.lv * 5 + s.biome * 9;
-        useGame.setState((st) =>
-          st.derby
-            ? {
-                derby: {
-                  ...st.derby,
-                  rivals: st.derby.rivals.map((r) => ({
-                    ...r,
-                    s: r.s + Math.round(loose() * pace * (0.4 + loose())),
-                  })),
-                },
-              }
-            : {},
-        );
+        useGame.setState((st) => (st.derby ? { derby: stepDerby(st.derby, Date.now()) } : {}));
       }
     }
   }
   if (s.flash && s.motion && s.weather === 2 && loose() < dt * 0.22) sim.flashA = 0.5;
 
   if (sim.frenzyLeft > 0) sim.frenzyLeft = Math.max(0, sim.frenzyLeft - dt);
+  if (sim.petT > 0) sim.petT = Math.max(0, sim.petT - dt);
   const shown = Math.ceil(sim.frenzyLeft);
   if (shown !== sim.shownFrenzy) {
     sim.shownFrenzy = shown;
@@ -2492,7 +2550,13 @@ type Store = Save &
     pin: (key: string) => void;
     rebirth: () => void;
     wipe: () => void;
-    toggleSetting: (key: "sound" | "motion" | "flash" | "assist" | "followClock") => void;
+    toggleSetting: (key: "sound" | "motion" | "flash" | "assist" | "followClock" | "cb") => void;
+    /** WP-6: ambience volume, 0 to 100. */
+    setVolume: (v: number) => void;
+    /** WP-6: pick (or change) the pet. Opens at level 5. */
+    choosePet: (kind: PetKind) => void;
+    /** WP-6: take the lure the pet brought (once an hour). */
+    claimGift: () => void;
     /** Kid Mode on or off (a device setting, shared by every mode that allows it). */
     setKid: (on: boolean) => void;
     /** First-launch answer to "Who's fishing today?". */
@@ -2634,6 +2698,29 @@ export const useGame = create<Store>((set, get) => ({
   setKid: (on) => {
     set({ kid: on });
     persistSoon();
+  },
+  setVolume: (v) => {
+    set({ volume: clampVolume(v) });
+    persistSoon();
+  },
+  choosePet: (kind) => {
+    const s = get();
+    if (!funOn() || !isPetKind(kind) || !petUnlocked(s.lv)) return;
+    set({
+      pet: adopt(s.pet, kind, Date.now()),
+      toasts: pushToast([...s.toasts], `${PETS[kind].label} is your fishing buddy now.`),
+    });
+    persistNow();
+  },
+  claimGift: () => {
+    const s = get();
+    const now = Date.now();
+    if (!funOn() || !s.pet.kind || !giftReady(s.pet, now)) return;
+    const g = chooseGift({ biome: s.biome, spotId: s.lastSpot[s.biome], dex: s.dex, gifts: s.pet.gifts, kind: s.pet.kind });
+    const box = { ...s.box, [String(g.lure)]: Math.min(99999, (s.box[String(g.lure)] || 0) + g.qty) };
+    audio.coin();
+    set({ box, pet: takeGift(s.pet, now), message: g.say, detail: "", toasts: pushToast([...s.toasts], `${PETS[s.pet.kind].label} brought you ${g.qty} lures.`) });
+    persistNow();
   },
   answerWho: (who) => {
     try {
@@ -2940,13 +3027,21 @@ export const useGame = create<Store>((set, get) => ({
   startDerby: () => {
     const s = get();
     if (s.derby) return;
-    const names = ["Maren", "Old Cobb", "Pike Queen", "Juno", "The Professor", "Silent Sam"];
-    const rivals = [...names].sort(() => loose() - 0.5).slice(0, 3).map((n) => ({ n, s: 0 }));
+    const now = new Date();
+    const derby = newDerby(now.getTime(), {
+      seed: (loose() * 4294967296) >>> 0,
+      biome: s.biome,
+      luck: luckTotal(s, s.lure),
+      stage: stageOf(s.dex, s.biome),
+      weather: s.weather,
+      window: derbyWindow(now.getHours() + now.getMinutes() / 60, s.weather),
+    });
+    const names = derby.rivals.map((r) => rivalById(r.id)?.name).filter(Boolean).join(", ");
     audio.frenzy();
     set({
-      derby: { endsAt: Date.now() + 10 * 60_000, score: 0, rivals },
+      derby,
       tab: "cast",
-      toasts: pushToast([...s.toasts], "Derby started — most value in 10 minutes wins."),
+      toasts: pushToast([...s.toasts], `Derby started with ${names}. Most catch value in 10 minutes wins.`),
     });
     persistSoon();
   },
@@ -3109,6 +3204,13 @@ export const useGame = create<Store>((set, get) => ({
       sig: s.sigBox.includes(s.sig) ? s.sig : -1,
       derbiesWon: s.derbiesWon,
       rushBest: s.rushBest,
+      pet: s.pet,
+      stickers: s.stickers,
+      shiny: s.shiny,
+      fotdClaimed: s.fotdClaimed,
+      rivalRecord: s.rivalRecord,
+      volume: s.volume,
+      cb: s.cb,
       tab: s.tab,
       phase: "idle",
       message: "The ledger turns. Dex and level stay.",
@@ -3139,6 +3241,8 @@ export const useGame = create<Store>((set, get) => ({
       assist: s.assist,
       followClock: s.followClock,
       kid: s.kid,
+      volume: s.volume,
+      cb: s.cb,
       drag: s.drag,
       hydrated: true,
       tab,
@@ -3275,6 +3379,7 @@ function loadSlot(mode: Mode, toGame: boolean) {
     if (career) {
       save.dex = mergeDex(save.dex, career.dex);
       save.records = mergeRecords(save.records, career.records);
+      Object.assign(save, mergeFun(funOf(save), funOf(career)));
     }
   }
   /* A mode with no contracts has none (a save is never trusted to say so). */

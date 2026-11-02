@@ -21,6 +21,10 @@ import { MODES } from "@/game/modes";
 import { TripBar } from "@/components/game/trips";
 import { SurvivalCastCard } from "@/components/game/survival";
 import { TournamentPanel } from "@/components/game/tournament";
+import { FotdCard } from "@/components/game/fun";
+import { useFunOn } from "@/components/game/fun-hooks";
+import { RarityMark } from "@/components/game/rarity-mark";
+import { rivalById } from "@/game/rivals";
 import { DEFAULT_RIG, FAMILY_INFO, familyOf, rigLabel } from "@/game/presentation";
 import { resolveSpot } from "@/game/spots";
 import { FishPortrait } from "@/components/game/portrait";
@@ -159,10 +163,12 @@ function CastPanelCareer() {
   const stage = useGame((s) => stageOf(s.dex, s.biome));
   const derby = useGame((s) => s.derby);
   const survival = useGame((s) => !!MODES[s.mode].survival);
+  const fun = useFunOn();
 
   return (
     <div className="flex flex-col gap-3">
       {survival ? <SurvivalCastCard /> : null}
+      {fun ? <FotdCard /> : null}
       <div className={cn("grid grid-cols-3 gap-2", survival && "hidden")}>
         <Stat k="Luck" v={String(luck)} />
         <Stat k="Streak" v={String(streak)} />
@@ -185,6 +191,7 @@ function CastPanelCareer() {
           </div>
           <div className="flex flex-col gap-1 p-3">
             <p className={cn("text-xs font-semibold tracking-wide uppercase", TONE[last.rarity])}>
+              <RarityMark rarity={last.rarity} className="mr-1" />
               {RARITIES[last.rarity].name}
               {last.mutation ? ` · ${MUTATIONS[last.mutation].name}` : ""}
             </p>
@@ -197,6 +204,8 @@ function CastPanelCareer() {
               {last.perfect ? <Badge>Perfect hook</Badge> : null}
               {last.boss ? <Badge>Boss</Badge> : null}
               {last.frenzy ? <Badge>Frenzy</Badge> : null}
+              {last.shiny ? <Badge>Shiny</Badge> : null}
+              {last.fotd ? <Badge>Fish of the Day</Badge> : null}
             </div>
           </div>
         </article>
@@ -279,9 +288,13 @@ export function DerbyBanner() {
   const left = Math.max(0, Math.ceil((derby.endsAt - Date.now()) / 1000));
   const mins = Math.floor(left / 60);
   const secs = String(left % 60).padStart(2, "0");
-  const standings = [...derby.rivals.map((r) => ({ n: r.n, s: r.s })), { n: "You", s: Math.floor(derby.score) }].sort(
-    (a, b) => b.s - a.s,
-  );
+  const standings = [
+    ...derby.rivals.map((r) => {
+      const rv = rivalById(r.id);
+      return { n: rv ? `${rv.emoji} ${rv.name}` : "Rival", s: r.s };
+    }),
+    { n: "You", s: Math.floor(derby.score) },
+  ].sort((a, b) => b.s - a.s);
   return (
     <section className="rounded-2xl border border-brass bg-surface p-3">
       <div className="flex items-center justify-between">
@@ -292,7 +305,7 @@ export function DerbyBanner() {
       </div>
       <ul className="mt-1 text-sm">
         {standings.map((row) => (
-          <li key={row.n} className="flex justify-between border-b border-line py-0.5 last:border-0">
+          <li key={row.n} className="flex justify-between gap-3 border-b border-line py-0.5 last:border-0">
             <span className={row.n === "You" ? "text-brass" : "text-muted"}>{row.n}</span>
             <span>{money(row.s)}</span>
           </li>

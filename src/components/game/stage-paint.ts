@@ -15,6 +15,9 @@ import { nearestSpot, resolveSpot, spotRingPx, spotsOf, type Spot } from "@/game
 import { waterLineOf } from "@/game/water";
 import { drawFightRing, ringRadius } from "@/components/game/fight-ring";
 import { drawCampfire } from "@/components/game/survival-fx";
+import { drawPet } from "@/components/game/pet-fx";
+import { funModeOn } from "@/game/fun";
+import { giftReady } from "@/game/pet";
 import { MODES } from "@/game/modes";
 import {
   beginBuffer,
@@ -366,6 +369,11 @@ export function paint(canvas: HTMLCanvasElement, view: View) {
   /* Survival: the campfire glows in the corner while it burns. */
   if (s.survival && s.survival.camp.fire > 0 && MODES[s.mode].survival) {
     drawCampfire(ctx, w, h, s.survival.camp.fire, night, motion);
+  }
+
+  /* The pet sits at the water's edge (05 §6.2). Not in the menu preview, Survival or Tournaments. */
+  if (!menu && s.pet.kind && funModeOn(MODES[s.mode])) {
+    drawPet(ctx, w, h, s.pet.kind, sim.petT, sim.t, motion, giftReady(s.pet, Date.now()));
   }
 
   /* Plankton: full tier only. */

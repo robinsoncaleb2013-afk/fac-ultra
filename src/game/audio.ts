@@ -1,3 +1,4 @@
+import { AMBIENCE_GROUPS, CROSSFADE_S, DUCK, SILENT, type AmbienceTarget } from "./ambience.ts";
 import { loose } from "./rng.ts";
 
 let ctx: AudioContext | null = null;
@@ -21,7 +22,23 @@ function ac() {
 export const audio = {
   unlock() {
     const c = ac();
-    if (c.state === "suspended") void c.resume();
+    unlocked = true;
+    if (c.state === "suspended") void c.resume().then(applyAmbience, () => {});
+    else applyAmbience();
+  },
+  /** Ask for this ambience (WP-6). Nothing is fetched or played until the first interaction has unlocked audio. */
+  ambient(t: AmbienceTarget) {
+    want = t;
+    applyAmbience();
+  },
+  /** Kid Mode is reading a message aloud: the ambience steps back so the voice is clear. */
+  duck(on: boolean) {
+    ducked = on;
+    if (ambOut && ctx) ambOut.gain.setTargetAtTime(on ? DUCK : 1, ctx.currentTime, 0.2);
+  },
+  /** Which loop is playing and how loud, for tests and the Settings page. */
+  ambientInfo() {
+    return { group: voice?.group ?? null, loaded: [...buffers.keys()], gain: want.gain, unlocked };
   },
   setEnabled(v: boolean) {
     enabled = v;
@@ -144,5 +161,135 @@ function noise(dur: number, peak: number, freq: number) {
     src.disconnect();
     filter.disconnect();
     g.disconnect();
+  };
+}
+
+/* ── Ambience (WP-6): one lazy loop per group of waters, plus synthesized rain and wind ───────── */
+
+let unlocked = false;
+let ducked = false;
+let want: AmbienceTarget = SILENT;
+let ambOut: GainNode | null = null;
+let voice: { group: number; src: AudioBufferSourceNode; gain: GainNode } | null = null;
+const buffers = new Map<number, AudioBuffer>();
+const loading = new Map<number, Promise<AudioBuffer | null>>();
+const failed = new Map<number, number>();
+let rainGain: GainNode | null = null;
+let windGain: GainNode | null = null;
+
+function loadLoop(group: number): Promise<AudioBuffer | null> {
+  const have = buffers.get(group);
+  if (have) return Promise.resolve(have);
+  const busy = loading.get(group);
+  if (busy) return busy;
+  const lastFail = failed.get(group);
+  if (lastFail && Date.now() - lastFail < 30_000) return Promise.resolve(null);
+  const c = ctx;
+  if (!c) return Promise.resolve(null);
+  const p = fetch(AMBIENCE_GROUPS[group].file)
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+    .then((bytes) => c.decodeAudioData(bytes))
+    .then((buf) => {
+      buffers.set(group, buf);
+      return buf;
+    })
+    .catch(() => {
+      failed.set(group, Date.now());
+      return null;
+    })
+    .finally(() => loading.delete(group));
+  loading.set(group, p);
+  return p;
+}
+
+/** A 3-second loop of white noise for the synthesized weather layers. */
+function noiseSource(c: AudioContext, freq: number, q: number, type: BiquadFilterType): GainNode {
+  const n = Math.floor(c.sampleRate * 3);
+  const buffer = c.createBuffer(1, n, c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < n; i++) data[i] = loose() * 2 - 1;
+  /* Fade the ends into each other so the loop has no click. */
+  const f = Math.floor(c.sampleRate * 0.05);
+  for (let i = 0; i < f; i++) {
+    const k = i / f;
+    data[i] = data[i] * k + data[n - f + i] * (1 - k);
+  }
+  const src = c.createBufferSource();
+  src.buffer = buffer;
+  src.loop = true;
+  const filter = c.createBiquadFilter();
+  filter.type = type;
+  filter.frequency.value = freq;
+  filter.Q.value = q;
+  const g = c.createGain();
+  g.gain.value = 0;
+  src.connect(filter);
+  filter.connect(g);
+  src.start();
+  return g;
+}
+
+function applyAmbience() {
+  const c = ctx;
+  if (!c || !unlocked || c.state !== "running") return;
+  const t = want;
+  const now = c.currentTime;
+  if (!ambOut) {
+    ambOut = c.createGain();
+    ambOut.gain.value = ducked ? DUCK : 1;
+    ambOut.connect(c.destination);
+  }
+  /* Weather from the synth: made the first time it is wanted, then only its level moves. */
+  if ((t.rain > 0 || t.wind > 0) && !rainGain) {
+    rainGain = noiseSource(c, 3200, 0.6, "bandpass");
+    windGain = noiseSource(c, 380, 0.9, "lowpass");
+    rainGain.connect(ambOut);
+    windGain.connect(ambOut);
+  }
+  rainGain?.gain.setTargetAtTime(t.rain * 0.5, now, 0.6);
+  windGain?.gain.setTargetAtTime(t.wind * 0.9, now, 0.8);
+  if (t.group === null || t.gain <= 0) {
+    if (voice) fadeOutVoice(c, 0.6);
+    return;
+  }
+  const group = t.group;
+  if (voice && voice.group === group) {
+    voice.gain.gain.setTargetAtTime(t.gain, now, 0.15);
+    return;
+  }
+  /* A new loop: fetch it (first time only), then crossfade from the old one. */
+  void loadLoop(group).then((buf) => {
+    const cc = ctx;
+    if (!buf || !cc || !ambOut || cc.state !== "running") return;
+    /* The player may have moved on while it loaded. */
+    if (want.group !== group || want.gain <= 0) return;
+    if (voice && voice.group === group) return;
+    const at = cc.currentTime;
+    const src = cc.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const gain = cc.createGain();
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.linearRampToValueAtTime(want.gain, at + CROSSFADE_S);
+    src.connect(gain);
+    gain.connect(ambOut);
+    src.start();
+    if (voice) fadeOutVoice(cc, CROSSFADE_S);
+    voice = { group, src, gain };
+  });
+}
+
+function fadeOutVoice(c: AudioContext, secs: number) {
+  const old = voice;
+  if (!old) return;
+  voice = null;
+  const at = c.currentTime;
+  old.gain.gain.cancelScheduledValues(at);
+  old.gain.gain.setValueAtTime(old.gain.gain.value, at);
+  old.gain.gain.linearRampToValueAtTime(0.0001, at + secs);
+  old.src.stop(at + secs + 0.05);
+  old.src.onended = () => {
+    old.src.disconnect();
+    old.gain.disconnect();
   };
 }

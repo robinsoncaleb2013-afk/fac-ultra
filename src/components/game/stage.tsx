@@ -8,6 +8,7 @@ import { WINDOW_INFO } from "@/game/presentation";
 import { nearestSpot } from "@/game/spots";
 import { FpsMeter, governorStep, shouldSkipFrame, TIERS } from "@/game/graphics";
 import { paint } from "@/components/game/stage-paint";
+import { FotdLine, GiftChip } from "@/components/game/fun";
 import { cn } from "@/lib/cn";
 
 type StageProps = {
@@ -184,7 +185,17 @@ export function StageChips({ className, style }: { className?: string; style?: C
       </Chip>
       {inCreel ? <Chip>{creelLine(inCreel.length, inCreel.reduce((n, f) => n + f.w, 0))}</Chip> : null}
       {frenzy > 0 ? <Chip brass>Frenzy {Math.ceil(frenzy)}s</Chip> : null}
+      <FotdChip />
+      <GiftChip />
     </div>
+  );
+}
+
+function FotdChip() {
+  return (
+    <span className="rounded-full border border-line bg-bg/70 px-2.5 py-1 text-xs text-fg backdrop-blur-sm empty:hidden">
+      <FotdLine />
+    </span>
   );
 }
 

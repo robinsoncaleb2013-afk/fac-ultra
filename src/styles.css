@@ -131,3 +131,54 @@
   font-size: var(--text-2xl);
   line-height: var(--text-2xl--line-height);
 }
+
+/* WP-6 colour-blind palette (05 §6.6). The attribute is set on <html> by useCbAttr(); r1 to r4 swap for hues that stay apart for deuteranopia. */
+html[data-cb] {
+  --color-r1: #2a9d8f;
+  --color-r2: #4a7bd0;
+  --color-r3: #d08a2e;
+  --color-r4: #e8c547;
+}
+
+/* Sticker dex (05 §6.3): the sticker-peel on a cell's first fill (300 ms), a foil edge for mutations, a sparkle for shiny. */
+@keyframes fac-peel {
+  0% {
+    transform: perspective(300px) rotateX(55deg) scale(0.7);
+    opacity: 0;
+    filter: brightness(1.8);
+  }
+  70% {
+    transform: perspective(300px) rotateX(-8deg) scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+    filter: none;
+  }
+}
+.fac-peel {
+  animation: fac-peel 300ms ease-out both;
+}
+.fac-foil {
+  background: conic-gradient(from 20deg, #ffd36e, #ff8fb3, #8fd3ff, #8dffb7, #ffd36e);
+}
+@keyframes fac-twinkle {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15) rotate(25deg);
+  }
+}
+.fac-twinkle {
+  animation: fac-twinkle 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fac-peel,
+  .fac-twinkle {
+    animation: none;
+  }
+}

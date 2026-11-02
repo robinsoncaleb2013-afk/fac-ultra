@@ -6,6 +6,7 @@ import { useGame } from "@/game/engine";
 import { MENU_CARDS, orderCards, type MenuCard } from "@/game/modes";
 import { Button } from "@/components/ui/button";
 import { Stage } from "@/components/game/stage";
+import { FotdLine } from "@/components/game/fun";
 import { cn } from "@/lib/cn";
 
 type G = ReturnType<typeof useGame.getState>;
@@ -152,6 +153,9 @@ export function MainMenu({ plan }: { plan: LayoutPlan }) {
             </p>
             <p className="text-xs text-fg/60">{BIOMES[shown].name} · swipe to look at other waters</p>
             <div className="mt-2">{kidChip}</div>
+            <p className="mt-2 text-xs text-fg/80">
+              <FotdLine />
+            </p>
           </div>
           <div className="mt-auto flex flex-col gap-2 pt-40">{cards.map(card)}</div>
           <p className="px-2 pt-3 text-center text-xs text-muted">Progress saves in this browser, one ledger per mode.</p>
@@ -163,6 +167,9 @@ export function MainMenu({ plan }: { plan: LayoutPlan }) {
               <h1 className="font-serif text-5xl leading-none">FAC Ultra</h1>
               <p className="mt-2 text-sm text-fg/80">
                 {rankName(lv)} · Lv {lv} · {dex}/{TOTAL_SPECIES} species · Fifteen waters, fifteen bosses
+              </p>
+              <p className="mt-1 text-sm text-fg/80">
+                <FotdLine />
               </p>
             </div>
             {kidChip}

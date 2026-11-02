@@ -150,7 +150,7 @@ test("a v3 save walks all the way to the current version", () => {
 
 test("fresh saves start with nothing remembered", () => {
   const f = fresh();
-  assert.equal(f.version, 7);
+  assert.equal(f.version, 8);
   assert.deepEqual(f.lastSpot, {});
   assert.deepEqual(f.rig, {});
 });
@@ -223,7 +223,7 @@ test("a v5 save gains empty WP-3 fields, keeps its progress and its spots and ri
   assert.equal(raw.version, 5);
   for (const k of ["records", "released", "stewards", "coached", "drag"]) assert.equal(k in raw, false, k);
   const s = sanitize(raw);
-  assert.equal(s.version, 7);
+  assert.equal(s.version, 8);
   assert.deepEqual(s.records, {});
   assert.deepEqual(s.released, {});
   assert.deepEqual(s.stewards, { species: [], waters: [] });
@@ -241,10 +241,10 @@ test("a v5 save gains empty WP-3 fields, keeps its progress and its spots and ri
   }
 });
 
-test("a v4 save walks all the way to v7 with every new field empty", () => {
+test("a v4 save walks all the way to v8 with every new field empty", () => {
   const raw = JSON.parse(readFileSync(join(dir, "save-v4.json"), "utf8")) as Record<string, unknown>;
   const s = sanitize(raw);
-  assert.equal(s.version, 7);
+  assert.equal(s.version, 8);
   assert.equal(s.kid, false);
   assert.deepEqual(s.trips, []);
   assert.equal(s.trip, null);
@@ -330,7 +330,7 @@ test("a v6 save gains Kid Mode off and an empty logbook, and keeps everything it
   assert.equal(raw.version, 6);
   for (const k of ["kid", "trips", "trip"]) assert.equal(k in raw, false, k);
   const s = sanitize(raw);
-  assert.equal(s.version, 7);
+  assert.equal(s.version, 8);
   assert.equal(s.kid, false);
   assert.deepEqual(s.trips, []);
   assert.equal(s.trip, null);
@@ -345,10 +345,10 @@ test("a v6 save gains Kid Mode off and an empty logbook, and keeps everything it
   }
 });
 
-test("a v3, v4 and v5 save all reach v7 with the WP-4 fields at their defaults", () => {
+test("a v3, v4 and v5 save all reach v8 with the WP-4 fields at their defaults", () => {
   for (const f of ["save-v3.json", "save-v4.json", "save-v5.json"]) {
     const s = sanitize(JSON.parse(readFileSync(join(dir, f), "utf8")));
-    assert.equal(s.version, 7, f);
+    assert.equal(s.version, 8, f);
     assert.equal(s.kid, false, f);
     assert.deepEqual(s.trips, [], f);
     assert.equal(s.trip, null, f);
@@ -365,7 +365,7 @@ test("an old Sandbox-shaped save (nothing to sell, everything unlocked) loads as
   old.dex = { "0-4": { c: 2, w: 3.1, m: 0 } };
   old.inv = [{ name: "Perch", t: 0, v: 4, w: 1.2, i: 4, b: 0, m: 0 }];
   const s = sanitize(old);
-  assert.equal(s.version, 7);
+  assert.equal(s.version, 8);
   assert.equal(s.ub.length, BIOMES.length, "every water is still unlocked");
   assert.deepEqual(s.dex, { "0-4": { c: 2, w: 3.1, m: 0 } });
   assert.equal(s.inv.length, 1);
@@ -406,4 +406,88 @@ test("hostile WP-4 values are cleaned: junk trips, a closed trip pretending to b
     assert.equal(t.trip, null);
   }
   assert.equal(sanitize({ ...fresh(), kid: 1 }).kid, true);
+});
+
+/* ── v7 → v8 (WP-6): pet, stickers, shiny, fotdClaimed, rivalRecord, volume, cb ─────────────────── */
+
+import { DEFAULT_VOLUME } from "./ambience.ts";
+import { frameId, pageId } from "./stickers.ts";
+
+const v7 = () => JSON.parse(readFileSync(join(dir, "save-v7.json"), "utf8")) as Record<string, unknown>;
+
+test("a v7 save (a real session, Derby running) loads as v8 with an empty fun layer and keeps its progress", () => {
+  const raw = v7();
+  assert.equal(raw.version, 7);
+  assert.equal("pet" in raw, false);
+  const s = sanitize(raw);
+  assert.equal(s.version, 8);
+  assert.equal(s.c, raw.c);
+  assert.equal(s.caught, raw.caught);
+  assert.equal(s.lv, raw.lv);
+  assert.equal(dexCount(s.dex), Object.keys(raw.dex as object).length);
+  assert.deepEqual(s.pet, { kind: null, next: 0, gifts: 0 });
+  assert.deepEqual(s.stickers, []);
+  assert.deepEqual(s.shiny, []);
+  assert.deepEqual(s.fotdClaimed, []);
+  assert.deepEqual(s.rivalRecord, {});
+  assert.equal(s.volume, DEFAULT_VOLUME);
+  assert.equal(s.cb, false);
+});
+
+test("the v7 Derby that was running becomes a Regulars Derby with the same three anglers", () => {
+  const raw = v7();
+  const s = sanitize(raw);
+  assert.ok(s.derby, "the Derby survived");
+  assert.deepEqual(
+    s.derby!.rivals.map((r) => r.id),
+    ["juno", "queen", "cobb"],
+    "Juno, Pike Queen and Old Cobb keep their faces",
+  );
+  assert.equal(s.derby!.endsAt, (raw.derby as { endsAt: number }).endsAt);
+});
+
+test("a v8 save with a pet, stickers, shinies and records round-trips and survives export codes", () => {
+  const s = sanitize({
+    ...fresh(),
+    pet: { kind: "heron", next: 5000, gifts: 4 },
+    stickers: [pageId(0), frameId("0-3")],
+    shiny: ["0-3"],
+    fotdClaimed: ["2026-11-01", "2026-11-02"],
+    rivalRecord: { cobb: { w: 2, l: 5 } },
+    volume: 70,
+    cb: true,
+  });
+  assert.equal(s.pet.kind, "heron");
+  assert.equal(s.volume, 70);
+  assert.equal(s.cb, true);
+  const back = sanitize(JSON.parse(JSON.stringify(snapshot(s))));
+  assert.deepEqual(back, s);
+  const viaCode = sanitize(JSON.parse(decodeURIComponent(escape(atob(btoa(unescape(encodeURIComponent(JSON.stringify(snapshot(s))))))))));
+  assert.deepEqual(viaCode, s);
+});
+
+test("hostile WP-6 values are cleaned", () => {
+  const s = sanitize({
+    ...fresh(),
+    pet: { kind: "dragon", next: "soon", gifts: -3 },
+    stickers: ["page-99", "page-1", "page-1", 7, "frame-1-77"],
+    shiny: ["1-1", "1-1", "zz", 5],
+    fotdClaimed: ["yesterday", "2026-11-02"],
+    rivalRecord: { cobb: { w: -1, l: "x" }, nobody: { w: 4, l: 4 } },
+    volume: 9999,
+    cb: "yes",
+  });
+  assert.deepEqual(s.pet, { kind: null, next: 0, gifts: 0 });
+  assert.deepEqual(s.stickers, ["page-1"]);
+  assert.deepEqual(s.shiny, ["1-1"]);
+  assert.deepEqual(s.fotdClaimed, ["2026-11-02"]);
+  assert.deepEqual(s.rivalRecord, {});
+  assert.equal(s.volume, 100);
+  assert.equal(s.cb, false);
+  for (const junk of [null, 5, "x", [], {}]) {
+    const t = sanitize({ ...fresh(), pet: junk, stickers: junk, shiny: junk, fotdClaimed: junk, rivalRecord: junk, volume: junk });
+    assert.deepEqual(t.stickers, []);
+    assert.equal(t.pet.kind, null);
+    assert.equal(t.volume, junk === undefined ? DEFAULT_VOLUME : t.volume);
+  }
 });

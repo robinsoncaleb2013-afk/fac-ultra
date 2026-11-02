@@ -76,9 +76,9 @@ test("the water shrinks to a peek strip after 40% of the panel has scrolled", ()
 });
 
 test("device settings: a pinned tier survives a reload and beats the per-mode save", () => {
-  const stored = JSON.parse(JSON.stringify({ gfx: "lite", sound: false, motion: true, flash: false, followClock: false, kid: true }));
+  const stored = JSON.parse(JSON.stringify({ gfx: "lite", sound: false, motion: true, flash: false, followClock: false, kid: true, volume: 20, cb: true }));
   const device = readDeviceSettings(stored);
-  const modeSave = { gfx: "auto" as const, sound: true, motion: true, flash: true, followClock: true, kid: false };
+  const modeSave = { gfx: "auto" as const, sound: true, motion: true, flash: true, followClock: true, kid: false, volume: 35, cb: false };
   assert.deepEqual(overlayDevice(modeSave, device), stored);
 });
 
