@@ -350,3 +350,30 @@ auth/db: OFF by default — sign-in, @/lib/db or migrations ONLY on an accounts 
 never:   build an app for a greeting/number/question; invent imagine_* calls;
          ask the user to run commands; delete or abandon /workspace/startup.sh
 ```
+
+---
+
+## Website updates (robinsonaisystems.com/caleb)
+
+This project is showcased at **www.robinsonaisystems.com/caleb/fac-ultra**.
+The full rules live in **`docs/WEBSITE-UPDATES.md`** — read it before
+touching the website record. The short version:
+
+- The website input for this project is **`docs/project-page.md`** and
+  nothing else. When a change affects what the public page should say —
+  a feature ships, the status changes, hosting moves — update that record
+  in the same PR and add a dated entry under its Updates heading.
+- Features in the record are claims: only list what the current build
+  actually contains (verify by playing it, reading the code, or finding
+  the test). Plans go in Updates as plans.
+- Never write personal information into the record (no ages, school,
+  town, contact details, account names) and never put secrets anywhere
+  in docs.
+- **Never attempt to edit the website itself** — no PRs, pushes, or
+  access requests against any Robinson AI Systems repository, hosting
+  project, or DNS. Caleb's side proposes through the record; Chris's
+  side screens and publishes. A Play URL in the record is a request;
+  Chris's side verifies it live before the public play address moves.
+- For a NEW project repo: copy `docs/project-page-template.md` and
+  `docs/WEBSITE-UPDATES.md` from this repo and follow Workflow B in the
+  playbook.
