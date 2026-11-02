@@ -350,3 +350,31 @@ auth/db: OFF by default — sign-in, @/lib/db or migrations ONLY on an accounts 
 never:   build an app for a greeting/number/question; invent imagine_* calls;
          ask the user to run commands; delete or abandon /workspace/startup.sh
 ```
+
+---
+
+## Website updates (robinsonaisystems.com/caleb)
+
+This project is showcased at www.robinsonaisystems.com/caleb/fac-ultra.
+Caleb's website docs live in `docs/website/` — read `docs/website/README.md`
+first, then `docs/website/AGENT-PLAYBOOK.md`, before touching any
+website-related file. The short version:
+
+- The website input for this project is `docs/project-page.md` and nothing
+  else. Keep it updated in the same PR as any change that affects what the
+  public page should say, with a dated entry under its Updates heading.
+- Features in the record are claims: only what the current build actually
+  contains, verified. No personal information and no secrets in docs.
+- **This game has its own page rules:** `docs/website/FAC-ULTRA-PAGE-RULES.md`
+  — what counts as website-worthy news for FAC Ultra (milestones and big
+  features only; fixes, tuning, and plumbing stay off the page) and how
+  tight to keep the Features list. Follow it for every record update.
+- Never attempt to edit the website itself — no PRs, pushes, or access
+  requests against any Robinson AI Systems repository, hosting project,
+  or DNS. This side proposes through the record; Chris's side screens
+  and publishes.
+- Starting a NEW project: follow `docs/website/new-project-checklist.md`.
+  The docs also recommend setting up a separate reference repo,
+  `robinsoncaleb2013-afk/caleb-projects`, as the shared home for how all
+  of Caleb's projects work with the website — see
+  `docs/website/HUB-SETUP.md`.
