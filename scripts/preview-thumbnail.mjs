@@ -4,7 +4,7 @@
 // PNG is written; the service treats any non-zero exit as a gated skip and does
 // not download the file.
 import { chromium } from "playwright";
-import { checkedOutputPath, checkedUrl } from "./browser-guard.mjs";
+import { checkedOutputPath, checkedUrl, chromiumArgs, chromiumEnv } from "./browser-guard.mjs";
 
 // The service always passes a loopback URL and a /tmp path; the checks keep that
 // true when the script is invoked by hand.
@@ -17,7 +17,8 @@ const timeoutMs = Number(process.env.PREVIEW_THUMBNAIL_TIMEOUT_MS || 45000);
 
 const browser = await chromium.launch({
   headless: true,
-  args: ["--no-sandbox", "--disable-dev-shm-usage"],
+  args: chromiumArgs(),
+  env: chromiumEnv(),
 });
 
 try {

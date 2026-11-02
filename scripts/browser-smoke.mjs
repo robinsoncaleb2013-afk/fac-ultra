@@ -2,7 +2,7 @@
 import { mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { chromium } from "playwright";
-import { checkedOutputPath, checkedUrl } from "./browser-guard.mjs";
+import { checkedOutputPath, checkedUrl, chromiumArgs, chromiumEnv } from "./browser-guard.mjs";
 import { computeBrandWarnings } from "./brand-check.mjs";
 import {
   authInvariantWarnings,
@@ -92,7 +92,8 @@ let browser = null;
 try {
   browser = await chromium.launch({
     headless: true,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    args: chromiumArgs(),
+    env: chromiumEnv(),
   });
 
   const viewports = {};
