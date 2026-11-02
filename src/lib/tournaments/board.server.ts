@@ -264,6 +264,7 @@ export async function handleSurvivalBoard(sql: Sql, req: ApiReq): Promise<ApiRes
 
   /* Replay every cast from the daily seed. */
   const startsAt = Date.parse(`${day.date}T00:00:00Z`);
+  /* No rulesVersion: the daily Survival board is frozen on the original fight rules (version 1), docs/architecture/10 §1.6. */
   const ev: ReplayEvent = { id: day.id, seed: survivalSeed(day.date, day.water), water: day.water, startsAt };
   let landed = 0;
   let heaviest = 0;

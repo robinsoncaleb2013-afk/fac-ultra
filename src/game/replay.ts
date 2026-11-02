@@ -15,6 +15,8 @@
    Tackle is fixed for everyone (EVENT_GEAR), which is what lets the server know it. */
 
 import { BOATS, LINES, REELS, rollFish, RODS, WEATHER, type Rolled } from "./content.ts";
+import { hasLineWear, rulesVersionOf } from "./line-wear.ts";
+import { healthOf } from "./lines.ts";
 import { FIGHT_STEP, newFight, pushTrace, replayFight, TAP_STEPS, stepFight, type Drag, type Fight, type FightInit } from "./fight.ts";
 import { habitOf } from "./habits.ts";
 import { planCast, windowOf } from "./match.ts";
@@ -36,7 +38,14 @@ export const MAX_TRACE_ENTRIES = 2400;
 export const MISSED = -1;
 
 /** The event facts a replay needs. */
-export type ReplayEvent = { id: string; seed: number; water: number; startsAt: number };
+export type ReplayEvent = {
+  id: string;
+  seed: number;
+  water: number;
+  startsAt: number;
+  /** The fight/line rules the event was made under (docs/architecture/10 §1.6). Missing means 1: no line wear. */
+  rulesVersion?: number;
+};
 
 export type Claim = { out: "missed" | "lost" | "landed"; i: number; w: number; v: number };
 
@@ -53,6 +62,8 @@ export type Envelope = {
   inputs: number[];
   drag: Drag;
   released: boolean;
+  /** The rules version the client played under. Missing means 1. The server refuses a cast whose version is not the event's. */
+  rv?: number;
   /** What the client says happened. The server checks it against its own replay. */
   claim: Claim;
 };
@@ -119,9 +130,11 @@ export function rollCast(
 }
 
 /** The fight for a rolled cast. No Helping Hand, no calm lures, no partner. */
-export function fightInitOf(roll: CastRoll, drag: Drag): FightInit {
+export function fightInitOf(roll: CastRoll, drag: Drag, rulesVersion = 1): FightInit {
   const habit = habitOf(roll.fish.b, roll.fish.i);
   return {
+    /* Rules version 2 and up: the event line has health and the fish wears it down. */
+    ...(hasLineWear(rulesVersion) ? { lineHealth: healthOf(EVENT_GEAR.line), wearMul: 1 } : {}),
     seed: roll.fightSeed,
     rarity: roll.fish.t,
     style: habit.fight,
@@ -166,6 +179,7 @@ export function parseEnvelope(v: unknown): Parsed {
   }
   if (!(o.drag === 0 || o.drag === 1 || o.drag === 2)) return bad("drag");
   if (typeof o.released !== "boolean") return bad("released");
+  if (o.rv !== undefined && !isInt(o.rv, 1, 1000)) return bad("rv");
   const c = o.claim as Record<string, unknown> | undefined;
   if (!c || typeof c !== "object") return bad("claim");
   if (c.out !== "missed" && c.out !== "lost" && c.out !== "landed") return bad("claim.out");
@@ -181,6 +195,7 @@ export function parseEnvelope(v: unknown): Parsed {
       inputs: o.inputs as number[],
       drag: o.drag,
       released: o.released,
+      ...(o.rv === undefined ? {} : { rv: o.rv as number }),
       claim: { out: c.out, i: c.i, w: c.w, v: c.v },
     },
   };
@@ -217,6 +232,9 @@ export function traceReason(inputs: readonly number[]): string | null {
 
 /** Run the cast from its seed and the player's choices. Does not look at the claim. */
 export function replayCast(ev: ReplayEvent, playerId: string, env: Envelope): Replayed {
+  /* A cast is replayed with the rules its event was made under, and must say it was played under them. */
+  const rules = rulesVersionOf(ev.rulesVersion);
+  if ((env.rv ?? 1) !== rules) return { ok: false, reason: "rules_version" };
   const roll = rollCast(ev, playerId, env.castIndex, env.spot, env.p, env.at);
   if (!roll) return { ok: false, reason: "unknown_spot" };
   if (env.hook === MISSED) {
@@ -227,7 +245,7 @@ export function replayCast(ev: ReplayEvent, playerId: string, env: Envelope): Re
   const why = traceReason(env.inputs);
   if (why) return { ok: false, reason: why };
   const total = env.inputs.reduce((a, b) => a + b, 0);
-  const F = replayFight(fightInitOf(roll, env.drag), env.inputs, MAX_FIGHT_STEPS);
+  const F = replayFight(fightInitOf(roll, env.drag, rules), env.inputs, MAX_FIGHT_STEPS);
   if (!F.result) return { ok: false, reason: "unfinished" };
   /* An honest trace ends on the step that ended the fight, never before it and never after. */
   if (F.steps !== total) return { ok: false, reason: "trace_length" };
@@ -283,13 +301,14 @@ export function recordCast(
   choice: Choice,
   want: (F: Fight) => boolean = decentPlayer(),
 ): Envelope {
+  const rules = rulesVersionOf(ev.rulesVersion);
   const roll = rollCast(ev, playerId, castIndex, choice.spot, choice.p, at);
   if (!roll) throw new Error(`no spot ${choice.spot} in water ${ev.water}`);
-  const base = { castIndex, at, spot: choice.spot, p: choice.p, drag: choice.drag, released: false };
+  const base = { castIndex, at, spot: choice.spot, p: choice.p, drag: choice.drag, released: false, ...(rules > 1 ? { rv: rules } : {}) };
   if (choice.hookMs < 0 || choice.hookMs > roll.biteMax * 1000) {
     return { ...base, hook: MISSED, inputs: [], claim: { out: "missed", i: 0, w: 0, v: 0 } };
   }
-  const F = newFight(fightInitOf(roll, choice.drag));
+  const F = newFight(fightInitOf(roll, choice.drag, rules));
   const inputs: number[] = [];
   let down = false;
   let tapLeft = 0;

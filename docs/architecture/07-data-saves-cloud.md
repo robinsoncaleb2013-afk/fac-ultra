@@ -29,6 +29,8 @@ Field inventory planned by this chapter (so names don't collide):
 
 Save v4 is the version that ships with WP-1; each later package bumps once.
 
+> WP-14: `SAVE_VERSION` is 10. It adds `lineGear` (lines owned, unopened line packs, last pull). Old saves get one copy of each line up to the one they used. See `10-gear-progression-and-line.md` section 1.7.
+
 ## 2. Save slots
 
 One `localStorage` key per mode (`modes.ts` `saveKey`): `fac-ultra` (Expedition), `fac-ultra-sandbox` (Recreational), `fac-ultra-survival`, `fac-ultra-coop`, `fac-ultra-tourney`. **Slots never share data** (WP-11): a mode reads and writes only its own key, including its dex, records, stickers, shinies, Fish of the Day claim, pet and Regulars record. Settings that are about the *device* (gfx, sound, motion, flash, kid, followClock) are **also** mirrored to a shared key `fac-ultra-device` so they apply across modes; `hydrate()` overlays them.

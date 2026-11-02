@@ -35,6 +35,8 @@ Migration: `career → expedition`, `sandbox → recreational` (same save key `f
 
 > **As built (WP-4).** `src/game/modes.ts` holds the rules table (`MODES`, `MODE_KEYS`, `rulesOf`), the seven menu cards (`MENU_CARDS`) and the career-collection merge; `modeRules()` in `engine.ts` is the single lookup every mode branch reads. The union is `Mode = "expedition" | "recreational" | "coop"` (the spec's `ModeId` names); WP-5 and WP-7 add `survival` and `tournament` to the union and the table. Beyond the table in this section the rules also carry `trips`, `photo` and `twoPlayer`. Trips live in `src/game/trips.ts`, Kid Mode helpers in `src/game/kid.ts`. Save v7 adds `kid`, `trips` and `trip` (the trip in progress); `kid` is mirrored to `fac-ultra-device`.
 
+> WP-14: gear gates, line wear and line crafting differ per mode; the table is in `10-gear-progression-and-line.md` (sections 1.5 and 2).
+
 ## 2. Expedition (exists; renamed in copy only)
 The career. Everything on. Unchanged by WP-4 apart from the rules refactor.
 

@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import type { Sql } from "@/lib/db";
+import { RULES_VERSION } from "@/game/line-wear";
 import { decentPlayer, recordCast, type Choice, type Envelope, type ReplayEvent } from "@/game/replay";
 import { FAMILIES } from "@/game/presentation";
 import { dailyAt, DAY, HOUR, quickAt } from "@/game/schedule";
@@ -48,7 +49,8 @@ function nextEnvelope(ev: ReplayEvent, playerId: string, castIndex: number, at: 
   return recordCast(ev, playerId, castIndex, at, spotChoice(ev.water, castIndex, hookMs), decentPlayer());
 }
 
-const evOf = (e: { id: string; seed: number; water: number; startsAt: number }): ReplayEvent => ({ id: e.id, seed: e.seed, water: e.water, startsAt: e.startsAt });
+/* Events made today carry the current fight/line rules version (docs/architecture/10 §1.6). */
+const evOf = (e: { id: string; seed: number; water: number; startsAt: number }): ReplayEvent => ({ id: e.id, seed: e.seed, water: e.water, startsAt: e.startsAt, rulesVersion: RULES_VERSION });
 
 test("events: the open list materialises the schedule, once, and tells Quick from Daily", async () => {
   const a = await openEvents();
@@ -427,7 +429,7 @@ test("survival board: a log that replays is accepted, one that lies is not", asy
   const date = "2026-11-02";
   const { survivalAt } = await import("@/game/schedule");
   const s = survivalAt(NOW);
-  const ev: ReplayEvent = { id: s.id, seed: s.seed, water: s.water, startsAt: Date.parse(`${date}T00:00:00Z`) };
+  const ev: ReplayEvent = { id: s.id, seed: s.seed, water: s.water, startsAt: Date.parse(`${date}T00:00:00Z`) }; // the daily Survival board replays with rules version 1 (10 §1.6)
   const p = idOf(50);
   const log: Envelope[] = [];
   let landed = 0;
@@ -521,4 +523,47 @@ test("limits: too many writes from one address in a minute get a 429", async () 
   for (let i = 0; i < 42; i++) last = await handleEntry(sql, post({ op: "join", eventId: q.id, playerId: idOf(500) }, NOW + 90 * DAY / 90, "9.9.9.9"));
   assert.equal(last!.status, 429);
   assert.equal(last!.body.verdict, "rate");
+});
+
+/* ── WP-14: fight/line rules versions (docs/architecture/10 §1.6) ─────────── */
+
+test("rules version: new events carry the current version, an event row from before line wear replays with version 1", async () => {
+  const q = quickAt(NOW);
+  const fresh = await join(q.id, idOf(950));
+  assert.equal((fresh.body.event as { rulesVersion: number }).rulesVersion, RULES_VERSION);
+
+  /* A private event written before WP-14: its stored rules have no version at all. */
+  const made = await handleEvents(sql, post({ op: "create", playerId: idOf(951), water: 2, rules: { category: "total", castBudget: 6, fishingSeconds: 3000 }, minutes: 180 }, NOW));
+  const id = `p-${made.body.code}`;
+  await sql.query("update events set rules = rules - 'rulesVersion' where id = $1", [id]);
+  const p = idOf(952);
+  const j = await join(id, p, NOW);
+  assert.equal((j.body.event as { rulesVersion: number }).rulesVersion, 1, "no version stored means version 1");
+  const old = { id, seed: j.body.seed as number, water: j.body.water as number, startsAt: j.body.startsAt as number };
+
+  /* An old client's cast (no stamp) still verifies. */
+  const env = recordCast(old, p, 0, NOW + 30_000, spotChoice(old.water, 0), decentPlayer());
+  assert.equal(env.rv, undefined);
+  const ok = await handleCatch(sql, post({ eventId: id, playerId: p, envelope: env }, NOW + 60_000));
+  assert.equal(ok.body.verdict, "ok");
+
+  /* A cast stamped with the new rules does not belong in an old event. */
+  const stamped = recordCast({ ...old, rulesVersion: RULES_VERSION }, p, 1, NOW + 90_000, spotChoice(old.water, 1), decentPlayer());
+  const no = await handleCatch(sql, post({ eventId: id, playerId: p, envelope: stamped }, NOW + 120_000));
+  assert.equal(no.body.verdict, "mismatch");
+  assert.equal(no.body.reason, "rules_version");
+});
+
+test("rules version: a new event verifies a stamped cast and refuses an unstamped one", async () => {
+  const made = await handleEvents(sql, post({ op: "create", playerId: idOf(953), water: 4, rules: { category: "total", castBudget: 6, fishingSeconds: 3000 }, minutes: 180 }, NOW));
+  const id = `p-${made.body.code}`;
+  const p = idOf(954);
+  const j = await join(id, p, NOW);
+  const base = { id, seed: j.body.seed as number, water: j.body.water as number, startsAt: j.body.startsAt as number };
+  const stamped = recordCast({ ...base, rulesVersion: RULES_VERSION }, p, 0, NOW + 30_000, spotChoice(base.water, 0), decentPlayer());
+  assert.equal((await handleCatch(sql, post({ eventId: id, playerId: p, envelope: stamped }, NOW + 60_000))).body.verdict, "ok");
+  const bare = recordCast(base, p, 1, NOW + 90_000, spotChoice(base.water, 1), decentPlayer());
+  const r = await handleCatch(sql, post({ eventId: id, playerId: p, envelope: bare }, NOW + 120_000));
+  assert.equal(r.body.verdict, "mismatch");
+  assert.equal(r.body.reason, "rules_version");
 });

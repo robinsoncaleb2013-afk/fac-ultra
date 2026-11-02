@@ -87,6 +87,8 @@ export type EventInfo = {
   maxPlayers?: number | null;
   /** The four-letter code of a private event. */
   code?: string | null;
+  /** WP-14: the fight/line rules version the event was made under (none = 1, an event from before line wear). */
+  rulesVersion?: number;
 };
 
 export type Standing = {
@@ -160,7 +162,7 @@ export type BoardReply = {
 /* ── The run the engine keeps ────────────────────────────────────────────── */
 
 export type TourneyRun = {
-  event: Pick<EventInfo, "id" | "kind" | "title" | "category" | "castBudget" | "fishingSeconds" | "startsAt" | "endsAt">;
+  event: Pick<EventInfo, "id" | "kind" | "title" | "category" | "castBudget" | "fishingSeconds" | "startsAt" | "endsAt"> & { rulesVersion?: number };
   seed: number;
   water: number;
   playerId: string;

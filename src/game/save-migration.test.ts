@@ -150,7 +150,7 @@ test("a v3 save walks all the way to the current version", () => {
 
 test("fresh saves start with nothing remembered", () => {
   const f = fresh();
-  assert.equal(f.version, 9);
+  assert.equal(f.version, 10);
   assert.deepEqual(f.lastSpot, {});
   assert.deepEqual(f.rig, {});
 });
@@ -223,7 +223,7 @@ test("a v5 save gains empty WP-3 fields, keeps its progress and its spots and ri
   assert.equal(raw.version, 5);
   for (const k of ["records", "released", "stewards", "coached", "drag"]) assert.equal(k in raw, false, k);
   const s = sanitize(raw);
-  assert.equal(s.version, 9);
+  assert.equal(s.version, 10);
   assert.deepEqual(s.records, {});
   assert.deepEqual(s.released, {});
   assert.deepEqual(s.stewards, { species: [], waters: [] });
@@ -244,7 +244,7 @@ test("a v5 save gains empty WP-3 fields, keeps its progress and its spots and ri
 test("a v4 save walks all the way to v9 with every new field empty", () => {
   const raw = JSON.parse(readFileSync(join(dir, "save-v4.json"), "utf8")) as Record<string, unknown>;
   const s = sanitize(raw);
-  assert.equal(s.version, 9);
+  assert.equal(s.version, 10);
   assert.equal(s.kid, false);
   assert.deepEqual(s.trips, []);
   assert.equal(s.trip, null);
@@ -330,7 +330,7 @@ test("a v6 save gains Kid Mode off and an empty logbook, and keeps everything it
   assert.equal(raw.version, 6);
   for (const k of ["kid", "trips", "trip"]) assert.equal(k in raw, false, k);
   const s = sanitize(raw);
-  assert.equal(s.version, 9);
+  assert.equal(s.version, 10);
   assert.equal(s.kid, false);
   assert.deepEqual(s.trips, []);
   assert.equal(s.trip, null);
@@ -348,7 +348,7 @@ test("a v6 save gains Kid Mode off and an empty logbook, and keeps everything it
 test("a v3, v4 and v5 save all reach v9 with the WP-4 fields at their defaults", () => {
   for (const f of ["save-v3.json", "save-v4.json", "save-v5.json"]) {
     const s = sanitize(JSON.parse(readFileSync(join(dir, f), "utf8")));
-    assert.equal(s.version, 9, f);
+    assert.equal(s.version, 10, f);
     assert.equal(s.kid, false, f);
     assert.deepEqual(s.trips, [], f);
     assert.equal(s.trip, null, f);
@@ -365,7 +365,7 @@ test("an old Sandbox-shaped save (nothing to sell, everything unlocked) loads as
   old.dex = { "0-4": { c: 2, w: 3.1, m: 0 } };
   old.inv = [{ name: "Perch", t: 0, v: 4, w: 1.2, i: 4, b: 0, m: 0 }];
   const s = sanitize(old);
-  assert.equal(s.version, 9);
+  assert.equal(s.version, 10);
   assert.equal(s.ub.length, BIOMES.length, "every water is still unlocked");
   assert.deepEqual(s.dex, { "0-4": { c: 2, w: 3.1, m: 0 } });
   assert.equal(s.inv.length, 1);
@@ -420,7 +420,7 @@ test("a v7 save (a real session, Derby running) loads as v9 with an empty fun la
   assert.equal(raw.version, 7);
   assert.equal("pet" in raw, false);
   const s = sanitize(raw);
-  assert.equal(s.version, 9);
+  assert.equal(s.version, 10);
   assert.equal(s.c, raw.c);
   assert.equal(s.caught, raw.caught);
   assert.equal(s.lv, raw.lv);
@@ -499,7 +499,7 @@ test("a v8 save gains an empty cabinet and the Classic bobber, and keeps its pro
   assert.equal(raw.version, 8);
   for (const k of ["trophies", "titles", "bobberSkin", "tourneyHistory"]) assert.equal(k in raw, false, `${k} is new in v9`);
   const s = sanitize(raw);
-  assert.equal(s.version, 9);
+  assert.equal(s.version, 10);
   assert.deepEqual(s.trophies, []);
   assert.deepEqual(s.titles, []);
   assert.deepEqual(s.tourneyHistory, []);
@@ -545,4 +545,28 @@ test("hostile WP-8 values are cleaned", () => {
     const t = sanitize({ ...fresh(), trophies: junk, titles: junk, tourneyHistory: junk, bobberSkin: junk });
     assert.deepEqual([t.trophies, t.titles, t.tourneyHistory, t.bobberSkin], [[], [], [], "plain"]);
   }
+});
+
+/* ── WP-14 (save v10): lines became an inventory ─────────────────────────── */
+
+test("a v9 save's single line becomes one copy of each line up to it, and stays in use", () => {
+  const raw = JSON.parse(readFileSync(join(dir, "save-v9.json"), "utf8")) as Record<string, unknown>;
+  const old = { ...raw, line: 5 };
+  const s = sanitize(old);
+  assert.equal(s.version, 10);
+  assert.equal(s.line, 5);
+  assert.deepEqual(s.lineGear.lines.slice(0, 7), [1, 1, 1, 1, 1, 1, 0]);
+  assert.deepEqual(s.lineGear.packs, [0, 0, 0, 0]);
+});
+
+test("a v10 save keeps its spares, its packs and the line in use; a line with no copies falls back to the hand line", () => {
+  const raw = JSON.parse(readFileSync(join(dir, "save-v10.json"), "utf8")) as Record<string, unknown>;
+  const s = sanitize(raw);
+  assert.equal(s.line, 3);
+  assert.equal(s.lineGear.lines[0], 2);
+  assert.equal(s.lineGear.lines[3], 3);
+  assert.deepEqual(s.lineGear.packs, [1, 0, 2, 0]);
+  assert.deepEqual(s.lineGear.last, [1, 0, 3]);
+  const gone = sanitize({ ...raw, line: 7 });
+  assert.equal(gone.line, 0, "no copy of tier 7 is owned");
 });
