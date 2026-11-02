@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { useRules } from "@/components/game/use-kid";
 import { cn } from "@/lib/cn";
 
-function Chip({ on, children, onClick }: { on: boolean; children: string; onClick: () => void }) {
+export function Chip({ on, children, onClick }: { on: boolean; children: string; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -31,7 +31,7 @@ function Chip({ on, children, onClick }: { on: boolean; children: string; onClic
   );
 }
 
-function Sheet({ children, label }: { children: React.ReactNode; label: string }) {
+export function Sheet({ children, label }: { children: React.ReactNode; label: string }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-bg/80 p-3">
       <div

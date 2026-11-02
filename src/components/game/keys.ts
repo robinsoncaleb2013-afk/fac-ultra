@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { takePhoto } from "@/components/game/photo";
 import { MODES } from "@/game/modes";
-import { act, nudgeDrag, partnerDown, partnerUp, reelDown, reelUp, sim, useGame, type Tab } from "@/game/engine";
+import { tabsFor } from "@/components/game/tabs";
+import { act, nudgeDrag, partnerDown, partnerUp, reelDown, reelUp, sim, useGame } from "@/game/engine";
 
-const NUMBER_TABS: Tab[] = ["cast", "bag", "gear", "lures", "waters", "dex", "lodge"];
 
 export function toggleFullscreen() {
   try {
@@ -56,7 +56,8 @@ export function useKeys() {
       if (event.code === "KeyM") return void state.toggleSetting("sound");
       const digit = /^Digit([1-7])$/.exec(event.code);
       if (digit) {
-        const id = NUMBER_TABS[Number(digit[1]) - 1];
+        const id = tabsFor(state.mode)[Number(digit[1]) - 1]?.id;
+        if (!id) return;
         state.setTab(state.tab === id && id !== "cast" ? "cast" : id);
         return;
       }

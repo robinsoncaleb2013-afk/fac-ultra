@@ -5,8 +5,8 @@
 
 import type { Records } from "./records.ts";
 
-/** WP-5 adds "survival" and WP-7 adds "tournament" to this union and to MODES. */
-export type Mode = "expedition" | "recreational" | "coop";
+/** WP-5 added "survival"; WP-7 adds "tournament" to this union and to MODES. */
+export type Mode = "expedition" | "recreational" | "survival" | "coop";
 
 export type HudItem = "money" | "level" | "weather" | "window" | "hunger" | "warmth" | "day" | "timer";
 
@@ -43,6 +43,8 @@ export type ModeRules = {
   photo: boolean;
   /** A second angler shares the screen (J holds the reel). */
   twoPlayer: boolean;
+  /** Survival (WP-5): hunger, warmth, a camp and a run with its own save. Only that row sets it. */
+  survival?: true;
 };
 
 const WILD: HudItem[] = ["money", "level", "weather", "window"];
@@ -91,6 +93,29 @@ export const MODES: Record<Mode, ModeRules> = {
     photo: true,
     twoPlayer: false,
   },
+  survival: {
+    id: "survival",
+    title: "Survival",
+    blurb: "Alone with a hand line. Catch food, keep warm, last as many days as you can.",
+    saveKey: "fac-ultra-survival",
+    economy: false,
+    contracts: false,
+    bosses: false,
+    rebirth: false,
+    aquarium: false,
+    allUnlocked: false,
+    assistAllowed: true,
+    fightSpeed: 1.15,
+    biteSpeed: 1,
+    keepRelease: "eat",
+    /* Survival keeps its own collection and never touches the career. */
+    dexShared: "own",
+    hud: ["hunger", "warmth", "day", "weather"],
+    trips: false,
+    photo: true,
+    twoPlayer: false,
+    survival: true,
+  },
   coop: {
     id: "coop",
     title: "Local Co-op",
@@ -114,12 +139,13 @@ export const MODES: Record<Mode, ModeRules> = {
   },
 };
 
-export const MODE_LIST: readonly Mode[] = ["expedition", "recreational", "coop"];
+export const MODE_LIST: readonly Mode[] = ["expedition", "recreational", "survival", "coop"];
 
 /** localStorage key per mode. */
 export const MODE_KEYS: Record<Mode, string> = {
   expedition: MODES.expedition.saveKey,
   recreational: MODES.recreational.saveKey,
+  survival: MODES.survival.saveKey,
   coop: MODES.coop.saveKey,
 };
 
@@ -170,6 +196,7 @@ export type MenuCard = {
 export const MENU_CARDS: MenuCard[] = [
   { id: "expedition", title: MODES.expedition.title, blurb: MODES.expedition.blurb, mode: "expedition" },
   { id: "recreational", title: MODES.recreational.title, blurb: MODES.recreational.blurb, mode: "recreational" },
+  { id: "survival", title: MODES.survival.title, blurb: MODES.survival.blurb, mode: "survival" },
   { id: "local", title: MODES.coop.title, blurb: MODES.coop.blurb, mode: "coop" },
   {
     id: "online",

@@ -50,6 +50,24 @@ test("Expedition is everything on, nothing changed", () => {
   assert.equal(r.trips, false);
 });
 
+test("Survival follows 05 §5: its own slot, its own dex, no money, tougher fish, eat what you catch", () => {
+  const r = MODES.survival;
+  assert.equal(MODE_KEYS.survival, "fac-ultra-survival");
+  assert.equal(r.saveKey, "fac-ultra-survival");
+  assert.equal(r.survival, true);
+  assert.equal(r.economy || r.contracts || r.bosses || r.rebirth || r.aquarium || r.allUnlocked, false);
+  assert.equal(r.fightSpeed, 1.15);
+  assert.equal(r.keepRelease, "eat");
+  assert.equal(r.dexShared, "own");
+  assert.equal(sharesCareerDex(r), false, "Survival never writes to the career");
+  assert.deepEqual(r.hud, ["hunger", "warmth", "day", "weather"]);
+  assert.equal(canKeep(r), true);
+  assert.equal(canRelease(r), false, "you eat what you catch");
+  assert.equal(showsMoney(r), false);
+  assert.equal(MODES.expedition.survival, undefined);
+  assert.equal(legacyMode("survival"), "survival");
+});
+
 test("Recreational follows 05 §3", () => {
   const r = MODES.recreational;
   assert.equal(r.economy, false);
@@ -115,13 +133,16 @@ test("legacy names still mean something", () => {
   assert.equal(isMode("toString"), false, "prototype names are not modes");
 });
 
-test("menu cards: seven, each opening a real mode, mode cards worded from the table", () => {
-  assert.equal(MENU_CARDS.length, 7);
-  assert.equal(new Set(MENU_CARDS.map((c) => c.id)).size, 7);
+test("menu cards: each opening a real mode, mode cards worded from the table", () => {
+  assert.ok(MENU_CARDS.length >= 8, "Survival joined the seven");
+  assert.equal(new Set(MENU_CARDS.map((c) => c.id)).size, MENU_CARDS.length, "no card twice");
   for (const c of MENU_CARDS) assert.ok(isMode(c.mode), c.id);
   assert.equal(MENU_CARDS[0].title, MODES.expedition.title);
   assert.equal(MENU_CARDS[1].title, MODES.recreational.title);
   assert.equal(MENU_CARDS[1].blurb, MODES.recreational.blurb);
+  assert.equal(MENU_CARDS.find((c) => c.id === "survival")?.mode, "survival");
+  assert.equal(MENU_CARDS.find((c) => c.id === "survival")?.blurb, MODES.survival.blurb);
+  assert.ok(MENU_CARDS.findIndex((c) => c.id === "survival") === 2, "05 §7: Expedition, Recreational, Survival");
   assert.equal(MENU_CARDS.find((c) => c.id === "local")?.mode, "coop");
   assert.equal(MENU_CARDS.find((c) => c.id === "rush")?.needsBosses, 3);
 });

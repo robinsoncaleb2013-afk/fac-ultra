@@ -69,6 +69,8 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
   const cel = useGame((s) => s.celebration);
   const keep = useGame((s) => s.keepCatch);
   const release = useGame((s) => s.releaseCatch);
+  const eatNow = useGame((s) => s.campEat);
+  const larder = useGame((s) => s.survival?.larder.length ?? 0);
   const records = useGame((s) => s.records);
   const released = useGame((s) => s.released);
   const stewards = useGame((s) => s.stewards);
@@ -177,7 +179,21 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
           ) : null}
           {canKeep(rules) ? (
             <Button className="min-h-12 flex-1" onClick={keep}>
-              Keep{mobile ? null : <kbd className="ml-1.5 text-xs opacity-70">K</kbd>}
+              {rules.survival ? "To the larder" : "Keep"}
+              {mobile ? null : <kbd className="ml-1.5 text-xs opacity-70">K</kbd>}
+            </Button>
+          ) : null}
+          {rules.survival ? (
+            <Button
+              variant="ghost"
+              className="min-h-12 flex-1"
+              disabled={larder < 1}
+              onClick={() => {
+                eatNow(larder - 1, "raw");
+                keep();
+              }}
+            >
+              Eat it raw
             </Button>
           ) : null}
           {canRelease(rules) ? (
@@ -187,7 +203,9 @@ export function Celebration({ mobile }: { mobile?: boolean }) {
           ) : null}
         </div>
         <p className="text-center text-xs text-muted">
-          {isSteward
+          {rules.survival
+            ? "It is in your larder. Cook it at camp, or eat it raw (sometimes it is bad)."
+            : isSteward
             ? `Release for 20% more XP. You are this fish's Steward.`
             : `Release for 20% more XP · ${toSteward} more to be its Steward`}
         </p>

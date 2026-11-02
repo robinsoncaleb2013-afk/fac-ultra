@@ -14,6 +14,8 @@ import { peerBoats } from "@/game/multiplayer";
 import { nearestSpot, resolveSpot, spotRingPx, spotsOf, type Spot } from "@/game/spots";
 import { waterLineOf } from "@/game/water";
 import { drawFightRing, ringRadius } from "@/components/game/fight-ring";
+import { drawCampfire } from "@/components/game/survival-fx";
+import { MODES } from "@/game/modes";
 import {
   beginBuffer,
   cacheCanvas,
@@ -360,6 +362,11 @@ export function paint(canvas: HTMLCanvasElement, view: View) {
   shade.addColorStop(1, "rgba(12,26,34,0.28)");
   ctx.fillStyle = shade;
   ctx.fillRect(0, h * 0.55, w, h * 0.45);
+
+  /* Survival: the campfire glows in the corner while it burns. */
+  if (s.survival && s.survival.camp.fire > 0 && MODES[s.mode].survival) {
+    drawCampfire(ctx, w, h, s.survival.camp.fire, night, motion);
+  }
 
   /* Plankton: full tier only. */
   if (motion && spec.plankton) {

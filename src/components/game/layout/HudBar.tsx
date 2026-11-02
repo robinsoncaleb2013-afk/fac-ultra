@@ -3,6 +3,7 @@ import { dexCount, money, rankName, TOTAL_SPECIES, xpNeed } from "@/game/content
 import { useGame } from "@/game/engine";
 import { moneyWords } from "@/game/kid";
 import { MODES, showsMoney } from "@/game/modes";
+import { SurvivalHud } from "@/components/game/survival";
 import { cn } from "@/lib/cn";
 
 function useHud() {
@@ -38,23 +39,27 @@ export function HudBar({ left }: { left: number }) {
         <div>
           <p className="font-serif text-lg leading-none [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">FAC Ultra</p>
           <p className="mt-1 text-xs text-fg/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
-            {rankName(h.lv)} · Lv {h.lv} · {modeLabel}
+            {h.rules.survival ? modeLabel : `${rankName(h.lv)} · Lv ${h.lv} · ${modeLabel}`}
           </p>
         </div>
       </div>
-      <div className="flex items-center gap-4 text-right">
-        <p className="text-xs text-fg/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
-          {h.dex}/{TOTAL_SPECIES}
-        </p>
-        <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-2" title={`Level ${h.lv}`}>
-          <div className="h-full bg-brass" style={{ width: `${h.pct}%` }} />
-        </div>
-        {h.cash ? (
-          <p className="font-serif text-2xl leading-none text-brass" title={h.words}>
-            {h.cash}
+      {h.rules.survival ? (
+        <SurvivalHud />
+      ) : (
+        <div className="flex items-center gap-4 text-right">
+          <p className="text-xs text-fg/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
+            {h.dex}/{TOTAL_SPECIES}
           </p>
-        ) : null}
-      </div>
+          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-2" title={`Level ${h.lv}`}>
+            <div className="h-full bg-brass" style={{ width: `${h.pct}%` }} />
+          </div>
+          {h.cash ? (
+            <p className="font-serif text-2xl leading-none text-brass" title={h.words}>
+              {h.cash}
+            </p>
+          ) : null}
+        </div>
+      )}
     </header>
   );
 }
@@ -69,15 +74,21 @@ export function HudBarMobile({ onMenu, className }: { onMenu: () => void; classN
         className,
       )}
     >
-      {h.cash ? (
-        <p className="font-serif text-xl leading-none text-brass" title={h.words}>
-          {h.cash}
-        </p>
-      ) : null}
-      <p className="text-xs text-fg">Lv {h.lv}</p>
-      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
-        <div className="h-full bg-brass" style={{ width: `${h.pct}%` }} />
-      </div>
+      {h.rules.survival ? (
+        <SurvivalHud compact />
+      ) : (
+        <>
+          {h.cash ? (
+            <p className="font-serif text-xl leading-none text-brass" title={h.words}>
+              {h.cash}
+            </p>
+          ) : null}
+          <p className="text-xs text-fg">Lv {h.lv}</p>
+          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
+            <div className="h-full bg-brass" style={{ width: `${h.pct}%` }} />
+          </div>
+        </>
+      )}
       <button
         type="button"
         onPointerDown={(e) => e.stopPropagation()}

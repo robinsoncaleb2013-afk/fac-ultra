@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "run": {
+    "water": 0,
+    "seed": 2938174651,
+    "daily": true,
+    "date": "2026-01-01",
+    "min": 5000,
+    "hunger": 61.5,
+    "warmth": 74,
+    "weather": 1,
+    "camp": {
+      "shelter": 1,
+      "fire": 95,
+      "smoker": false,
+      "driftwood": 5,
+      "bone": 4,
+      "gut": 6
+    },
+    "gear": {
+      "hook": 1,
+      "line": 0
+    },
+    "larder": [
+      {
+        "name": "Bluegill",
+        "cal": 96,
+        "smoked": false,
+        "expiresDay": 5,
+        "w": 1.6,
+        "t": 0
+      },
+      {
+        "name": "Spotted Bass",
+        "cal": 252,
+        "smoked": true,
+        "expiresDay": 8,
+        "w": 2.8,
+        "t": 1
+      }
+    ],
+    "log": [
+      "Day 1. You wash up on the shore of the Pond with a hand line. You find 3 pieces of driftwood.",
+      "Landed a Bluegill (1.6 lb). +1 bone, +1 gut.",
+      "You make the bone hook.",
+      "Day 4. It is rain. The tide left 4 pieces of driftwood."
+    ],
+    "casts": 37,
+    "sick": 0,
+    "fish": 21,
+    "eaten": 14,
+    "bad": 1,
+    "biggest": {
+      "name": "Spotted Bass",
+      "w": 2.8,
+      "t": 1
+    },
+    "rescued": false,
+    "over": null,
+    "recorded": false
+  },
+  "history": [
+    {
+      "water": 2,
+      "daily": false,
+      "date": "2025-12-30",
+      "days": 6,
+      "fish": 18,
+      "eaten": 11,
+      "biggest": 3.4,
+      "won": false,
+      "cause": "The cold got you on day 7 — a storm, no fire, no shelter."
+    }
+  ],
+  "lastWater": 0,
+  "dex": {
+    "0-0": {
+      "c": 5,
+      "w": 0.8,
+      "m": 0
+    },
+    "0-1": {
+      "c": 3,
+      "w": 1.2,
+      "m": 1
+    },
+    "0-4": {
+      "c": 2,
+      "w": 2.8,
+      "m": 0
+    }
+  },
+  "records": {},
+  "lastSpot": {},
+  "rig": {
+    "0": {
+      "depth": 1,
+      "retrieve": "slow"
+    }
+  },
+  "coached": {
+    "runner": 3
+  },
+  "drag": 1
+}

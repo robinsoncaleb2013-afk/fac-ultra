@@ -13,6 +13,8 @@ import {
 } from "@/game/content";
 import { useGame } from "@/game/engine";
 import { habitOf, habitSentences } from "@/game/habits";
+import { MODES } from "@/game/modes";
+import { SURVIVAL_WATERS } from "@/game/survival";
 import { whereToFind } from "@/game/match";
 import { STEWARD_SPECIES, STEWARD_WATER, waterReleased } from "@/game/keep";
 import { recordLine } from "@/game/records";
@@ -63,18 +65,21 @@ export function DexPanel() {
   const stewards = useGame((s) => s.stewards);
   const released = useGame((s) => s.released);
   const n = dexCount(dex);
+  const survival = useGame((s) => !!MODES[s.mode].survival);
   return (
     <div className="flex flex-col gap-3">
       <div>
         <h3 className="font-serif text-lg">
-          Dex {n}/{TOTAL_SPECIES}
+          {survival ? `Survival dex ${n}/${SURVIVAL_WATERS.length * 24}` : `Dex ${n}/${TOTAL_SPECIES}`}
         </h3>
         <p className="text-sm text-muted">
-          Each species adds 1% to sale prices and 0.1 luck. Pin up to eight favorites. Catch all 24
-          others in a water and its boss wakes.
+          {survival
+            ? "Your own collection, just for Survival. It does not touch your career dex. Tap a fish to see where to find it."
+            : "Each species adds 1% to sale prices and 0.1 luck. Pin up to eight favorites. Catch all 24 others in a water and its boss wakes."}
         </p>
       </div>
       {BIOMES.map((place, biome) => {
+        if (survival && !SURVIVAL_WATERS.includes(biome)) return null;
         const caught = biomeSpeciesCaught(dex, biome);
         const bossEntry = dex[`${biome}-${BOSS_INDEX}`];
         const bossName = place.fish[BOSS_INDEX];

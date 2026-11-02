@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { loose, rng } from "@/game/rng";
+import { loose, makeRng, rng, seedFrom, setRng } from "@/game/rng";
 import { habitOf, type FightStyle } from "@/game/habits";
 import { hintForCast, HINT_AFTER, missNote, planCast, windowNow, type CastPlan } from "@/game/match";
 import {
@@ -28,6 +28,41 @@ import {
   type Mode,
   type ModeRules,
 } from "@/game/modes";
+import {
+  addHistory,
+  addLog,
+  advance,
+  bandPadOfGear,
+  biteMul,
+  castMinutes,
+  craft,
+  dailySeed,
+  eat,
+  fightMinutes,
+  freshMeta,
+  gatherWood,
+  gearGate,
+  GATE_TIP,
+  hourOf,
+  holdMulOfGear,
+  isForcedCamp,
+  keepGoing,
+  landFish,
+  localDate,
+  newRun,
+  sanitizeSurvival,
+  sleep,
+  smoke,
+  summarize,
+  SURVIVAL_WATERS,
+  toSurvivalSave,
+  windowAt,
+  type Meal,
+  type RecipeId,
+  type Step,
+  type SurvivalMeta,
+  type SurvivalRun,
+} from "@/game/survival";
 import { assistOn, coachAlways, hintAfter, kidActive, needsSure } from "@/game/kid";
 import {
   addTrip,
@@ -131,7 +166,7 @@ import {
   xpNeed,
 } from "@/game/content";
 
-export type Tab = "cast" | "bag" | "gear" | "lures" | "waters" | "dex" | "lodge";
+export type Tab = "cast" | "bag" | "gear" | "lures" | "waters" | "dex" | "lodge" | "camp";
 export type Phase = "idle" | "wait" | "bite" | "reel";
 export type { Mode } from "@/game/modes";
 export { MODE_KEYS } from "@/game/modes";
@@ -345,6 +380,8 @@ export const sim = {
   cast: null as null | CastInfo,
   waited: 0,
   hinted: false,
+  /* WP-5: when the fish was hooked (sim.t), so a Survival fight can cost game time. -1 = not hooked. */
+  hookT: -1,
 };
 
 /** Everything the fight and the after-catch message need to know about the cast. */
@@ -857,7 +894,9 @@ function closeTrip(
 function persistNow() {
   try {
     const key = modeKey();
-    const json = JSON.stringify(snapshot(useGame.getState()));
+    const st = useGame.getState();
+    /* Survival has its own slot and its own shape (survival.ts): it never writes a career-shaped save. */
+    const json = JSON.stringify(modeRules().survival ? toSurvivalSave(st) : snapshot(st));
     const prev = localStorage.getItem(key);
     if (prev) localStorage.setItem(key + "-bak", prev);
     localStorage.setItem(key, json);
@@ -888,6 +927,70 @@ function shareWithCareer(st: Save) {
   const records = mergeRecords(base.records, st.records);
   if (JSON.stringify(dex) === JSON.stringify(base.dex) && JSON.stringify(records) === JSON.stringify(base.records)) return;
   localStorage.setItem(MODE_KEYS.expedition, JSON.stringify(snapshot({ ...base, dex, records })));
+}
+
+/* ── Survival (WP-5): the store side. The rules are pure and live in survival.ts. ───────────── */
+
+/** Real seconds since the fish was hooked (0 if it never was). */
+function hookedSeconds() {
+  return sim.hookT >= 0 ? Math.max(0, sim.t - sim.hookT) : 0;
+}
+
+/** Make `run` the live run: the sky follows it, a finished run is filed in the history, and it is saved. */
+function commitRun(run: SurvivalRun, line?: string) {
+  const s = useGame.getState();
+  let meta = s.sMeta;
+  let out = run;
+  if (out.over && !out.recorded) {
+    out = { ...out, recorded: true };
+    meta = { ...meta, history: addHistory(meta.history, summarize(out)) };
+    if (out.over?.kind === "won") audio.fanfare();
+    else audio.fail("snap");
+  }
+  const patch: Partial<Store> = { survival: out, sMeta: meta, weather: out.weather };
+  if (line) {
+    patch.message = line;
+    patch.detail = "";
+  }
+  if (isForcedCamp(out) && s.survival && !isForcedCamp(s.survival) && !out.over) {
+    patch.toasts = pushToast([...s.toasts], "It is too dark to fish. Time to camp.");
+  }
+  useGame.setState(patch);
+  persistSoon();
+}
+
+/** A cast is refused when there is no run, the run is over, or it is too dark. Says why. */
+function survivalBlocksCast(): boolean {
+  const run = useGame.getState().survival;
+  let why = "";
+  let dark = false;
+  if (!run) why = "Start a run first.";
+  else if (run.over) why = "This run is over.";
+  else if (isForcedCamp(run)) {
+    why = "It is too dark to fish.";
+    dark = true;
+  }
+  if (!why) return false;
+  useGame.setState({ message: why, detail: dark ? "Open Camp and sleep until morning." : "", ...(dark ? { tab: "camp" as Tab } : {}) });
+  return true;
+}
+
+/** Pay a cast's game time. False when the run ended during it. */
+function survivalChargeCast(waitSeconds: number): boolean {
+  const run = useGame.getState().survival;
+  if (!run) return false;
+  const next = advance({ ...run, casts: run.casts + 1 }, castMinutes(waitSeconds));
+  commitRun(next);
+  if (next.over) {
+    sim.phase = "idle";
+    return false;
+  }
+  return true;
+}
+
+function survivalFightCost(realSeconds: number) {
+  const run = useGame.getState().survival;
+  if (run) commitRun(advance(run, fightMinutes(realSeconds)));
 }
 
 function persistSoon() {
@@ -1226,11 +1329,20 @@ export function windowFor(
 
 /** The window a Recreational trip fixed, or null for the real clock. */
 export function pickedWindow(s: { trip: Trip | null }): Window | null {
+  /* Survival: the game clock decides dawn, day, dusk and night (05 §5). */
+  if (modeRules().survival) {
+    const run = useGame.getState().survival;
+    return run ? windowAt(run.min) : null;
+  }
   return modeRules().trips && s.trip && s.trip.window !== "clock" ? s.trip.window : null;
 }
 
 /** The clock hour the painting should be tinted for when a window is picked; null = the real time. */
 export function pickedHour(s: { trip: Trip | null }): number | null {
+  if (modeRules().survival) {
+    const run = useGame.getState().survival;
+    return run ? Math.floor(hourOf(run.min)) : null;
+  }
   const w = pickedWindow(s);
   return w ? windowHour(w) : null;
 }
@@ -1426,6 +1538,9 @@ function succeed() {
   const fish = sim.fish;
   if (!fish) return;
   const next = withCatch(s, fish, { auto: false, perfect: sim.perfect, frenzy: sim.frenzyLeft > 0, ctx: castContext() });
+  /* Survival: the fish goes in the larder (not a bag to sell from), and the fight costs game time. */
+  const sv = modeRules().survival && s.survival ? s.survival : null;
+  const fed = sv ? advance(landFish(sv, { name: fish.name, w: fish.w, t: fish.t }), fightMinutes(hookedSeconds())) : null;
   sim.phase = "idle";
   sim.leap = { t: 0, look: fish };
   sim.fish = null;
@@ -1444,6 +1559,7 @@ function succeed() {
   if (lc && (fish.t >= 3 || lc.discovered || lc.boss)) audio.fanfare();
   useGame.setState({
     ...next,
+    ...(sv ? { inv: s.inv, toasts: next.lastCatch?.discovered ? pushToast([...s.toasts], `New species. ${fish.name}.`) : s.toasts } : {}),
     helping: false,
     tension: 0,
     celebration: lc ? { catch: lc, at: Date.now() } : null,
@@ -1456,10 +1572,11 @@ function succeed() {
           )
         : s.trip,
     phase: "idle",
-    message: fish.boss ? `${fish.name} landed!` : "Landed. Keep it or let it go?",
+    message: fish.boss ? `${fish.name} landed!` : sv ? "Landed. It goes in the larder." : "Landed. Keep it or let it go?",
     detail: sim.cast && !fish.boss ? (missNote(habitOf(fish.b, fish.i), sim.cast.p) ?? "") : "",
     lair: fish.boss ? !!s.rush : s.lair,
   });
+  if (fed) commitRun(fed);
   /* Online co-op: tell the room (multiplayer.ts listens for this). */
   window.dispatchEvent(new CustomEvent("fac:catch", { detail: { name: next.lastCatch?.name, v: next.lastCatch?.value, b: fish.b } }));
   /* Boss Rush: a boss in the current rush water advances the gauntlet. */
@@ -1496,9 +1613,9 @@ function succeed() {
 }
 
 /** Why a fight was lost: the pill always names the cause (pillar 3). */
-type Why = "bite" | "line" | "jump" | "snap";
+type Why = "bite" | "line" | "jump" | "snap" | "gear";
 
-function fail(kind: "slip" | "snap", why: Why = kind === "snap" ? "snap" : "bite") {
+function fail(kind: "slip" | "snap", why: Why = kind === "snap" ? "snap" : "bite", note?: { message: string; detail: string }) {
   const wasLair = sim.castLair;
   sim.phase = "idle";
   sim.fish = null;
@@ -1519,7 +1636,7 @@ function fail(kind: "slip" | "snap", why: Why = kind === "snap" ? "snap" : "bite
     phase: "idle",
     streak: 0,
     lair: wasLair && !s.rush ? false : s.lair,
-    message: wasLair
+    message: note ? note.message : wasLair
       ? kind === "snap"
         ? "The boss snapped your line."
         : why === "jump"
@@ -1532,8 +1649,9 @@ function fail(kind: "slip" | "snap", why: Why = kind === "snap" ? "snap" : "bite
           : why === "line"
             ? "It got away. You gave too much line."
             : "It shook free.",
-    detail:
-      why === "snap"
+    detail: note
+      ? note.detail
+      : why === "snap"
         ? "Too long in the red. Let go when the needle turns red."
         : why === "jump"
           ? "Next time ease off when it leaps."
@@ -1541,6 +1659,8 @@ function fail(kind: "slip" | "snap", why: Why = kind === "snap" ? "snap" : "bite
             ? "Keep reeling when the line goes slack."
             : "Hook sooner next time.",
   });
+  /* Survival: even a lost fight takes game time (a snapped hand line took a few seconds). */
+  if (modeRules().survival) survivalFightCost(why === "gear" ? 4 : hookedSeconds());
   persistSoon();
 }
 
@@ -1800,7 +1920,8 @@ export function frame(dt: number) {
   }
 
   sim.weatherAcc += dt;
-  if (sim.weatherAcc >= 45) {
+  /* Survival's sky comes from the run's seed (survival.ts), not from this timer. */
+  if (sim.weatherAcc >= 45 && !modeRules().survival) {
     if (sim.phase === "bite" || sim.phase === "reel") sim.weatherAcc = 45;
     else {
       sim.weatherAcc = 0;
@@ -1814,7 +1935,7 @@ export function frame(dt: number) {
     sim.calmAcc += dt;
     if (sim.calmAcc >= 70) {
       sim.calmAcc = 0;
-      if (sim.frenzyLeft <= 0 && rng() < 0.42) {
+      if (sim.frenzyLeft <= 0 && !modeRules().survival && rng() < 0.42) {
         sim.frenzyLeft = 26;
         sim.shownFrenzy = 26;
         audio.frenzy();
@@ -1839,6 +1960,12 @@ function startCast() {
   const s = useGame.getState();
   if (sim.phase !== "idle") return;
   audio.unlock();
+  /* Survival: no cast in the dark or after the run, and every cast rolls from the run's own seed. */
+  if (modeRules().survival) {
+    if (survivalBlocksCast()) return;
+    const run = s.survival!;
+    setRng(makeRng(seedFrom("cast", run.seed, run.casts)));
+  }
   const inRush = !!s.rush;
   const lair = s.lair && (stageOf(s.dex, s.biome) >= 3 || inRush);
   if (s.lair && !lair) {
@@ -1873,6 +2000,7 @@ function startCast() {
   if (fx?.kind === "bite") factor *= fx.mult;
   if (sim.castBait === 0) factor *= 0.85;
   factor *= modeRules().biteSpeed;
+  if (s.survival && modeRules().survival) factor *= biteMul(s.survival);
   /* WP-2: the better the spot and rig suit the fish around, the sooner they bite. */
   const at = castNow(s, sim.castLure, sim.castBait, lair);
   sim.cast = { spotId: at.spotId, p: at.p, window: at.window, weather: at.weather, ms: at.ms, avg: at.avg };
@@ -1880,6 +2008,9 @@ function startCast() {
   sim.waitLeft = Math.max(0.7, ((1200 + rng() * 2800) / 1000) * factor);
   sim.waited = 0;
   sim.hinted = false;
+  sim.hookT = -1;
+  /* Survival: the cast costs game time, 12 minutes plus 4 for every second you wait. */
+  if (modeRules().survival && !survivalChargeCast(sim.waitLeft)) return;
   sim.introT = lair ? sim.waitLeft + 1.2 : 0;
   sim.phase = "wait";
   sim.trauma = Math.min(1, sim.trauma + 0.1);
@@ -1905,6 +2036,14 @@ function hook() {
   sim.phase = "reel";
   sim.misses = 0;
   sim.spinT = 0;
+  /* Survival: a hand line cannot hold a big fish. It snaps, and the pill says what to make. */
+  const sv = modeRules().survival ? s.survival : null;
+  const tooBig = sv ? gearGate(sv.gear, fish.t) : null;
+  if (tooBig) {
+    fail("snap", "gear", { message: tooBig, detail: GATE_TIP });
+    return;
+  }
+  sim.hookT = sim.t;
   const habit = habitOf(fish.b, fish.i);
   const fx = sigEffect(s.sig);
   /* Gear still matters: a better rod widens the green, a better reel gains line faster, a
@@ -1924,11 +2063,11 @@ function hook() {
     stamina: habit.stamina,
     boss: fish.boss,
     biome: fish.b,
-    hold: LINES[s.line].hold,
+    hold: sv ? LINES[0].hold * holdMulOfGear(sv.gear) : LINES[s.line].hold,
     reelSpeed: REELS[s.reel].speed,
     drag: s.drag,
     pullMul,
-    bandPad,
+    bandPad: sv ? bandPad + bandPadOfGear(sv.gear) : bandPad,
   });
   sim.fight = F;
   sim.dragAtHook = s.drag;
@@ -2045,11 +2184,31 @@ type Ui = {
   askWho: boolean;
   /** Kid Mode "Are you sure?": which sale is waiting for its second tap. */
   armSell: string;
+  /* WP-5 (Survival only; never part of the career Save, it lives in fac-ultra-survival) */
+  /** The run in progress, or null when none has been started. */
+  survival: SurvivalRun | null;
+  /** Finished runs and the last water picked. */
+  sMeta: SurvivalMeta;
 };
 
 type Store = Save &
   Ui & {
     setTab: (tab: Tab) => void;
+    /** Survival: start a run on a water, as today's daily challenge or a free run. */
+    beginRun: (water: number, daily: boolean) => void;
+    /** Survival: start the finished run again from the same seed. */
+    retryRun: () => void;
+    /** Survival: leave the finished run and pick a new one. */
+    leaveRun: () => void;
+    /** Survival: after the rescue boat, keep going. */
+    continueRun: () => void;
+    /** Survival camp: eat a fish from the larder, raw or cooked. */
+    campEat: (index: number, how: Meal) => void;
+    campSmoke: (index: number) => void;
+    campLog: () => void;
+    campGather: () => void;
+    campSleep: () => void;
+    campCraft: (id: RecipeId) => void;
     setScreen: (screen: "menu" | "game") => void;
     setLodgeView: (view: LodgeView) => void;
     switchMode: (mode: Mode) => void;
@@ -2134,6 +2293,52 @@ export const useGame = create<Store>((set, get) => ({
   tripCard: null,
   askWho: false,
   armSell: "",
+  survival: null,
+  sMeta: freshMeta(),
+  beginRun: (water, daily) => {
+    if (!modeRules().survival || sim.phase !== "idle") return;
+    const w = SURVIVAL_WATERS.includes(water) ? water : 0;
+    const date = localDate();
+    const seed = daily ? dailySeed(date, w) : (loose() * 4294967296) >>> 0;
+    const run = newRun(w, seed, daily, date);
+    resetSim();
+    set({
+      survival: run,
+      sMeta: { ...get().sMeta, lastWater: w },
+      biome: w,
+      weather: run.weather,
+      tab: "cast",
+      celebration: null,
+      message: "Day 1. You are on your own. Cast a line.",
+      detail: daily ? "Today's challenge: everyone gets the same sky." : "A free run: your own sky.",
+    });
+    persistNow();
+  },
+  retryRun: () => {
+    const r = get().survival;
+    if (!modeRules().survival || !r?.over || sim.phase !== "idle") return;
+    resetSim();
+    const run = newRun(r.water, r.seed, r.daily, r.date);
+    set({ survival: run, biome: run.water, weather: run.weather, tab: "cast", celebration: null, message: "Same water, same sky. Try again.", detail: "" });
+    persistNow();
+  },
+  leaveRun: () => {
+    if (!modeRules().survival || !get().survival?.over) return;
+    resetSim();
+    set({ survival: null, tab: "cast", celebration: null, message: "Pick a water to begin.", detail: "" });
+    persistNow();
+  },
+  continueRun: () => {
+    const r = get().survival;
+    if (!r) return;
+    commitRun(keepGoing(r), "You keep going. How long can you last?");
+  },
+  campEat: (index, how) => runCamp((r) => eat(r, index, how)),
+  campSmoke: (index) => runCamp((r) => smoke(r, index)),
+  campLog: () => runCamp((r) => addLog(r)),
+  campGather: () => runCamp((r) => gatherWood(r)),
+  campSleep: () => runCamp((r) => sleep(r), true),
+  campCraft: (id) => runCamp((r) => craft(r, id)),
   setKid: (on) => {
     set({ kid: on });
     persistSoon();
@@ -2629,6 +2834,8 @@ export const useGame = create<Store>((set, get) => ({
     const tab = s.tab;
     set({
       ...(modeRules().allUnlocked ? unlockedSave() : fresh()),
+      survival: null,
+      sMeta: freshMeta(),
       sound: s.sound,
       motion: s.motion,
       flash: s.flash,
@@ -2657,8 +2864,32 @@ export const useGame = create<Store>((set, get) => ({
     persistSoon();
   },
   importSave: (raw) => {
-    const save = sanitize(raw);
     if (!raw || typeof raw !== "object") return false;
+    if (modeRules().survival) {
+      /* A Survival ledger is its own shape: the run, the history and the Survival dex. */
+      const sv = sanitizeSurvival(raw);
+      resetSim();
+      set({
+        dex: sv.dex,
+        records: sv.records,
+        lastSpot: sv.lastSpot,
+        rig: sv.rig,
+        coached: sv.coached,
+        drag: sv.drag,
+        survival: sv.run,
+        sMeta: { history: sv.history, lastWater: sv.lastWater },
+        biome: sv.run?.water ?? sv.lastWater,
+        weather: sv.run?.weather ?? 0,
+        phase: "idle",
+        message: "Ledger restored.",
+        detail: "",
+        tab: "cast",
+        toasts: pushToast([], "Save imported."),
+      });
+      persistNow();
+      return true;
+    }
+    const save = sanitize(raw);
     resetSim();
     audio.setEnabled(save.sound);
     set({
@@ -2678,7 +2909,7 @@ export const useGame = create<Store>((set, get) => ({
     return true;
   },
   exportCode: () => {
-    const json = JSON.stringify(snapshot(get()));
+    const json = JSON.stringify(modeRules().survival ? toSurvivalSave(get()) : snapshot(get()));
     return btoa(unescape(encodeURIComponent(json)));
   },
   importCode: (code) => {
@@ -2690,6 +2921,23 @@ export const useGame = create<Store>((set, get) => ({
     }
   },
 }));
+
+/** One thing the player does at camp: only between fish, and the game says plainly when it can't be done. */
+function runCamp(fn: (r: SurvivalRun) => Step, morning = false) {
+  const s = useGame.getState();
+  if (!s.survival) return;
+  if (sim.phase !== "idle") {
+    useGame.setState({ toasts: pushToast([...s.toasts], "Finish this fish first.") });
+    return;
+  }
+  const step = fn(s.survival);
+  if (!step.ok) {
+    useGame.setState({ message: step.say, detail: "", toasts: pushToast([...s.toasts], step.say) });
+    return;
+  }
+  commitRun(step.run, step.say);
+  if (morning && !step.run.over) useGame.setState({ tab: "cast", detail: "A new day. Check the sky and cast a line." });
+}
 
 function loadSlot(mode: Mode, toGame: boolean) {
   currentMode = mode;
@@ -2707,7 +2955,22 @@ function loadSlot(mode: Mode, toGame: boolean) {
     }
   }
   let save: Save;
-  if (!raw && MODES[mode].allUnlocked) save = unlockedSave();
+  /* Survival's slot has its own shape (survival.ts): its run, its history and its own dex. */
+  const sv = MODES[mode].survival ? sanitizeSurvival(raw) : null;
+  if (sv) {
+    save = {
+      ...fresh(),
+      dex: sv.dex,
+      records: sv.records,
+      lastSpot: sv.lastSpot,
+      rig: sv.rig,
+      coached: sv.coached,
+      drag: sv.drag,
+      biome: sv.run?.water ?? sv.lastWater,
+      ub: [...SURVIVAL_WATERS],
+      weather: sv.run?.weather ?? 0,
+    };
+  } else if (!raw && MODES[mode].allUnlocked) save = unlockedSave();
   else save = sanitize(raw);
   /* Recreational fills the career collection: bring the career dex and records in (and, the first time,
      the old Sandbox's own dex goes the other way, see persistNow). */
@@ -2756,8 +3019,12 @@ function loadSlot(mode: Mode, toGame: boolean) {
   }
   audio.setEnabled(save.sound);
   resetSim();
+  /* Leaving Survival: its seeded dice stop, casual play is unpredictable again. */
+  if (useGame.getState().mode === "survival" && mode !== "survival") setRng(makeRng((loose() * 4294967296) >>> 0));
   useGame.setState({
     ...save,
+    survival: sv?.run ?? null,
+    sMeta: sv ? { history: sv.history, lastWater: sv.lastWater } : freshMeta(),
     tier: resolveGfx(save.gfx, formOf(dev), dev.mem, dev.cores),
     celebration: null,
     helping: false,
@@ -2799,7 +3066,8 @@ export function hydrate(mode: Mode = "expedition") {
 export { legacyMode };
 
 export function downloadSave() {
-  const blob = new Blob([JSON.stringify(snapshot(useGame.getState()))], { type: "application/json" });
+  const st = useGame.getState();
+  const blob = new Blob([JSON.stringify(modeRules().survival ? toSurvivalSave(st) : snapshot(st))], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = "fac-ultra.json";

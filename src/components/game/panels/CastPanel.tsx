@@ -19,6 +19,7 @@ import {
 import { useGame } from "@/game/engine";
 import { MODES } from "@/game/modes";
 import { TripBar } from "@/components/game/trips";
+import { SurvivalCastCard } from "@/components/game/survival";
 import { DEFAULT_RIG, FAMILY_INFO, familyOf, rigLabel } from "@/game/presentation";
 import { resolveSpot } from "@/game/spots";
 import { FishPortrait } from "@/components/game/portrait";
@@ -151,17 +152,19 @@ export function CastPanel() {
   const taught = useGame((s) => s.taught);
   const stage = useGame((s) => stageOf(s.dex, s.biome));
   const derby = useGame((s) => s.derby);
+  const survival = useGame((s) => !!MODES[s.mode].survival);
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-3 gap-2">
+      {survival ? <SurvivalCastCard /> : null}
+      <div className={cn("grid grid-cols-3 gap-2", survival && "hidden")}>
         <Stat k="Luck" v={String(luck)} />
         <Stat k="Streak" v={String(streak)} />
         <Stat k="Stage" v={STAGE_NAMES[stage]} />
       </div>
       <SpotCard />
       {derby ? <DerbyBanner /> : null}
-      <BossControls />
+      {survival ? null : <BossControls />}
       {last ? (
         <article className="overflow-hidden rounded-2xl border border-line bg-surface">
           <div className="relative h-40 bg-surface-2">
@@ -181,7 +184,7 @@ export function CastPanel() {
             </p>
             <h2 className="font-serif text-2xl leading-tight">{last.name}</h2>
             <p className="text-sm text-muted">
-              {BIOMES[last.biome].name} · {last.weight} lb · worth {money(Math.round(last.value * mult))}
+              {BIOMES[last.biome].name} · {last.weight} lb{survival ? "" : ` · worth ${money(Math.round(last.value * mult))}`}
             </p>
             <div className="flex flex-wrap gap-1.5 pt-1">
               {last.discovered ? <Badge>New species</Badge> : null}
@@ -193,11 +196,11 @@ export function CastPanel() {
         </article>
       ) : (
         <p className="rounded-2xl border border-dashed border-line px-3 py-4 text-sm text-muted">
-          The bank is empty. Cast, hook the bite, then keep the brass mark in the teal band.
+          {survival ? "Nothing caught yet. Cast, hook the bite, and hold the reel while the needle stays green." : "The bank is empty. Cast, hook the bite, then keep the brass mark in the teal band."}
         </p>
       )}
       <Bounties />
-      {taught ? null : (
+      {taught || survival ? null : (
         <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm text-muted">
           <li>Cast and watch the bobber.</li>
           <li>Hook as soon as it bites. A fast hook is worth more.</li>

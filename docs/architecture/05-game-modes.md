@@ -136,3 +136,10 @@ Expedition · Recreational · Survival · Tournaments · Co-op (local + online) 
 - **WP-4**: `modes.ts` rules table drives every mode branch; Recreational with creel, trip log, Logbook view, photo mode; Kid Mode profile with every row in §4; menu cards from `MODES`; migration from `sandbox` keeps old sandbox saves; tests for `rules()` and trip summaries.
 - **WP-5**: Survival on 8 waters with meters, camp, crafting, larder, seeded weather forecast, daily seed vs free run, death screen; `survival.test.ts` thresholds; phone layout works.
 - **WP-6**: 12 rivals replacing derby numbers; pet with hourly gift; sticker dex pages with peel/foil/shiny; Fish of the Day; 5 ambient loops with crossfade and volume; rarity shapes + CB palette; all gated by `motion`/`sound` settings.
+
+## 9. As built: WP-5 Survival
+
+- Rules live in `src/game/survival.ts` (pure, seeded, no Math.random). The store hooks are small and additive in `engine.ts`.
+- Own save slot `fac-ultra-survival` with its own dex and run history. Career `SAVE_VERSION` is unchanged. Survival save has its own `sanitizeSurvival` / `migrateSurvival` (fixture: `src/game/__fixtures__/survival-v1.json`).
+- Waters: Pond, Creek, Lake, River, Reservoir, Arctic, Bayou, Delta (ids 0,1,2,3,5,9,4,8). Rescue arrives on day 15.
+- Tests: `survival.test.ts` (thresholds: competent player lasts 12+ days on Pond with the 2026-01-01 seed, do-nothing dies on day 2, raw-only eating gives 1+ bad fish per 20) and `survival-flow.test.ts` (real store, slot separation, reload).

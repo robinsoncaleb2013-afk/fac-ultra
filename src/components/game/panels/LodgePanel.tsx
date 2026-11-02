@@ -24,6 +24,7 @@ import {
 import { downloadSave, sim, useGame } from "@/game/engine";
 import { MODES } from "@/game/modes";
 import { Logbook } from "@/components/game/trips";
+import { RunsLog } from "@/components/game/survival";
 import { useKidOn } from "@/components/game/use-kid";
 import { createRoom, joinRoom, leaveRoom, useCrew } from "@/game/multiplayer";
 import { FishPortrait } from "@/components/game/portrait";
@@ -38,7 +39,14 @@ export function LodgePanel() {
   const view = useGame((s) => s.lodgeView);
   const setView = useGame((s) => s.setLodgeView);
   const trips = useGame((s) => MODES[s.mode].trips);
-  const views = (
+  const survival = useGame((s) => !!MODES[s.mode].survival);
+  const views = (survival
+    ? ([
+        ["record", "Record"],
+        ["logbook", "Runs"],
+        ["settings", "Settings"],
+      ] as const)
+    : (
     [
       ["record", "Record"],
       ["logbook", "Logbook"],
@@ -47,7 +55,7 @@ export function LodgePanel() {
       ["crew", "Crew"],
       ["settings", "Settings"],
     ] as const
-  ).filter(([id]) => id !== "logbook" || trips);
+      ).filter(([id]) => id !== "logbook" || trips));
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-1 overflow-x-auto">
@@ -65,12 +73,30 @@ export function LodgePanel() {
           </button>
         ))}
       </div>
-      {view === "record" ? <Record /> : null}
+      {view === "record" ? survival ? <SurvivalRecord /> : <Record /> : null}
       {view === "logbook" && trips ? <Logbook /> : null}
-      {view === "tank" ? <Aquarium /> : null}
-      {view === "derby" ? <DerbyView /> : null}
-      {view === "crew" ? <CrewView /> : null}
+      {view === "logbook" && survival ? <RunsLog /> : null}
+      {view === "tank" && !survival ? <Aquarium /> : null}
+      {view === "derby" && !survival ? <DerbyView /> : null}
+      {view === "crew" && !survival ? <CrewView /> : null}
       {view === "settings" ? <Settings /> : null}
+    </div>
+  );
+}
+
+/** Lodge → Record in Survival: your best runs and best fish. No level, luck or rebirth here. */
+function SurvivalRecord() {
+  const meta = useGame((s) => s.sMeta);
+  const caught = useGame((s) => dexCount(s.dex));
+  const best = meta.history.reduce((m, r) => Math.max(m, r.days), 0);
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-2xl border border-line bg-surface p-3 text-sm leading-6">
+        <p>Longest run {best} {best === 1 ? "day" : "days"}</p>
+        <p>Runs finished {meta.history.length}</p>
+        <p>Kinds of fish found in Survival {caught}</p>
+      </div>
+      <RecordBook />
     </div>
   );
 }
