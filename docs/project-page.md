@@ -7,11 +7,8 @@ like this one, under the update contract in that repo's `docs/WEBSITE-BLUEPRINT.
 
 How it works: edit this file here, in this repository, and tell Chris the update is
 ready. Chris's side screens it and publishes it to the website — this file alone
-changes nothing public.
-
-The Caleb-side guide to working with this record — update workflows, the
-new-project routine, and the copy-paste request message for Chris — is
-`docs/WEBSITE-UPDATES.md` in this repo. Keep it honest: features list only what the current build
+changes nothing public. **Agents: your full instructions are in
+`docs/website/AGENT-PLAYBOOK.md` in this repo — read it before editing this file.** Keep it honest: features list only what the current build
 actually does, updates are dated, and no personal information goes in here.
 
 ## Name
