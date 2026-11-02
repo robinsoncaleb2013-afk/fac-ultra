@@ -1,7 +1,10 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { loadArt, wantedSize } from "@/game/art";
 import { biomeSpeciesCaught, BIOMES, BOSS_INDEX, STAGE_NAMES, stageOf, WEATHER } from "@/game/content";
 import { act, frame, sim, useGame } from "@/game/engine";
+import { windowNow } from "@/game/match";
+import { WINDOW_INFO } from "@/game/presentation";
+import { nearestSpot } from "@/game/spots";
 import { FpsMeter, governorStep, shouldSkipFrame, TIERS } from "@/game/graphics";
 import { paint } from "@/components/game/stage-paint";
 import { cn } from "@/lib/cn";
@@ -108,7 +111,21 @@ export function Stage({ menu = false, big = false, className, biomeOverride, onW
         !menu && idle && "cursor-pointer",
         className,
       )}
-      onPointerDown={menu ? undefined : () => (onWater ? onWater() : act())}
+      onPointerDown={
+        menu
+          ? undefined
+          : (e) => {
+              /* Aim first: a tap on a spot's ring picks that spot, then the tap does its usual job. */
+              const st = useGame.getState();
+              if (st.phase === "idle") {
+                const r = e.currentTarget.getBoundingClientRect();
+                const spot = nearestSpot(st.biome, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, r.width, r.height, big);
+                if (spot) st.setSpot(spot.id);
+              }
+              if (onWater) onWater();
+              else act();
+            }
+      }
       onPointerMove={(e) => {
         if (menu || e.pointerType !== "mouse") return;
         const r = e.currentTarget.getBoundingClientRect();
@@ -124,6 +141,18 @@ export function Stage({ menu = false, big = false, className, biomeOverride, onW
   );
 }
 
+/** The time-of-day window the fish are feeding in, kept fresh once a minute. */
+function useWindow() {
+  const weather = useGame((s) => s.weather);
+  const follow = useGame((s) => s.followClock);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+  return windowNow(follow, weather, now);
+}
+
 export function StageChips({ className, style }: { className?: string; style?: CSSProperties }) {
   const biome = useGame((s) => s.biome);
   const weather = useGame((s) => s.weather);
@@ -131,9 +160,11 @@ export function StageChips({ className, style }: { className?: string; style?: C
   const stage = useGame((s) => stageOf(s.dex, s.biome));
   const lair = useGame((s) => s.lair);
   const boss = useGame((s) => biomeSpeciesCaught(s.dex, s.biome));
+  const slot = useWindow();
   return (
     <div style={style} className={cn("pointer-events-none flex flex-wrap gap-1.5", className)}>
       <Chip>{WEATHER[weather].name}</Chip>
+      <Chip>{WINDOW_INFO[slot].label}</Chip>
       <Chip>{BIOMES[biome].name}</Chip>
       <Chip>{lair ? "Boss Lair" : STAGE_NAMES[stage]}</Chip>
       <Chip>

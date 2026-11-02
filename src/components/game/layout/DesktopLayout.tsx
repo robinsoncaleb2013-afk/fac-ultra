@@ -9,6 +9,7 @@ import { CastDock } from "@/components/game/layout/CastDock";
 import { Drawer } from "@/components/game/layout/Drawer";
 import { HudBar } from "@/components/game/layout/HudBar";
 import { Rail } from "@/components/game/layout/Rail";
+import { RigPopover, RigSheet, SpotChips } from "@/components/game/layout/RigControl";
 
 /** Big Water: the painting fills the screen; the rail, HUD bar, drawer and cast dock float over it. */
 export function DesktopLayout({ plan }: { plan: LayoutPlan }) {
@@ -49,6 +50,17 @@ export function DesktopLayout({ plan }: { plan: LayoutPlan }) {
           </div>
           <Rail collapsed={plan.railCollapsed} />
           <Drawer left={railW} width={plan.drawerWidth} />
+          <div className="absolute bottom-7 z-20" style={{ left: railW + 12 }}>
+            {plan.bigRing ? <RigSheet compact /> : <RigPopover />}
+          </div>
+          {plan.bigRing ? (
+            <div
+              className="absolute right-3 bottom-7 z-20 flex"
+              style={{ width: `calc(50% - ${150 + 12}px)` }}
+            >
+              <SpotChips className="overflow-x-auto [scrollbar-width:none]" />
+            </div>
+          ) : null}
           <CastDock />
           <Toasts />
           <Celebration />

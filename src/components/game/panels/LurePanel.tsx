@@ -9,6 +9,7 @@ import {
   SIG_LURES,
 } from "@/game/content";
 import { useGame } from "@/game/engine";
+import { FAMILY_INFO } from "@/game/presentation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
@@ -67,7 +68,7 @@ export function LurePanel() {
           >
             <span className="block text-sm font-semibold leading-snug">{LURES[index].name}</span>
             <span className="mt-1 block text-xs text-muted">
-              Luck {compact(LURES[index].luck)} · haste {compact(LURES[index].speed)} · ×{box[String(index)]}
+              {FAMILY_INFO[LURES[index].family].label} · luck {compact(LURES[index].luck)} · haste {compact(LURES[index].speed)} · ×{box[String(index)]}
             </span>
           </button>
         ))}
@@ -119,6 +120,7 @@ function SigSection() {
             >
               <span className="block text-sm font-semibold leading-snug">{item.name}</span>
               <span className="mt-1 block text-xs text-muted">{item.desc}</span>
+              <span className="mt-1 block text-xs text-lagoon">{FAMILY_INFO[item.family].label}</span>
               <span className="mt-2 block text-sm text-brass">
                 {equipped ? "Equipped" : have ? "Equip" : money(item.price)}
               </span>
@@ -163,6 +165,7 @@ function BaitSection() {
             >
               <span className="block text-sm font-semibold leading-snug">{item.name}</span>
               <span className="mt-1 block text-xs text-muted">{item.desc}</span>
+              <span className="mt-1 block text-xs text-lagoon">{FAMILY_INFO[item.family].label}</span>
               <span className="mt-1 block text-xs text-muted">Have {count}</span>
               <span className="mt-2 flex gap-2">
                 <Button

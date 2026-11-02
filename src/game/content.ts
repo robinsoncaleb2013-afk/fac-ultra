@@ -1,3 +1,6 @@
+import type { LureFamily } from "./presentation.ts";
+import { rng, weighted } from "./rng.ts";
+
 export type DexEntry = { c: number; w: number; m: number };
 export type Dex = Record<string, DexEntry>;
 
@@ -212,11 +215,37 @@ const LURE_TYPES =
   "Spinnerbait,Crankbait,Jig,Spoon,Popper,Swimbait,Jerkbait,Buzzbait,Frog,Worm,Grub,Plug,Topwater,Fly,Softbait,Blade,Squid Rig".split(",");
 const LURE_BRANDS = ["Strike King", "Rapala", "Berkley"];
 
-export const LURES = Array.from({ length: 50 }, (_, i) => ({
-  name: `${LURE_BRANDS[i % 3]} ${LURE_TYPES[Math.floor(i / 3)]}`,
-  luck: i * 1.2 + 1,
-  speed: i * 0.5,
-}));
+/** Every lure belongs to a family (docs/architecture/04 §3.1); a procedural lure takes the
+    family of its type, so a "Rapala Crankbait" is a crank and a "Berkley Worm" is a worm. */
+export const LURE_TYPE_FAMILY: Record<string, LureFamily> = {
+  Spinnerbait: "crank",
+  Crankbait: "crank",
+  Jig: "jig",
+  Spoon: "spoon",
+  Popper: "topwater",
+  Swimbait: "minnow",
+  Jerkbait: "minnow",
+  Buzzbait: "topwater",
+  Frog: "topwater",
+  Worm: "worm",
+  Grub: "insect",
+  Plug: "crank",
+  Topwater: "topwater",
+  Fly: "fly",
+  Softbait: "worm",
+  Blade: "spoon",
+  "Squid Rig": "squid",
+};
+
+export const LURES = Array.from({ length: 50 }, (_, i) => {
+  const type = LURE_TYPES[Math.floor(i / 3)];
+  return {
+    name: `${LURE_BRANDS[i % 3]} ${type}`,
+    family: LURE_TYPE_FAMILY[type],
+    luck: i * 1.2 + 1,
+    speed: i * 0.5,
+  };
+});
 
 export const PACKS = [
   { name: "Basic Pack", price: 100, min: 0, max: 16 },
@@ -233,33 +262,33 @@ export type SigEffect =
   | { kind: "calm"; speed: number; zone: number }
   | { kind: "bite"; mult: number };
 
-export type SigLure = { name: string; price: number; desc: string; effect: SigEffect };
+export type SigLure = { name: string; family: LureFamily; price: number; desc: string; effect: SigEffect };
 
 export const SIG_LURES: SigLure[] = [
-  { name: "Eel Whistle", price: 2500, desc: "Eels and eel-kin bite three times as often.", effect: { kind: "family", fam: "eel", mult: 3 } },
-  { name: "Ray Charm", price: 2500, desc: "Rays and mantas drift in three times as often.", effect: { kind: "family", fam: "ray", mult: 3 } },
-  { name: "Shell Bell", price: 3000, desc: "Turtles come to the bell, three times as often.", effect: { kind: "family", fam: "turtle", mult: 3 } },
-  { name: "Shark Tooth Rig", price: 4000, desc: "Sharks smell it three waters away.", effect: { kind: "family", fam: "shark", mult: 3 } },
-  { name: "Whale Song Box", price: 6000, desc: "The great ones come to listen — three times as often.", effect: { kind: "family", fam: "whale", mult: 3 } },
-  { name: "Crab Trap Charm", price: 3000, desc: "Crabs, lobsters and shrimp can't resist it.", effect: { kind: "family", fam: "crab", mult: 3 } },
-  { name: "Squid Lantern", price: 5000, desc: "Squid and octopus rise to the light.", effect: { kind: "family", fam: "squid", mult: 3 } },
-  { name: "Seahorse Flute", price: 5000, desc: "A tune only seahorses know.", effect: { kind: "family", fam: "seahorse", mult: 3 } },
-  { name: "Jelly Lantern", price: 6500, desc: "Jellies pulse toward the glow.", effect: { kind: "family", fam: "jelly", mult: 3 } },
-  { name: "False Lantern", price: 7500, desc: "Anglerfish hunt the hunter's light.", effect: { kind: "family", fam: "angler", mult: 3 } },
-  { name: "Prism Spoon", price: 8000, desc: "Mutations twice as likely. The strange love it.", effect: { kind: "mutation", mult: 2 } },
-  { name: "Star Spoon", price: 30000, desc: "Mutations three times as likely.", effect: { kind: "mutation", mult: 3 } },
-  { name: "Gilded Spoon", price: 12000, desc: "Everything you land is worth 30% more.", effect: { kind: "value", mult: 1.3 } },
-  { name: "Ultra Spoon Ω", price: 60000, desc: "Everything you land is worth 60% more.", effect: { kind: "value", mult: 1.6 } },
-  { name: "Epic Decoy", price: 15000, desc: "Rare and better fish bite two and a half times as often.", effect: { kind: "epic", mult: 2.5 } },
-  { name: "Royal Decoy", price: 45000, desc: "Rare and better fish bite three and a half times as often.", effect: { kind: "epic", mult: 3.5 } },
-  { name: "Storm Bell", price: 5000, desc: "+30 luck while the storm is up (+5 otherwise).", effect: { kind: "weather", weather: 2, luck: 30 } },
-  { name: "Rain Drum", price: 3500, desc: "+22 luck in the rain (+5 otherwise).", effect: { kind: "weather", weather: 1, luck: 22 } },
-  { name: "Fog Horn", price: 4500, desc: "+25 luck in the fog (+5 otherwise).", effect: { kind: "weather", weather: 3, luck: 25 } },
-  { name: "Moth Lantern", price: 3500, desc: "+25 luck at night (+5 otherwise).", effect: { kind: "weather", weather: 4, luck: 25 } },
-  { name: "Calm Bell", price: 4000, desc: "The reel mark runs a quarter slower. Forgiving water.", effect: { kind: "calm", speed: 0.75, zone: 4 } },
-  { name: "Deep Calm Bell", price: 14000, desc: "The reel mark runs 40% slower, and the band widens.", effect: { kind: "calm", speed: 0.6, zone: 7 } },
-  { name: "Swift Bell", price: 4000, desc: "Fish bite 30% sooner.", effect: { kind: "bite", mult: 0.7 } },
-  { name: "Hunter's Drum", price: 9000, desc: "Fish bite 45% sooner.", effect: { kind: "bite", mult: 0.55 } },
+  { name: "Eel Whistle", family: "worm", price: 2500, desc: "Eels and eel-kin bite three times as often.", effect: { kind: "family", fam: "eel", mult: 3 } },
+  { name: "Ray Charm", family: "cut", price: 2500, desc: "Rays and mantas drift in three times as often.", effect: { kind: "family", fam: "ray", mult: 3 } },
+  { name: "Shell Bell", family: "cut", price: 3000, desc: "Turtles come to the bell, three times as often.", effect: { kind: "family", fam: "turtle", mult: 3 } },
+  { name: "Shark Tooth Rig", family: "cut", price: 4000, desc: "Sharks smell it three waters away.", effect: { kind: "family", fam: "shark", mult: 3 } },
+  { name: "Whale Song Box", family: "glow", price: 6000, desc: "The great ones come to listen — three times as often.", effect: { kind: "family", fam: "whale", mult: 3 } },
+  { name: "Crab Trap Charm", family: "cut", price: 3000, desc: "Crabs, lobsters and shrimp can't resist it.", effect: { kind: "family", fam: "crab", mult: 3 } },
+  { name: "Squid Lantern", family: "squid", price: 5000, desc: "Squid and octopus rise to the light.", effect: { kind: "family", fam: "squid", mult: 3 } },
+  { name: "Seahorse Flute", family: "insect", price: 5000, desc: "A tune only seahorses know.", effect: { kind: "family", fam: "seahorse", mult: 3 } },
+  { name: "Jelly Lantern", family: "glow", price: 6500, desc: "Jellies pulse toward the glow.", effect: { kind: "family", fam: "jelly", mult: 3 } },
+  { name: "False Lantern", family: "glow", price: 7500, desc: "Anglerfish hunt the hunter's light.", effect: { kind: "family", fam: "angler", mult: 3 } },
+  { name: "Prism Spoon", family: "spoon", price: 8000, desc: "Mutations twice as likely. The strange love it.", effect: { kind: "mutation", mult: 2 } },
+  { name: "Star Spoon", family: "spoon", price: 30000, desc: "Mutations three times as likely.", effect: { kind: "mutation", mult: 3 } },
+  { name: "Gilded Spoon", family: "spoon", price: 12000, desc: "Everything you land is worth 30% more.", effect: { kind: "value", mult: 1.3 } },
+  { name: "Ultra Spoon Ω", family: "spoon", price: 60000, desc: "Everything you land is worth 60% more.", effect: { kind: "value", mult: 1.6 } },
+  { name: "Epic Decoy", family: "minnow", price: 15000, desc: "Rare and better fish bite two and a half times as often.", effect: { kind: "epic", mult: 2.5 } },
+  { name: "Royal Decoy", family: "minnow", price: 45000, desc: "Rare and better fish bite three and a half times as often.", effect: { kind: "epic", mult: 3.5 } },
+  { name: "Storm Bell", family: "crank", price: 5000, desc: "+30 luck while the storm is up (+5 otherwise).", effect: { kind: "weather", weather: 2, luck: 30 } },
+  { name: "Rain Drum", family: "fly", price: 3500, desc: "+22 luck in the rain (+5 otherwise).", effect: { kind: "weather", weather: 1, luck: 22 } },
+  { name: "Fog Horn", family: "jig", price: 4500, desc: "+25 luck in the fog (+5 otherwise).", effect: { kind: "weather", weather: 3, luck: 25 } },
+  { name: "Moth Lantern", family: "insect", price: 3500, desc: "+25 luck at night (+5 otherwise).", effect: { kind: "weather", weather: 4, luck: 25 } },
+  { name: "Calm Bell", family: "worm", price: 4000, desc: "The reel mark runs a quarter slower. Forgiving water.", effect: { kind: "calm", speed: 0.75, zone: 4 } },
+  { name: "Deep Calm Bell", family: "jig", price: 14000, desc: "The reel mark runs 40% slower, and the band widens.", effect: { kind: "calm", speed: 0.6, zone: 7 } },
+  { name: "Swift Bell", family: "topwater", price: 4000, desc: "Fish bite 30% sooner.", effect: { kind: "bite", mult: 0.7 } },
+  { name: "Hunter's Drum", family: "crank", price: 9000, desc: "Fish bite 45% sooner.", effect: { kind: "bite", mult: 0.55 } },
 ];
 
 export function sigEffect(sig: number): SigEffect | null {
@@ -268,12 +297,12 @@ export function sigEffect(sig: number): SigEffect | null {
 
 /* ── Bait: consumables for the new bait slot ───────────────────────────── */
 
-export const BAITS = [
-  { name: "Dough Ball", price: 15, desc: "Bites come 15% sooner." },
-  { name: "Glow Worm", price: 60, desc: "Mutations 25% more likely on this cast." },
-  { name: "Chum Bucket", price: 240, desc: "Rare and better fish bite 60% more often." },
-  { name: "Boss Chum", price: 0, desc: "Wakes the boss in its Lair. One per attempt. Priced by the water." },
-] as const;
+export const BAITS: readonly { name: string; family: LureFamily; price: number; desc: string }[] = [
+  { name: "Dough Ball", family: "dough", price: 15, desc: "Bites come 15% sooner." },
+  { name: "Glow Worm", family: "glow", price: 60, desc: "Mutations 25% more likely on this cast." },
+  { name: "Chum Bucket", family: "cut", price: 240, desc: "Rare and better fish bite 60% more often." },
+  { name: "Boss Chum", family: "cut", price: 0, desc: "Wakes the boss in its Lair. One per attempt. Priced by the water." },
+];
 
 export const BOSS_CHUM_INDEX = 3;
 
@@ -470,18 +499,6 @@ export function compact(n: number) {
   return Number.isInteger(r) ? String(r) : r.toFixed(1);
 }
 
-function pickWeighted(weights: number[]) {
-  let sum = 0;
-  for (const w of weights) sum += w;
-  let r = Math.random() * sum;
-  let i = 0;
-  while (i < weights.length - 1 && r > weights[i]) {
-    r -= weights[i];
-    i++;
-  }
-  return i;
-}
-
 export type RollOptions = {
   /** Roll the biome boss (slot 24) — Boss Lair casts only. */
   boss?: boolean;
@@ -491,30 +508,57 @@ export type RollOptions = {
   sig?: SigEffect | null;
   /** Equipped bait index, or -1. */
   bait?: number;
+  /** WP-2: match score (0…9.5) of every species in the water for this spot and presentation. */
+  match?: readonly number[];
 };
 
-export function rollFish(biome: number, luck: number, opts: RollOptions = {}): Rolled {
-  const boss = !!opts.boss;
+/* ── How much a good match is worth (04 §3.5, §4) ────────────────────────
+   The spec's first draft was `1 + 0.55·score` (a perfect rig ≈ 6× a hopeless
+   one). Measured against the tuning targets in §4 that is far too gentle: with
+   25 species sharing every spot, a perfect epic match at luck 40 landed about
+   2% of the time, not the 12% the targets ask for. So the curve is steeper at
+   the top: e^(0.4·score) so every extra point matters, plus a bonus that only
+   a near-perfect rig (score 7+) earns. A middling rig (score 4) is worth ~5×,
+   a perfect one (9.5) ~4,500×. Tuning tests live in match.test.ts. */
+export const MAX_MATCH = 9.5;
+export const MATCH_SLOPE = 0.4;
+export const MATCH_PERFECT_BONUS = 40;
+
+export function matchWeight(score: number): number {
+  const s = Math.min(MAX_MATCH, Math.max(0, score));
+  return Math.exp(MATCH_SLOPE * s) * (1 + MATCH_PERFECT_BONUS * (s / MAX_MATCH) ** 6);
+}
+
+/** Fishing a spot well produces bigger fish: -0.1 … +0.35 added to the weight roll. */
+export function sizeBiasOf(score: number): number {
+  return Math.min(0.35, Math.max(-0.1, (score - 3) * 0.06));
+}
+
+/** The weight of every species in the water for one cast, before rarity is rolled.
+    Boss and out-of-stage slots are 0. Pure; `rollFish` draws from it. */
+export function fishWeights(biome: number, luck: number, opts: RollOptions = {}): number[] {
   const stage = opts.stage ?? 3;
   const sig = opts.sig ?? null;
   const bait = opts.bait ?? -1;
   const k = Math.max(0.04, 0.36 / (1 + luck / 30));
-  let i: number;
-  if (boss) {
-    i = BOSS_INDEX;
-  } else {
-    const cap = stageCap(stage);
-    const weights = Array.from({ length: SPECIES_PER_BIOME }, (_, n) => {
-      if (n > cap || n === BOSS_INDEX) return 0;
-      let w = Math.exp(-k * n);
-      if (sig?.kind === "family" && archetypeOf(BIOMES[biome].fish[n]) === sig.fam) w *= sig.mult;
-      if (sig?.kind === "epic" && n >= 16) w *= sig.mult;
-      if (bait === 2 && n >= 16) w *= 1.6;
-      if (stage === 2 && n >= 21) w *= 1.8;
-      return w;
-    });
-    i = pickWeighted(weights);
-  }
+  const cap = stageCap(stage);
+  return Array.from({ length: SPECIES_PER_BIOME }, (_, n) => {
+    if (n > cap || n === BOSS_INDEX) return 0;
+    let w = Math.exp(-k * n);
+    if (sig?.kind === "family" && archetypeOf(BIOMES[biome].fish[n]) === sig.fam) w *= sig.mult;
+    if (sig?.kind === "epic" && n >= 16) w *= sig.mult;
+    if (bait === 2 && n >= 16) w *= 1.6;
+    if (stage === 2 && n >= 21) w *= 1.8;
+    if (opts.match) w *= matchWeight(opts.match[n] ?? 0);
+    return w;
+  });
+}
+
+export function rollFish(biome: number, luck: number, opts: RollOptions = {}): Rolled {
+  const boss = !!opts.boss;
+  const sig = opts.sig ?? null;
+  const bait = opts.bait ?? -1;
+  const i = boss ? BOSS_INDEX : weighted(fishWeights(biome, luck, opts), rng);
   const mw = MUTATIONS.map((x, j) => {
     if (!j) return x.w;
     let w = x.w * (1 + luck / 50);
@@ -522,10 +566,11 @@ export function rollFish(biome: number, luck: number, opts: RollOptions = {}): R
     if (bait === 1) w *= 1.25;
     return w;
   });
-  const m = pickWeighted(mw);
+  const m = weighted(mw, rng);
   const t = rarityOf(i);
-  let w = +((0.4 + i * 0.55 + t * 3) * (1 + biome * 0.5) * (0.5 + Math.random() * 1.1)).toFixed(1);
-  let v = Math.round((3 + i * i * 0.45 + t * 15) * 2.1 ** biome * (0.8 + Math.random() * 0.4) * MUTATIONS[m].mult);
+  const bias = opts.match ? sizeBiasOf(opts.match[i] ?? 0) : 0;
+  let w = +((0.4 + i * 0.55 + t * 3) * (1 + biome * 0.5) * (0.5 + bias + rng() * 1.1)).toFixed(1);
+  let v = Math.round((3 + i * i * 0.45 + t * 15) * 2.1 ** biome * (0.8 + rng() * 0.4) * MUTATIONS[m].mult);
   if (sig?.kind === "value") v = Math.round(v * sig.mult);
   if (boss) {
     w = +(w * 1.6).toFixed(1);

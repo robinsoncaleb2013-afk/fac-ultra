@@ -4,12 +4,14 @@
    leap → rod and line → bobber → fight ring → particles → flashes. */
 
 import { biomeArt, fitCanvas } from "@/game/art";
-import { BOSS_INDEX, SPECIES_PER_BIOME } from "@/game/content";
+import { BIOMES, BOSS_INDEX, SPECIES_PER_BIOME } from "@/game/content";
 import type { Gfx } from "@/game/device";
 import { drawFish } from "@/game/fish-draw";
 import { sim, useGame } from "@/game/engine";
 import { TIERS } from "@/game/graphics";
+import { spotResidents } from "@/game/match";
 import { peerBoats } from "@/game/multiplayer";
+import { nearestSpot, resolveSpot, spotRingPx, spotsOf, type Spot } from "@/game/spots";
 import { waterLineOf } from "@/game/water";
 import { drawFightRing, ringRadius } from "@/components/game/fight-ring";
 import {
@@ -105,6 +107,145 @@ function paintPicture(c: CanvasRenderingContext2D, w: number, h: number, biome: 
     c.fillStyle = "rgba(210, 220, 224, 0.2)";
     c.fillRect(0, 0, w, h);
   }
+}
+
+/* ── Spots ──────────────────────────────────────────────────────────────── */
+
+const silhouettes = new Map<string, HTMLCanvasElement | null>();
+
+/** A fish drawn once, then filled flat dark: the "something lives here" shape. */
+function silhouette(biome: number, species: number): HTMLCanvasElement | null {
+  const key = `${biome}-${species}`;
+  if (silhouettes.has(key)) return silhouettes.get(key) ?? null;
+  let out: HTMLCanvasElement | null = null;
+  try {
+    const c = document.createElement("canvas");
+    c.width = 64;
+    c.height = 36;
+    const g = c.getContext("2d");
+    if (g) {
+      drawFish(g, 32, 18, 50, 1, { biome, species, rarity: 0, mutation: 0, wag: 0, alpha: 1 });
+      g.globalCompositeOperation = "source-atop";
+      g.fillStyle = "rgba(142,172,182,0.7)";
+      g.fillRect(0, 0, 64, 36);
+      out = c;
+    }
+  } catch {
+    out = null;
+  }
+  silhouettes.set(key, out);
+  return out;
+}
+
+function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(next).width > maxW) {
+      lines.push(line);
+      line = word;
+    } else line = next;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function drawSpots(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  biome: number,
+  touch: boolean,
+  lastSpotId: string | undefined,
+  dex: Record<string, { c: number }>,
+) {
+  const current = resolveSpot(biome, lastSpotId);
+  const hovered: Spot | null = sim.hover ? nearestSpot(biome, sim.hover.x, sim.hover.y, w, h, touch) : null;
+  ctx.save();
+  for (const spot of spotsOf(biome)) {
+    const x = spot.x * w;
+    const y = spot.y * h;
+    const r = spotRingPx(spot, w, touch);
+    const here = spot.id === current.id;
+    const hot = hovered?.id === spot.id;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    if (hot) {
+      ctx.fillStyle = "rgba(231,243,241,0.10)";
+      ctx.fill();
+    }
+    ctx.setLineDash(here || hot ? [] : [4, 5]);
+    ctx.lineWidth = here || hot ? 2 : touch ? 1.75 : 1.25;
+    ctx.strokeStyle = here ? "rgba(226,162,58,0.95)" : hot ? "rgba(244,247,246,0.9)" : `rgba(231,243,241,${touch ? 0.5 : 0.34})`;
+    ctx.stroke();
+    if (here) {
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(226,162,58,0.9)";
+      ctx.beginPath();
+      ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.setLineDash([]);
+  countDraw(spotsOf(biome).length * 2);
+
+  if (hovered) {
+    const x = hovered.x * w;
+    const y = hovered.y * h;
+    const r = spotRingPx(hovered, w, touch);
+    const residents = spotResidents(biome, hovered, 2);
+    const known = residents.filter((i) => dex[`${biome}-${i}`]?.c).map((i) => BIOMES[biome].fish[i]);
+    const unknown = residents.length - known.length;
+    const who = known.length
+      ? known.join(", ") + (unknown ? " and something else" : "")
+      : "Something lives here.";
+    const pad = 10;
+    const boxW = 250;
+    ctx.font = "12px Outfit, sans-serif";
+    const tip = wrap(ctx, hovered.tip, boxW - pad * 2);
+    const boxH = pad * 2 + 18 + tip.length * 15 + 40;
+    let bx = x + r + 12;
+    if (bx + boxW > w - 8) bx = x - r - 12 - boxW;
+    const by = Math.min(h - boxH - 8, Math.max(8, y - boxH / 2));
+    ctx.fillStyle = "rgba(10,22,30,0.86)";
+    ctx.strokeStyle = "rgba(44,81,98,0.9)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, boxW, boxH, 12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#e2a23a";
+    ctx.font = "600 15px Outfit, sans-serif";
+    ctx.fillText(hovered.name, bx + pad, by + pad + 13);
+    ctx.fillStyle = "#e7f3f1";
+    ctx.font = "12px Outfit, sans-serif";
+    tip.forEach((line, n) => ctx.fillText(line, bx + pad, by + pad + 18 + 15 * (n + 1)));
+    const ry = by + pad + 18 + tip.length * 15 + 8;
+    let sx = bx + pad;
+    for (const i of residents) {
+      const sil = silhouette(biome, i);
+      if (sil) ctx.drawImage(sil, sx, ry, 32, 18);
+      sx += 34;
+    }
+    ctx.fillStyle = "#8eacb6";
+    ctx.fillText(who, sx + 4, ry + 13, boxW - (sx - bx) - pad);
+    countDraw(6);
+  } else if (sim.hover) {
+    const hx = sim.hover.x * w;
+    const hy = sim.hover.y * h;
+    ctx.strokeStyle = "rgba(231,243,241,0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(hx - 10, hy);
+    ctx.lineTo(hx + 10, hy);
+    ctx.moveTo(hx, hy - 10);
+    ctx.lineTo(hx, hy + 10);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 export function paint(canvas: HTMLCanvasElement, view: View) {
@@ -326,19 +467,8 @@ export function paint(canvas: HTMLCanvasElement, view: View) {
 
     drawFightRing(ctx, bobx, boby, ringRadius(w, h, big), big, motion, !!sim.fish?.boss);
 
-    /* Hover crosshair: groundwork for picking a spot (desktop mouse only). */
-    if (sim.hover && sim.phase === "idle") {
-      const hx = sim.hover.x * w;
-      const hy = sim.hover.y * h;
-      ctx.strokeStyle = "rgba(231,243,241,0.35)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(hx - 10, hy);
-      ctx.lineTo(hx + 10, hy);
-      ctx.moveTo(hx, hy - 10);
-      ctx.lineTo(hx, hy + 10);
-      ctx.stroke();
-    }
+    /* Spot rings and the hover crosshair (04 §2.2). Only while a cast can be aimed. */
+    if (sim.phase === "idle" && !s.photo && !s.celebration) drawSpots(ctx, w, h, s.biome, big, s.lastSpot[s.biome], s.dex);
   }
 
   for (const p of sim.particles) {

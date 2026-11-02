@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { loose } from "@/game/rng";
 import { P2PRoom, type PeerInfo } from "@/lib/multiplayer";
 import { BIOMES } from "@/game/content";
 import { useGame } from "@/game/engine";
@@ -48,13 +49,13 @@ function pushFeed(text: string) {
 }
 
 function uid() {
-  return Math.random().toString(36).slice(2, 10);
+  return loose().toString(36).slice(2, 10);
 }
 
 function makeCode() {
   const letters = "ABCDEFGHJKMNPQRSTUVWXYZ";
   let out = "";
-  for (let i = 0; i < 4; i++) out += letters[(Math.random() * letters.length) | 0];
+  for (let i = 0; i < 4; i++) out += letters[(loose() * letters.length) | 0];
   return out;
 }
 

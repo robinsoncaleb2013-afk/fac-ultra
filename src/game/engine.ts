@@ -1,4 +1,18 @@
 import { create } from "zustand";
+import { loose, rng } from "@/game/rng";
+import { habitOf } from "@/game/habits";
+import { hintForCast, HINT_AFTER, missNote, planCast, windowNow, type CastPlan } from "@/game/match";
+import {
+  DEFAULT_RIG,
+  isDepth,
+  isRetrieve,
+  presentationOf,
+  readRig,
+  type Presentation,
+  type Rig,
+  type Window,
+} from "@/game/presentation";
+import { defaultSpot, resolveSpot, spotById, type Spot } from "@/game/spots";
 import { audio } from "@/game/audio";
 import { helpingHand } from "@/game/assist";
 import {
@@ -106,6 +120,9 @@ export type Save = {
   gfx: GfxPref;
   assist: boolean;
   followClock: boolean;
+  /* WP-2 (save v5): where you last fished each water, and how you rigged it there */
+  lastSpot: Record<number, string>;
+  rig: Record<number, Rig>;
   /* Expansion (save v3) */
   sigBox: number[];
   sig: number;
@@ -138,7 +155,7 @@ export type LastCatch = {
 
 type Toast = { id: number; text: string };
 
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 const MARKS = [10, 25, 50, 100, 150, 200, 250, 300, 375];
 
 export const MODE_KEYS: Record<Mode, string> = {
@@ -235,6 +252,24 @@ export const sim = {
   wins: 0,
   lastInput: 0,
   hover: null as null | { x: number; y: number },
+  /* WP-2: where the bobber is aimed and what this cast was made with (never saved) */
+  spotId: "",
+  /** 0 → 1 while the bobber flies from the rod tip to the spot; 1 = landed. */
+  castT: 1,
+  cast: null as null | CastInfo,
+  waited: 0,
+  hinted: false,
+};
+
+/** Everything the fight and the after-catch message need to know about the cast. */
+export type CastInfo = {
+  spotId: string;
+  p: Presentation;
+  window: Window;
+  weather: number;
+  /** Match score per species slot; null on Boss Lair casts (the boss is not matched). */
+  ms: number[] | null;
+  avg: number;
 };
 
 function starterContracts(): Contract[] {
@@ -285,6 +320,8 @@ export function fresh(): Save {
     gfx: "auto",
     assist: true,
     followClock: true,
+    lastSpot: {},
+    rig: {},
     sigBox: [],
     sig: -1,
     baitBox: {},
@@ -351,7 +388,7 @@ export function list<T>(v: unknown, item: (x: unknown) => T | undefined, max = 5
 }
 export { num as saveNum, int as saveInt, bool as saveBool };
 function uid() {
-  return Math.random().toString(36).slice(2, 9);
+  return loose().toString(36).slice(2, 9);
 }
 
 const KINDS = new Set(["count", "rarity", "discover", "bank", "biome", "boss"]);
@@ -404,6 +441,32 @@ function readTank(v: unknown, dex: Save["dex"]): TankState {
     feedUntil: num(t.feedUntil, 0, 0, 1e16),
     lastSettle: num(t.lastSettle, Date.now(), 0, 1e16),
   };
+}
+
+/** Remembered spots: only known biomes and spot ids that still exist in that water survive. */
+function readLastSpot(v: unknown): Record<number, string> {
+  const out: Record<number, string> = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const [k, id] of Object.entries(v as object)) {
+    if (!/^\d{1,2}$/.test(k)) continue;
+    const b = Number(k);
+    if (b < 0 || b >= BIOMES.length || typeof id !== "string") continue;
+    if (spotById(b, id)) out[b] = id;
+  }
+  return out;
+}
+
+/** Remembered rigs per water; depth and retrieve each fall back to the default if off. */
+function readRigs(v: unknown): Record<number, Rig> {
+  const out: Record<number, Rig> = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const [k, rig] of Object.entries(v as object)) {
+    if (!/^\d{1,2}$/.test(k)) continue;
+    const b = Number(k);
+    if (b < 0 || b >= BIOMES.length) continue;
+    out[b] = readRig(rig);
+  }
+  return out;
 }
 
 export function sanitize(raw: unknown): Save {
@@ -563,6 +626,9 @@ export function sanitize(raw: unknown): Save {
     gfx: isGfxPref(o.gfx) ? o.gfx : "auto",
     assist: bool(o.assist, true),
     followClock: bool(o.followClock, true),
+    /* v4 → v5 (WP-2): two new fields, nothing existing changed meaning. Old saves get {}. */
+    lastSpot: readLastSpot(o.lastSpot),
+    rig: readRigs(o.rig),
     sigBox,
     sig,
     baitBox,
@@ -613,6 +679,8 @@ export function snapshot(s: Save): Save {
     gfx: s.gfx,
     assist: s.assist,
     followClock: s.followClock,
+    lastSpot: s.lastSpot,
+    rig: s.rig,
     sigBox: s.sigBox,
     sig: s.sig,
     baitBox: s.baitBox,
@@ -722,7 +790,7 @@ function nextContract(s: Save, current: Contract[]): Contract {
   const pool: Contract["kind"][] = ["count", "rarity", "bank", "biome", "boss"];
   if (dexCount(s.dex) < TOTAL_SPECIES) pool.push("discover");
   const open = pool.filter((k) => !used.has(k));
-  const kind = (open.length ? open : pool)[(Math.random() * (open.length || pool.length)) | 0];
+  const kind = (open.length ? open : pool)[(loose() * (open.length || pool.length)) | 0];
   return makeContract(s, kind);
 }
 
@@ -848,17 +916,17 @@ function burst(x: number, y: number, n: number, kind: Particle["kind"]) {
   const count = motion ? n : Math.min(3, n);
   for (let i = 0; i < count; i++) {
     if (sim.particles.length >= sim.cap) sim.particles.shift();
-    const a = Math.random() * Math.PI * 2;
-    const sp = 0.05 + Math.random() * 0.18;
+    const a = loose() * Math.PI * 2;
+    const sp = 0.05 + loose() * 0.18;
     sim.particles.push({
       x,
       y,
       vx: Math.cos(a) * sp * (kind === "splash" ? 0.45 : 1),
-      vy: kind === "splash" ? -Math.random() * 0.25 : Math.sin(a) * sp,
-      life: 0.35 + Math.random() * 0.45,
+      vy: kind === "splash" ? -loose() * 0.25 : Math.sin(a) * sp,
+      life: 0.35 + loose() * 0.45,
       max: 0.8,
       kind,
-      size: 1.5 + Math.random() * 2.5,
+      size: 1.5 + loose() * 2.5,
     });
   }
 }
@@ -874,7 +942,7 @@ function buzz(ms: number) {
 
 function placeZone() {
   const z = sim.zone;
-  sim.zc = z / 2 + 5 + Math.random() * Math.max(8, 90 - z);
+  sim.zc = z / 2 + 5 + rng() * Math.max(8, 90 - z);
 }
 
 function linePct() {
@@ -885,13 +953,13 @@ function ensureSwimmers() {
   if (sim.swimmers.length) return;
   for (let i = 0; i < 5; i++) {
     sim.swimmers.push({
-      x: Math.random(),
-      y: 0.7 + Math.random() * 0.12,
-      v: 0.035 + Math.random() * 0.04,
-      dir: Math.random() < 0.5 ? -1 : 1,
+      x: loose(),
+      y: 0.7 + loose() * 0.12,
+      v: 0.035 + loose() * 0.04,
+      dir: loose() < 0.5 ? -1 : 1,
       species: i * 3,
-      phase: Math.random() * 6,
-      sc: 0.75 + Math.random() * 0.45,
+      phase: loose() * 6,
+      sc: 0.75 + loose() * 0.45,
     });
   }
 }
@@ -915,6 +983,10 @@ export function resetSim() {
   sim.wins = 0;
   sim.zoneBonus = 0;
   sim.speedFactor = 1;
+  sim.castT = 1;
+  sim.cast = null;
+  sim.waited = 0;
+  sim.hinted = false;
 }
 
 /** Re-read Helping Hand: the band and the cursor speed follow the player's streak, live. */
@@ -937,11 +1009,44 @@ function assistNow() {
   return helpingHand({ assist: s.assist, misses: 0, failedFights: sim.failedFights, wins: sim.wins });
 }
 
-function updateBobber() {
-  if (sim.phase === "reel") sim.bnx = 0.1 + 0.8 * (sim.cp / 100);
-  else sim.bnx = 0.46 + Math.sin(sim.t * 1.3) * 0.018;
+const ARC_SECONDS = 0.5;
+/* Where the rod tip is drawn on the stage (stage-paint.ts). */
+const ROD_TIP = { x: 0.78, y: 0.4 };
+
+/** The spot the line is aimed at: the chosen one while idle, the one that was cast to otherwise. */
+function aimedSpot(s: Save): Spot {
+  if (sim.phase !== "idle" && sim.cast) return spotById(s.biome, sim.cast.spotId) ?? defaultSpot(s.biome);
+  return resolveSpot(s.biome, s.lastSpot[s.biome]);
+}
+
+function updateBobber(dt: number) {
+  const s = useGame.getState();
+  const spot = aimedSpot(s);
+  sim.spotId = spot.id;
+  let bx: number;
+  let by: number;
+  if (sim.phase === "reel") {
+    bx = Math.min(0.96, Math.max(0.04, spot.x + (sim.cp / 100 - 0.5) * 0.2));
+    by = spot.y + Math.sin(sim.t * 2.1) * 0.008;
+  } else {
+    bx = spot.x + Math.sin(sim.t * 1.3) * 0.012;
+    by = spot.y + Math.sin(sim.t * 2.1) * 0.008;
+  }
+  if (sim.castT < 1) {
+    sim.castT = Math.min(1, sim.castT + dt / ARC_SECONDS);
+    const p = 1 - (1 - sim.castT) ** 2;
+    bx = ROD_TIP.x + (bx - ROD_TIP.x) * p;
+    by = ROD_TIP.y + (by - ROD_TIP.y) * p - 0.16 * Math.sin(Math.PI * sim.castT);
+    if (sim.castT >= 1) burst(bx, by, 9, "splash");
+  } else if (sim.phase === "idle") {
+    /* Picking another spot slides the bobber over instead of teleporting it. */
+    const k = Math.min(1, dt * 12);
+    bx = sim.bnx + (bx - sim.bnx) * k;
+    by = sim.bny + (by - sim.bny) * k;
+  }
   const thrash = sim.phase === "bite" ? Math.sin(sim.t * 32) * 0.012 : 0;
-  sim.bny = 0.73 + Math.sin(sim.t * 2.1) * 0.008 + thrash;
+  sim.bnx = bx;
+  sim.bny = by + thrash;
 }
 
 function tickLeap(dt: number) {
@@ -994,11 +1099,11 @@ function tickWeatherFx(dt: number) {
     kind = "bubble";
     rate = 6;
   }
-  if (!kind || Math.random() > rate * dt) return;
+  if (!kind || loose() > rate * dt) return;
   if (sim.particles.length >= sim.cap * 0.8) return;
   if (kind === "rain") {
     sim.particles.push({
-      x: Math.random(),
+      x: loose(),
       y: -0.02,
       vx: -0.05,
       vy: 0.85,
@@ -1009,9 +1114,9 @@ function tickWeatherFx(dt: number) {
     });
   } else if (kind === "snow") {
     sim.particles.push({
-      x: Math.random(),
+      x: loose(),
       y: -0.02,
-      vx: Math.sin(sim.t + Math.random()) * 0.05,
+      vx: Math.sin(sim.t + loose()) * 0.05,
       vy: 0.12,
       life: 3,
       max: 3,
@@ -1020,10 +1125,10 @@ function tickWeatherFx(dt: number) {
     });
   } else if (kind === "ember") {
     sim.particles.push({
-      x: Math.random(),
+      x: loose(),
       y: 0.95,
-      vx: (Math.random() - 0.5) * 0.05,
-      vy: -0.12 - Math.random() * 0.08,
+      vx: (loose() - 0.5) * 0.05,
+      vy: -0.12 - loose() * 0.08,
       life: 2.2,
       max: 2.2,
       kind,
@@ -1031,7 +1136,7 @@ function tickWeatherFx(dt: number) {
     });
   } else {
     sim.particles.push({
-      x: 0.15 + Math.random() * 0.7,
+      x: 0.15 + loose() * 0.7,
       y: 0.82,
       vx: 0,
       vy: -0.06,
@@ -1043,6 +1148,23 @@ function tickWeatherFx(dt: number) {
   }
 }
 
+/** Spot, presentation, time window and match for a cast made right now (04 §3.5). */
+function castNow(s: Save, lureIdx: number, baitIdx: number, lair: boolean): CastInfo & { plan: CastPlan | null; spot: Spot } {
+  const spot = resolveSpot(s.biome, s.lastSpot[s.biome]);
+  const rig = s.rig[s.biome] ?? DEFAULT_RIG;
+  const p = presentationOf({ lure: lureIdx, sig: s.sig, bait: lair ? -1 : baitIdx }, rig);
+  const window = windowNow(s.followClock, s.weather);
+  /* The Boss Lair is its own place: the boss is not matched to a spot. */
+  const plan = lair
+    ? null
+    : planCast(s.biome, spot, p, s.weather, window, luckTotal(s, lureIdx), {
+        stage: stageOf(s.dex, s.biome),
+        sig: sigEffect(s.sig),
+        bait: baitIdx,
+      });
+  return { spotId: spot.id, p, window, weather: s.weather, ms: plan?.ms ?? null, avg: plan?.avg ?? 0, plan, spot };
+}
+
 function beginBite() {
   const s = useGame.getState();
   const luck = luckTotal(s, sim.castLure);
@@ -1051,6 +1173,7 @@ function beginBite() {
     stage: stageOf(s.dex, s.biome),
     sig: sigEffect(s.sig),
     bait: sim.castBait,
+    match: sim.cast?.ms ?? undefined,
   });
   sim.fish = fish;
   sim.phase = "bite";
@@ -1096,7 +1219,7 @@ function succeed() {
     celebration: lc ? { catch: lc, at: Date.now() } : null,
     phase: "idle",
     message: fish.boss ? `${fish.name} landed!` : "Landed.",
-    detail: "",
+    detail: sim.cast && !fish.boss ? (missNote(habitOf(fish.b, fish.i), sim.cast.p) ?? "") : "",
     lair: fish.boss ? !!s.rush : s.lair,
   });
   /* Online co-op: tell the room (multiplayer.ts listens for this). */
@@ -1174,9 +1297,11 @@ function autoCatch() {
   const castLure = s.lure;
   const spent = consumeLure(s);
   const luck = luckTotal(s, castLure);
-  const fish = rollFish(s.biome, luck, { stage: stageOf(s.dex, s.biome), sig: sigEffect(s.sig) });
+  /* The auto-reel fishes the spot and rig you set, so knowing fish pays there too. */
+  const at = castNow(s, castLure, -1, false);
+  const fish = rollFish(s.biome, luck, { stage: stageOf(s.dex, s.biome), sig: sigEffect(s.sig), match: at.ms ?? undefined });
   const next = withCatch({ ...s, ...spent }, fish, { auto: true, perfect: false, frenzy: sim.frenzyLeft > 0 });
-  burst(0.5, 0.74, 6, "splash");
+  burst(at.spot.x, at.spot.y, 6, "splash");
   audio.land(Math.min(2, fish.t));
   useGame.setState({ ...spent, ...next });
   persistSoon();
@@ -1192,7 +1317,7 @@ export function frame(dt: number) {
   sim.trauma = Math.max(0, sim.trauma - dt * 1.7);
   sim.hitFlash = Math.max(0, sim.hitFlash - dt * 2.4);
   sim.flashA = Math.max(0, sim.flashA - dt * 1.6);
-  updateBobber();
+  updateBobber(dt);
   tickParticles(dt);
   tickWeatherFx(dt);
   tickLeap(dt);
@@ -1240,7 +1365,7 @@ export function frame(dt: number) {
                   ...st.derby,
                   rivals: st.derby.rivals.map((r) => ({
                     ...r,
-                    s: r.s + Math.round(Math.random() * pace * (0.4 + Math.random())),
+                    s: r.s + Math.round(loose() * pace * (0.4 + loose())),
                   })),
                 },
               }
@@ -1249,7 +1374,7 @@ export function frame(dt: number) {
       }
     }
   }
-  if (s.flash && s.motion && s.weather === 2 && Math.random() < dt * 0.22) sim.flashA = 0.5;
+  if (s.flash && s.motion && s.weather === 2 && loose() < dt * 0.22) sim.flashA = 0.5;
 
   if (sim.frenzyLeft > 0) sim.frenzyLeft = Math.max(0, sim.frenzyLeft - dt);
   const shown = Math.ceil(sim.frenzyLeft);
@@ -1265,6 +1390,17 @@ export function frame(dt: number) {
 
   if (sim.phase === "wait") {
     sim.waitLeft -= dt;
+    sim.waited += dt;
+    /* A long quiet wait: one hint per cast about the best fish you have not caught here (04 §3.6). */
+    if (!sim.hinted && sim.cast && !sim.castLair && sim.waited >= HINT_AFTER && sim.waitLeft > 0.6) {
+      sim.hinted = true;
+      const c = sim.cast;
+      const spot = spotById(s.biome, c.spotId);
+      const hint = spot
+        ? hintForCast(s.biome, spot, c.p, c.weather, c.window, stageOf(s.dex, s.biome), (i) => !!s.dex[`${s.biome}-${i}`]?.c)
+        : null;
+      if (hint) useGame.setState({ message: hint, detail: "Quiet here." });
+    }
     if (sim.waitLeft <= 0) beginBite();
   } else if (sim.phase === "bite") {
     sim.biteLeft -= dt;
@@ -1285,7 +1421,7 @@ export function frame(dt: number) {
         sim.fxAcc += dt;
         if (sim.fxAcc > 0.7) {
           sim.fxAcc = 0;
-          if (Math.random() < 0.55) {
+          if (rng() < 0.55) {
             sim.cd = sim.cd > 0 ? -1 : 1;
             placeZone();
             sim.spinT = 0.22;
@@ -1316,7 +1452,7 @@ export function frame(dt: number) {
     if (sim.phase === "bite" || sim.phase === "reel") sim.weatherAcc = 45;
     else {
       sim.weatherAcc = 0;
-      useGame.setState({ weather: (Math.random() * 5) | 0 });
+      useGame.setState({ weather: (rng() * 5) | 0 });
     }
   }
 
@@ -1324,7 +1460,7 @@ export function frame(dt: number) {
     sim.calmAcc += dt;
     if (sim.calmAcc >= 70) {
       sim.calmAcc = 0;
-      if (sim.frenzyLeft <= 0 && Math.random() < 0.42) {
+      if (sim.frenzyLeft <= 0 && rng() < 0.42) {
         sim.frenzyLeft = 26;
         sim.shownFrenzy = 26;
         audio.frenzy();
@@ -1382,11 +1518,19 @@ function startCast() {
   const fx = sigEffect(s.sig);
   if (fx?.kind === "bite") factor *= fx.mult;
   if (sim.castBait === 0) factor *= 0.85;
-  sim.waitLeft = ((1200 + Math.random() * 2800) / 1000) * factor;
+  /* WP-2: the better the spot and rig suit the fish around, the sooner they bite. */
+  const at = castNow(s, sim.castLure, sim.castBait, lair);
+  sim.cast = { spotId: at.spotId, p: at.p, window: at.window, weather: at.weather, ms: at.ms, avg: at.avg };
+  if (at.plan) factor *= at.plan.wait;
+  sim.waitLeft = Math.max(0.7, ((1200 + rng() * 2800) / 1000) * factor);
+  sim.waited = 0;
+  sim.hinted = false;
   sim.introT = lair ? sim.waitLeft + 1.2 : 0;
   sim.phase = "wait";
   sim.trauma = Math.min(1, sim.trauma + 0.1);
-  burst(sim.bnx, sim.bny, 7, "splash");
+  /* The bobber flies from the rod tip to the spot, then splashes (updateBobber). */
+  sim.castT = s.motion ? 0 : 1;
+  if (!s.motion) burst(at.spot.x, at.spot.y, 7, "splash");
   audio.cast();
   useGame.setState({
     ...spent,
@@ -1415,8 +1559,8 @@ function hook() {
   sim.zone = sim.baseZone;
   sim.hold = LINES[s.line].hold;
   sim.reelSpeed = REELS[s.reel].speed;
-  sim.cd = Math.random() < 0.5 ? -1 : 1;
-  sim.cp = 8 + Math.random() * 84;
+  sim.cd = rng() < 0.5 ? -1 : 1;
+  sim.cp = 8 + rng() * 84;
   sim.trail.fill(sim.cp);
   applyAssist();
   placeZone();
@@ -1535,6 +1679,10 @@ type Store = Save &
     buyBait: (index: number) => void;
     equipBait: (index: number) => void;
     setLair: (on: boolean) => void;
+    /** Aim at another spot in this water (idle only). */
+    setSpot: (id: string) => void;
+    /** Change depth and/or retrieve for this water (idle only). */
+    setRig: (patch: Partial<Rig>) => void;
     addExhibit: (key: string) => void;
     removeExhibit: (key: string) => void;
     togglePed: (key: string) => void;
@@ -1635,8 +1783,8 @@ export const useGame = create<Store>((set, get) => ({
     const box = { ...s.box };
     const names: string[] = [];
     for (let n = 0; n < 3; n++) {
-      const x = pack.min + ((Math.random() * (pack.max - pack.min)) | 0);
-      box[String(x)] = (box[String(x)] || 0) + 12 + ((Math.random() * 14) | 0);
+      const x = pack.min + ((loose() * (pack.max - pack.min)) | 0);
+      box[String(x)] = (box[String(x)] || 0) + 12 + ((loose() * 14) | 0);
       names.push(LURES[x].name);
     }
     audio.coin();
@@ -1689,6 +1837,24 @@ export const useGame = create<Store>((set, get) => ({
   },
   setLair: (on) => {
     set({ lair: on });
+    persistSoon();
+  },
+  setSpot: (id) => {
+    const s = get();
+    if (sim.phase !== "idle" || !spotById(s.biome, id) || s.lastSpot[s.biome] === id) return;
+    set({ lastSpot: { ...s.lastSpot, [s.biome]: id } });
+    persistSoon();
+  },
+  setRig: (patch) => {
+    const s = get();
+    if (sim.phase !== "idle") return;
+    const now = s.rig[s.biome] ?? DEFAULT_RIG;
+    const next: Rig = {
+      depth: isDepth(patch.depth) ? patch.depth : now.depth,
+      retrieve: isRetrieve(patch.retrieve) ? patch.retrieve : now.retrieve,
+    };
+    if (next.depth === now.depth && next.retrieve === now.retrieve && s.rig[s.biome]) return;
+    set({ rig: { ...s.rig, [s.biome]: next } });
     persistSoon();
   },
   addExhibit: (key) => {
@@ -1773,7 +1939,7 @@ export const useGame = create<Store>((set, get) => ({
     const s = get();
     if (s.derby) return;
     const names = ["Maren", "Old Cobb", "Pike Queen", "Juno", "The Professor", "Silent Sam"];
-    const rivals = [...names].sort(() => Math.random() - 0.5).slice(0, 3).map((n) => ({ n, s: 0 }));
+    const rivals = [...names].sort(() => loose() - 0.5).slice(0, 3).map((n) => ({ n, s: 0 }));
     audio.frenzy();
     set({
       derby: { endsAt: Date.now() + 10 * 60_000, score: 0, rivals },
@@ -1897,6 +2063,8 @@ export const useGame = create<Store>((set, get) => ({
       gfx: s.gfx,
       assist: s.assist,
       followClock: s.followClock,
+      lastSpot: s.lastSpot,
+      rig: s.rig,
       tank: { ...s.tank, lastSettle: Date.now() },
       mastered: s.mastered,
       sigBox: s.sigBox,

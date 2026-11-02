@@ -9,6 +9,7 @@ import { Celebration } from "@/components/game/layout/Celebration";
 import { CastDock } from "@/components/game/layout/CastDock";
 import { HudBarMobile } from "@/components/game/layout/HudBar";
 import { MenuSheet } from "@/components/game/layout/MenuSheet";
+import { SpotBar } from "@/components/game/layout/RigControl";
 import { cn } from "@/lib/cn";
 
 const PEEK = 120;
@@ -47,6 +48,7 @@ export function MobileLayout({ plan, height }: { plan: LayoutPlan; height: numbe
         />
         <HudBarMobile onMenu={() => setSheet(true)} />
         {collapsed ? null : <StageChips className="absolute top-11 left-3 z-10 pr-3" />}
+        {collapsed ? null : <SpotBar className="absolute inset-x-0 bottom-1" />}
       </div>
       <div
         ref={panel}

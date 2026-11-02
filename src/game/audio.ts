@@ -1,3 +1,5 @@
+import { loose } from "./rng.ts";
+
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let sfx: GainNode | null = null;
@@ -46,7 +48,7 @@ export const audio = {
     tone(990, 0.12, "sine", 0.04);
   },
   tick() {
-    tone(480 + Math.random() * 80, 0.04, "square", 0.03);
+    tone(480 + loose() * 80, 0.04, "square", 0.03);
   },
   miss() {
     tone(180, 0.08, "sawtooth", 0.03);
@@ -91,7 +93,7 @@ function tone(freq: number, dur: number, type: OscillatorType, peak: number) {
   const g = c.createGain();
   o.type = type;
   const t0 = c.currentTime;
-  o.frequency.setValueAtTime(freq * (0.96 + Math.random() * 0.08), t0);
+  o.frequency.setValueAtTime(freq * (0.96 + loose() * 0.08), t0);
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t0 + 0.012);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
@@ -111,7 +113,7 @@ function noise(dur: number, peak: number, freq: number) {
   const n = Math.max(1, Math.floor(c.sampleRate * dur));
   const buffer = c.createBuffer(1, n, c.sampleRate);
   const data = buffer.getChannelData(0);
-  for (let i = 0; i < n; i++) data[i] = Math.random() * 2 - 1;
+  for (let i = 0; i < n; i++) data[i] = loose() * 2 - 1;
   const src = c.createBufferSource();
   src.buffer = buffer;
   const filter = c.createBiquadFilter();

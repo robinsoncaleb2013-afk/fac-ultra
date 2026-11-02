@@ -17,6 +17,8 @@ import {
   TONE,
 } from "@/game/content";
 import { useGame } from "@/game/engine";
+import { DEFAULT_RIG, FAMILY_INFO, familyOf, rigLabel } from "@/game/presentation";
+import { resolveSpot } from "@/game/spots";
 import { FishPortrait } from "@/components/game/portrait";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -118,6 +120,25 @@ export function Bounties() {
   );
 }
 
+/** Where the line is aimed and how it is rigged, so the Cast tab says it in words too. */
+function SpotCard() {
+  const biome = useGame((s) => s.biome);
+  const spot = useGame((s) => resolveSpot(s.biome, s.lastSpot[s.biome]));
+  const rig = useGame((s) => s.rig[s.biome]) ?? DEFAULT_RIG;
+  const family = useGame((s) => familyOf({ lure: s.lure, sig: s.sig, bait: s.bait }));
+  return (
+    <section className="rounded-2xl border border-line bg-surface p-3" aria-label={`Fishing spot in ${BIOMES[biome].name}`}>
+      <p className="text-xs text-muted">You are fishing</p>
+      <h3 className="font-serif text-lg leading-tight">{spot.name}</h3>
+      <p className="text-sm text-muted">{spot.tip}</p>
+      <p className="mt-1 text-sm">
+        <span className="text-brass">{rigLabel(rig)}</span>
+        <span className="text-muted"> · {FAMILY_INFO[family].label}</span>
+      </p>
+    </section>
+  );
+}
+
 export function CastPanel() {
   const luck = useGame((s) => Math.round(luckTotal(s, s.lure)));
   const streak = useGame((s) => s.streak);
@@ -134,6 +155,7 @@ export function CastPanel() {
         <Stat k="Streak" v={String(streak)} />
         <Stat k="Stage" v={STAGE_NAMES[stage]} />
       </div>
+      <SpotCard />
       {derby ? <DerbyBanner /> : null}
       <BossControls />
       {last ? (
