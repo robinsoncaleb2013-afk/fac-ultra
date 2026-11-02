@@ -40,9 +40,9 @@ Docs-only PRs #7 (self-hosting plan) and #10 (project page record) were merged t
 - Two real devices on different networks for Tournaments and friends.
 - A Neon database (everything was tested on the local PGlite database).
 
-## Open question for you
+## A decision worth a second look
 
-Recreational mode also fills the career collection and records. Do you want that, or should Recreational stay separate?
+Recreational is built as the design says: it replaces the old Sandbox, has no money or shop, has everything unlocked, and its catches fill the career collection and records (`dexShared: "career"` in `05-game-modes.md`). If you would rather keep Recreational catches out of the Expedition records and rank (so the relaxed mode can never beat the career for records), that is a small change: keep the shared collection and sticker book, but hold back records and XP. Say the word.
 
 ## How to undo any part
 
