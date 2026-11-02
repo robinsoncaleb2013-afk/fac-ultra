@@ -166,15 +166,20 @@ import {
   DEVICE_KEY,
   deviceSubset,
   formOf,
-  isGfxPref,
+  LEVEL_TIER,
+  normPref,
   overlayDevice,
   readDevice,
   readDeviceSettings,
-  resolveGfx,
+  resolveLevel,
   type Gfx,
   type GfxPref,
+  type Level,
 } from "@/game/device";
-import { TIERS } from "@/game/graphics";
+import { setActiveLevel, tierSpec } from "@/game/graphics";
+import { hubTargetFor } from "@/game/hubnav";
+import { useHubUi } from "@/game/hubstate";
+import { probedLevel } from "@/game/probe";
 import {
   AUTO_PRICE,
   BAITS,
@@ -852,7 +857,7 @@ export function sanitize(raw: unknown): Save {
     sound: bool(o.sound, true),
     motion: bool(o.motion, true),
     flash: bool(o.flash, true),
-    gfx: isGfxPref(o.gfx) ? o.gfx : "auto",
+    gfx: normPref(o.gfx) ?? "auto",
     assist: bool(o.assist, true),
     followClock: bool(o.followClock, true),
     /* v6 → v7 (WP-4): three new fields, nothing existing changed meaning. Old saves get no logbook and Kid Mode off. */
@@ -2171,7 +2176,7 @@ export function frame(dt: number) {
   const s = useGame.getState();
   if (!s.hydrated) return;
   sim.t += dt;
-  sim.cap = TIERS[s.tier].particles;
+  sim.cap = tierSpec(s.tier).particles;
   if (sim.spinT > 0) sim.spinT = Math.max(0, sim.spinT - dt);
   if (sim.bandFlash > 0) sim.bandFlash = Math.max(0, sim.bandFlash - dt);
   sim.trauma = Math.max(0, sim.trauma - dt * 1.7);
@@ -2512,6 +2517,39 @@ export function nudgeDrag(delta: -1 | 1) {
   persistSoon();
 }
 
+/** The old panel names open the pause menu (the Hub) at the matching tab; "cast" closes it (WP-10). */
+function syncHub(tab: Tab, lodgeView: LodgeView) {
+  const target = hubTargetFor(tab, lodgeView);
+  const hub = useHubUi.getState();
+  if (!target) hub.closeHub();
+  else hub.openHub(target.tab, target.item);
+}
+
+/* ── Graphics level (WP-10) ───────────────────────────────────────────────── */
+
+/** What Auto settled on in this session (the speed test, or the governor stepping). Pinned levels never use it. */
+let sessionLevel: Level | null = null;
+
+function levelFor(pref: GfxPref): Level {
+  if (pref !== "auto") return pref;
+  if (sessionLevel) return sessionLevel;
+  const d = readDevice();
+  return resolveLevel("auto", formOf(d), d.mem, d.cores, probedLevel());
+}
+
+function levelPatch(level: Level): { level: Level; tier: Gfx } {
+  setActiveLevel(level);
+  return { level, tier: LEVEL_TIER[level] };
+}
+
+/** The start-up speed test finished: Auto takes its result, unless the governor has already moved it. */
+export function applySpeedTest() {
+  const s = useGame.getState();
+  if (s.gfx !== "auto" || sessionLevel) return;
+  const next = levelFor("auto");
+  if (next !== s.level) useGame.setState(levelPatch(next));
+}
+
 type Ui = {
   hydrated: boolean;
   tab: Tab;
@@ -2530,6 +2568,8 @@ type Ui = {
   welcomeBack: { gain: number; hours: number } | null;
   /* WP-1 */
   tier: Gfx;
+  /** WP-10: the named quality level in force (the tier above is what it draws with). */
+  level: Level;
   celebration: { catch: LastCatch; at: number } | null;
   photo: boolean;
   helping: boolean;
@@ -2626,6 +2666,8 @@ type Store = Save &
     endTrip: () => void;
     dismissTripCard: () => void;
     setGfx: (pref: GfxPref) => void;
+    /** WP-10: the governor moved Auto to another level (never called for a pinned level). */
+    governLevel: (level: Level) => void;
     setDrag: (drag: Drag) => void;
     dismissCelebration: () => void;
     /** Keep the fish just landed (the default; the card also does this by itself after 6 s). */
@@ -2668,6 +2710,7 @@ export const useGame = create<Store>((set, get) => ({
   lodgeView: "record",
   welcomeBack: null,
   tier: "full",
+  level: "ultra",
   celebration: null,
   photo: false,
   helping: false,
@@ -2854,9 +2897,14 @@ export const useGame = create<Store>((set, get) => ({
     persistSoon();
   },
   setGfx: (pref) => {
-    const d = readDevice();
-    set({ gfx: pref, tier: resolveGfx(pref, formOf(d), d.mem, d.cores) });
+    /* Going back to Auto forgets what Auto settled on, so it starts from the speed test again. */
+    if (pref === "auto") sessionLevel = null;
+    set({ gfx: pref, ...levelPatch(levelFor(pref)) });
     persistSoon();
+  },
+  governLevel: (level) => {
+    sessionLevel = level;
+    set(levelPatch(level));
   },
   dismissCelebration: () => set({ celebration: null }),
   keepCatch: () => {
@@ -2903,6 +2951,7 @@ export const useGame = create<Store>((set, get) => ({
   setTab: (tab) => {
     if (isTournament(modeRules()) && !TOURNAMENT_TABS.includes(tab)) return;
     set({ tab, armRebirth: false, armReset: false, armSell: "" });
+    syncHub(tab, get().lodgeView);
   },
   setScreen: (screen) => {
     /* The main menu is the career's front door: leaving another mode for it saves that mode and
@@ -2914,7 +2963,10 @@ export const useGame = create<Store>((set, get) => ({
     }
     set({ screen });
   },
-  setLodgeView: (view) => set({ lodgeView: view, tab: "lodge" }),
+  setLodgeView: (view) => {
+    set({ lodgeView: view, tab: "lodge" });
+    syncHub("lodge", view);
+  },
   dismissWelcome: () => set({ welcomeBack: null }),
   switchMode: (mode) => {
     if (mode === currentMode) {
@@ -3497,7 +3549,6 @@ function loadSlot(mode: Mode, toGame: boolean) {
   }
   save = overlayDevice(save, device);
   if (!isSkinId(save.bobberSkin)) save.bobberSkin = "plain";
-  const dev = readDevice();
   if (dexCount(save.dex) >= TOTAL_SPECIES) {
     save.contracts = save.contracts.map((c) =>
       c.kind === "discover" && c.prog < c.goal ? makeContract(save, "count") : c,
@@ -3520,7 +3571,7 @@ function loadSlot(mode: Mode, toGame: boolean) {
     ...save,
     survival: sv?.run ?? null,
     sMeta: sv ? { history: sv.history, lastWater: sv.lastWater } : freshMeta(),
-    tier: resolveGfx(save.gfx, formOf(dev), dev.mem, dev.cores),
+    ...levelPatch(levelFor(save.gfx)),
     celebration: null,
     helping: false,
     hydrated: true,

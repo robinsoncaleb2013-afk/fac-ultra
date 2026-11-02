@@ -97,7 +97,7 @@ test("a v3 save gains the WP-1 settings with safe defaults and keeps its progres
 
 test("v4 settings round-trip through snapshot and export/import shape", () => {
   const s = sanitize({ ...fresh(), gfx: "lite", assist: false, followClock: false });
-  assert.equal(s.gfx, "lite");
+  assert.equal(s.gfx, "medium", "WP-10: the old name lite means the Medium level");
   assert.equal(s.assist, false);
   assert.equal(s.followClock, false);
   const back = sanitize(JSON.parse(JSON.stringify(snapshot(s))));
@@ -126,7 +126,7 @@ test("a v4 save gains empty lastSpot and rig, keeps its progress and its v4 sett
   assert.equal(s.version, fresh().version, "stamped with the current version");
   assert.deepEqual(s.lastSpot, {});
   assert.deepEqual(s.rig, {});
-  assert.equal(s.gfx, raw.gfx, "WP-1 setting preserved");
+  assert.equal(s.gfx, raw.gfx === "lite" ? "medium" : raw.gfx, "WP-1 setting preserved (old tier names become levels)");
   assert.equal(s.assist, raw.assist);
   assert.equal(s.c, raw.c, "money preserved");
   assert.equal(s.caught, raw.caught);

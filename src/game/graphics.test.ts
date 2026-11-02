@@ -3,7 +3,6 @@ import { test } from "node:test";
 import {
   confettiFor,
   FpsMeter,
-  governorStep,
   rainRingRate,
   rippleAmp,
   rippleDx,
@@ -101,36 +100,6 @@ test("fps meter averages the last 60 frames", () => {
   assert.ok(Math.abs(m.fps - 60) < 1e-2, "old frames fall out");
   m.reset();
   assert.equal(m.full, false);
-});
-
-test("governor steps down after 3 s under 45 fps, once, and never up", () => {
-  let gov = { lowFor: 0 };
-  let tier: "full" | "lite" | "mobile" = "full";
-  let steps = 0;
-  for (let i = 0; i < 400; i++) {
-    const r = governorStep(gov, { fps: 30, dt: 1 / 30, ready: true, pinned: false, tier });
-    gov = r.gov;
-    if (r.down) {
-      tier = r.down;
-      steps++;
-      if (steps === 1) assert.ok(i >= 89 && i <= 91, `first step near 3 s (frame ${i})`);
-    }
-  }
-  assert.equal(tier, "mobile", "keeps stepping while slow, then stops at the bottom");
-  assert.equal(steps, 2);
-  const up = governorStep({ lowFor: 0 }, { fps: 120, dt: 0.01, ready: true, pinned: false, tier: "lite" });
-  assert.equal(up.down, null);
-});
-
-test("governor: a recovery resets the timer, a pin disables it, and it waits for a full meter", () => {
-  let gov = { lowFor: 0 };
-  gov = governorStep(gov, { fps: 30, dt: 2, ready: true, pinned: false, tier: "full" }).gov;
-  assert.equal(gov.lowFor, 2);
-  gov = governorStep(gov, { fps: 60, dt: 0.5, ready: true, pinned: false, tier: "full" }).gov;
-  assert.equal(gov.lowFor, 0);
-  assert.equal(governorStep({ lowFor: 5 }, { fps: 10, dt: 1, ready: true, pinned: true, tier: "full" }).down, null);
-  assert.equal(governorStep({ lowFor: 5 }, { fps: 10, dt: 1, ready: false, pinned: false, tier: "full" }).down, null);
-  assert.equal(governorStep({ lowFor: 5 }, { fps: 10, dt: 1, ready: true, pinned: false, tier: "mobile" }).down, null);
 });
 
 test("mobile drops to 30 fps only after a quiet minute with no cast", () => {

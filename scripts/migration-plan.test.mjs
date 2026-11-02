@@ -60,7 +60,7 @@ test("the auth schema ships outside the globbed directory", () => {
   const migrationsDir = join(projectRoot(), "migrations");
   // Only app migrations (numbered files) are globbed; the auth/ directory is not.
   const pending = pendingMigrations(readdirSync(migrationsDir), []).map((m) => m.name);
-  assert.deepEqual(pending, ["0007_tournaments.sql", "0008_social.sql", "0009_accounts.sql"]);
+  assert.deepEqual(pending, ["0007_tournaments.sql", "0008_social.sql", "0009_accounts.sql", "0010_friend_requests.sql"]);
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
 });
 

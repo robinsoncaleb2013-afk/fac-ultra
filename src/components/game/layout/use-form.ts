@@ -15,10 +15,14 @@ export function useForm(): { ready: boolean; form: Form; plan: LayoutPlan; width
     setInfo({ d: readDevice(), ready: true });
     window.addEventListener("resize", read);
     window.addEventListener("orientationchange", read);
+    document.addEventListener("fullscreenchange", read);
+    document.addEventListener("webkitfullscreenchange", read);
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", read);
       window.removeEventListener("orientationchange", read);
+      document.removeEventListener("fullscreenchange", read);
+      document.removeEventListener("webkitfullscreenchange", read);
     };
   }, []);
   const form = formOf(info.d);

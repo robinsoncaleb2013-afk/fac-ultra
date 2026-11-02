@@ -22,7 +22,7 @@ export function Filter({ on, children, onClick }: { on: boolean; children: strin
       type="button"
       onClick={onClick}
       className={cn(
-        "min-h-11 shrink-0 rounded-full border px-3 text-sm",
+        "min-h-11 min-w-11 shrink-0 rounded-full border px-3 text-sm",
         on ? "border-brass bg-surface-2 text-fg" : "border-line text-muted",
       )}
     >

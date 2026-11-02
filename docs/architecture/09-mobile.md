@@ -6,6 +6,33 @@ This document amends `03-presentation-big-water.md` §1.1 (which said "phone kee
 
 ## 1. Device and graphics tiers
 
+### 1.0 Graphics levels (amended in WP-10 — read this first)
+
+Players see **five levels**; the drawing code still has **three tiers**. The levels sit on top of the tiers and are kept separate from the form factor (a PC can be on Low; a phone can never be pushed above Low by Auto).
+
+| Level (what players see) | Tier it uses | What is trimmed on top of the tier (`TRIM` in `graphics.ts`) |
+|---|---|---|
+| **Ultra** | `full` | nothing: the `full` column of §1.2 |
+| **High** | `full` | 30 glints, 70 particles, 48 confetti, no plankton |
+| **Medium** | `lite` | nothing: the `lite` column |
+| **Low** | `mobile` | nothing: the `mobile` column |
+| **Potato** | `mobile` | 8 px strips redrawn every 3rd frame, 4 glints, 12 particles, 1 swimmer, quarter rain rings, 8 confetti, canvas DPR 1 |
+
+`LEVEL_TIER` in `src/game/device.ts` is the mapping and `tierSpec(tier)` in `graphics.ts` applies the trim, so every effect still reads one table. The device setting `gfx` is now `"auto" | "ultra" | "high" | "medium" | "low" | "potato"`. Old values load as `full → ultra`, `lite → medium`, `mobile → low` (no save-version bump: device settings are not part of the career save).
+
+**Auto** is the default. It uses, in this order of importance:
+1. **The speed test** (`src/game/probe.ts`): about 50 animation frames measured at start-up. Frame rate is the main signal (`levelFromFps`: 55+ Ultra, 46+ High, 34+ Medium, 22+ Low, below that Potato).
+2. **The graphics-chip name** (`WEBGL_debug_renderer_info`) is only a hint: it can hold the level back (software drawing → Low, weak built-in chips → High) and never pushes it up (`levelCapFromRenderer`).
+3. **The device default** (§1.1) when the test has not finished.
+Auto may lower the starting level anywhere, and may raise it only on a PC. Its ceiling is `autoCeiling(form)`: Ultra on a PC, Medium on a tablet, **Low on a phone** (mobile defaults stay safe).
+
+**The governor** (`governorStep`, `03` §7): quick down, slow up.
+- Down: under 45 fps for 3 s drops one level and shows the toast "Switched to lighter graphics for a smoother game — change it in Settings." (Pinned levels are never lowered by the game.)
+- Up: Auto only; the game must stay at 57+ fps for 30 s (a smooth stretch, not one lucky second); **at most once per session**; never above `autoCeiling`; and never again once the player has pinned a level by hand during the session.
+- `src/game/governor.test.ts` drives it with simulated frame times.
+
+Settings → Picture quality lists Auto plus the five levels, each with one plain-English line (`LEVEL_INFO`).
+
 ### 1.1 Detecting the device class
 `src/game/device.ts`:
 
@@ -29,7 +56,7 @@ export function defaultGfx(form: Form): Gfx {
 }
 ```
 
-- `form` is re-evaluated on `resize`/`orientationchange`; `gfx` is a saved device setting (`07` §2) the player can pin in Settings (Full / Light / Mobile). Unpinned, it starts at `defaultGfx()` and the fps governor (`03` §7) may step it **down** one tier, never up.
+- `form` is re-evaluated on `resize`/`orientationchange`; `gfx` is a saved device setting (`07` §2) the player can pin in Settings (Full / Light / Mobile). Unpinned (Auto), it starts at `defaultGfx()` (or the speed test, §1.0) and the governor may step it **down** quickly and **up** slowly as §1.0 describes. (This replaces the WP-1 rule "never up".)
 - `useDesktop()` from `03` becomes `useForm()`; the desktop layout applies when `form === "desktop"` **or** when a tablet is in landscape with ≥ 1024 px width (a big iPad is a small PC).
 
 ### 1.2 What each tier draws
@@ -92,6 +119,17 @@ Canvas DPR: `full/lite` cap at 2 (as today), `mobile` caps at 1.5. On a 1080 px-
 ### 2.3 Main menu on mobile
 Painting full-bleed (800 px, water effects at the device tier), title top-left, mode cards as a **vertical list** of 7 rows, 64 px each, icon + title + one-line blurb; the row the player last played is first. Swipe left/right on the painting cycles the biome preview (cosmetic).
 
+### 2.4 As built in WP-10: the Hub (this replaces §2.1's bottom tabs, §2.2's rail and §2.3's card list)
+- **Title screen** (`hub/TitleScreen.tsx`): the current water painted behind the logo, one big **Play**, **Continue** (last mode) and **Settings**, and the Cloud and Full screen buttons. Swipe to preview another water. Enter plays.
+- **The Hub** (`hub/Hub.tsx`) is the pause menu. One row of six tabs: **Play, Tackle, Lodge, Waters, Players, Settings** (Tournament mode hides Tackle and Waters; Survival hides Waters). It opens from the title screen's Play, the corner **Menu** button, Esc, or the digits 1 to 6. It pauses the water (not in a tournament, where the clock is the server's).
+- **PC and big tablets** (`useHubLayout().split`): a list on the left and a **large detail panel** on the right that follows hover or the highlighted row. Locked things show a mystery silhouette and a hint. A hint bar at the bottom lists the keys (or gamepad buttons once a pad is seen).
+- **Phones**: tabs along the **bottom** (portrait) or the top (landscape), one column, every target 44 px or more, tap an item for a **full-screen detail with a Back button**. The inline cast panel stays under the water in portrait; every other panel now lives in the Hub.
+- **Corner HUD** (`hub/CornerHud.tsx`) replaces the rail, HUD bar, drawer, bottom tabs and the ☰ sheet: Menu button, level and collection bars, cash, a postage-stamp map of the water with its spots, and buttons for the quick wheel, the satchel and full screen.
+- **Quick wheel** (hold Tab, or tap its corner button): lures and emotes pages (Q/E swap). **Satchel** (hold B, or tap): the catch and a link to Tackle. Release the key and the pointed slice is chosen. Touch uses tap buttons, not long-press.
+- **Keyboard and gamepad** (`hub/HubKeys.tsx`, `game/hubnav.ts`, `game/spatial.ts`): arrows or WASD move by position on screen, Enter chooses, Esc goes back or closes, Q/E (LB/RB) change tab, F is full screen. Left and right past the edge change tab. Start toggles the menu, A/B choose and go back, LT holds the wheel, Y the satchel.
+- Old routes still work: `setTab("bag")` or `setLodgeView("records")` open the Hub at the matching tab and item (`hubTargetFor`). Digits 1 to 6 now open Hub tabs; the old Space/Enter, H, M, J, [, ], K, R, P keys are unchanged.
+- Motion respects `prefers-reduced-motion` and the in-game Motion setting; the drifting specks and the title sway stop. No new fonts: Fraunces and Outfit are still the only fonts (their stylesheet link is unchanged; offline they fall back to Georgia and system sans).
+
 ## 3. Touch controls
 
 ### 3.1 Casting and the fight
@@ -124,6 +162,13 @@ No swipe-to-reel, no pinch, no long-press menus. Kids and wet thumbs. Every acti
 
 ## 6. Installable (PWA)
 The sandbox already injects a manifest and icons under `public/__grok/` (platform plumbing — don't edit). Add a **"Add to home screen"** hint in the `☰` sheet that appears after the second session on a phone and explains the two taps for iOS Safari / Android Chrome; dismissable forever. No service worker in this chapter (the platform's injector owns the document; a SW would fight it) — offline play is out of scope until the sandbox plumbing is retired.
+
+### 6.1 Full screen (WP-10)
+- `src/game/fullscreen.ts` (pure, tested in `fullscreen.test.ts`) wraps the Fullscreen API with the `webkit` fallbacks; `components/game/fullscreen.tsx` holds `toggleFullscreen`, `useFullscreen` and the 44 px `FullscreenButton`, shown in the corner HUD, the Hub header, the title screen and Settings → Full screen. The **F** key toggles it everywhere.
+- State follows `fullscreenchange` (so Esc and swipes stay in sync) and the layout re-reads size on enter, leave and rotation (`use-form.ts`).
+- **iPhone Safari has no Fullscreen API for pages**: the button shows a plain-English Home Screen hint instead ("Add to Home Screen" from the share menu). An installed copy has no browser bars, so the button hides there.
+- Optional: after entering full screen on Android the screen may be locked to landscape if the player turns on "Keep the screen sideways in full screen" in Settings. It fails silently where unsupported; the preference lives in its own localStorage key.
+- PWA checks: `theme-color`, `viewport-fit=cover`, safe-area insets (`safe-top`, `safe-bot`, `safe-x`) and `100dvh` are in place, and `__root.tsx` now adds `mobile-web-app-capable` and `apple-mobile-web-app-capable`. **Known gap:** the manifest is written by the sandbox plugin (`scripts/grok-pwa-*`, `public/__grok/`) with `display: standalone`; a `fullscreen` display mode would need that plumbing changed, so it is left alone.
 
 ## 7. Multiplayer on mobile
 - Tournament lobby and live board (`06` §3) are full-screen sheets on phones; the board over the water becomes a one-line **rank ticker** under the HUD bar ("#4 of 31 · 2.3 lb behind #3").

@@ -38,8 +38,8 @@ test("form uses the short side, so rotating a phone does not make it a tablet", 
 });
 
 test("a pinned tier beats the device default; auto follows it", () => {
-  assert.equal(resolveGfx("full", "phone"), "full");
-  assert.equal(resolveGfx("lite", "desktop"), "lite");
+  assert.equal(resolveGfx("ultra", "phone"), "full");
+  assert.equal(resolveGfx("medium", "desktop"), "lite");
   assert.equal(resolveGfx("auto", "phone"), "mobile");
   assert.equal(resolveGfx("auto", "desktop"), "full");
 });
@@ -76,7 +76,7 @@ test("the water shrinks to a peek strip after 40% of the panel has scrolled", ()
 });
 
 test("device settings: a pinned tier survives a reload and beats the per-mode save", () => {
-  const stored = JSON.parse(JSON.stringify({ gfx: "lite", sound: false, motion: true, flash: false, followClock: false, kid: true, volume: 20, cb: true }));
+  const stored = JSON.parse(JSON.stringify({ gfx: "medium", sound: false, motion: true, flash: false, followClock: false, kid: true, volume: 20, cb: true }));
   const device = readDeviceSettings(stored);
   const modeSave = { gfx: "auto" as const, sound: true, motion: true, flash: true, followClock: true, kid: false, volume: 35, cb: false };
   assert.deepEqual(overlayDevice(modeSave, device), stored);
@@ -85,5 +85,5 @@ test("device settings: a pinned tier survives a reload and beats the per-mode sa
 test("device settings: junk is ignored field by field", () => {
   assert.deepEqual(readDeviceSettings(null), {});
   assert.deepEqual(readDeviceSettings("x"), {});
-  assert.deepEqual(readDeviceSettings({ gfx: "ultra", sound: "yes", motion: false }), { motion: false });
+  assert.deepEqual(readDeviceSettings({ gfx: "turbo", sound: "yes", motion: false }), { motion: false });
 });

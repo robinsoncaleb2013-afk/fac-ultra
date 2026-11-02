@@ -4,7 +4,7 @@
    with a sine push — that is the ripple. Nothing here allocates per frame
    except the occasional gradient when the stage is resized. */
 
-import { rainRingRate, rippleAmp, rippleDx, TIERS, timeTint } from "@/game/graphics";
+import { rainRingRate, rippleAmp, rippleDx, tierSpec, timeTint } from "@/game/graphics";
 import type { Gfx } from "@/game/device";
 import { waterLineOf, sunXOf } from "@/game/water";
 
@@ -95,7 +95,7 @@ export function reuseBackground(
   h: number,
 ): boolean {
   frameNo++;
-  const every = TIERS[tier].rippleEvery;
+  const every = tierSpec(tier).rippleEvery;
   if (every === 1) return false;
   if (!cache) cache = makeLayer();
   if (!cache) return false;
@@ -107,7 +107,7 @@ export function reuseBackground(
 }
 
 export function cacheTarget(tier: Gfx, dpr: number): CanvasRenderingContext2D | null {
-  if (TIERS[tier].rippleEvery === 1 || !cache || !buf) return null;
+  if (tierSpec(tier).rippleEvery === 1 || !cache || !buf) return null;
   if (cache.canvas.width !== buf.canvas.width || cache.canvas.height !== buf.canvas.height) {
     cache.canvas.width = buf.canvas.width;
     cache.canvas.height = buf.canvas.height;
@@ -141,7 +141,7 @@ export function rippleBlit(
   if (!buf) return;
   const src = buf.canvas;
   const waterTop = Math.round(waterLineOf(biome) * h);
-  const strip = TIERS[tier].strip;
+  const strip = tierSpec(tier).strip;
   if (waterTop > 0) {
     dst.drawImage(src, 0, 0, src.width, waterTop * dpr, 0, 0, w, waterTop);
     countDraw();
@@ -212,7 +212,7 @@ export function drawGlints(
   moon: boolean,
   boost: number,
 ) {
-  const n = TIERS[tier].glints;
+  const n = tierSpec(tier).glints;
   const top = waterLineOf(biome) * h;
   ctx.save();
   ctx.globalCompositeOperation = "lighter";

@@ -21,8 +21,8 @@ import {
   WEATHER,
   xpNeed,
 } from "@/game/content";
-import { downloadSave, sim, useGame } from "@/game/engine";
-import { CloudSettings } from "@/components/game/account";
+import { sim, useGame } from "@/game/engine";
+import { AllSettings } from "@/components/game/hub/settings-sections";
 import { MODES } from "@/game/modes";
 import { Logbook } from "@/components/game/trips";
 import { PetView, RegularsView } from "@/components/game/fun";
@@ -35,7 +35,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { drawFish } from "@/game/fish-draw";
 import { biomeArt, fitCanvas } from "@/game/art";
-import { Toggle } from "@/components/game/panels/shared";
 import { RecordBook, Stewardship } from "@/components/game/panels/RecordsSection";
 import { TourneyHistory, TrophyShelf } from "@/components/game/trophies";
 
@@ -96,7 +95,7 @@ export function LodgePanel() {
 }
 
 /** Lodge → Record in Survival: your best runs and best fish. No level, luck or rebirth here. */
-function SurvivalRecord() {
+export function SurvivalRecord() {
   const meta = useGame((s) => s.sMeta);
   const caught = useGame((s) => dexCount(s.dex));
   const best = meta.history.reduce((m, r) => Math.max(m, r.days), 0);
@@ -112,7 +111,7 @@ function SurvivalRecord() {
   );
 }
 
-function Record() {
+export function Record() {
   const s = useGame();
   const rebirth = useGame((st) => st.rebirth);
   const rules = MODES[s.mode];
@@ -179,7 +178,7 @@ function Record() {
   );
 }
 
-function Aquarium() {
+export function Aquarium() {
   const tank = useGame((s) => s.tank);
   const dex = useGame((s) => s.dex);
   const biome = useGame((s) => s.biome);
@@ -419,7 +418,7 @@ function Aquarium() {
   );
 }
 
-function DerbyView() {
+export function DerbyView() {
   const derby = useGame((s) => s.derby);
   const startDerby = useGame((s) => s.startDerby);
   const derbiesWon = useGame((s) => s.derbiesWon);
@@ -467,7 +466,7 @@ function DerbyView() {
   );
 }
 
-function CrewView() {
+export function CrewView() {
   const status = useCrew((s) => s.status);
   const code = useCrew((s) => s.code);
   const isHost = useCrew((s) => s.isHost);
@@ -559,237 +558,7 @@ function CrewView() {
   );
 }
 
-const CONTROLS: [string, string, string][] = [
-  ["Space", "Cast, hook, then hold to reel", "Hold Space or the mouse button to reel. Let go to give line. Enter works too."],
-  ["[ ]", "Looser or tighter drag in a fight", "Tight drag lands fish faster but snaps the line more easily"],
-  ["K / R", "Keep or release the fish you just landed", "Release for 20% more XP and a step toward Steward. Waiting 6 seconds keeps it."],
-  ["1–7", "Open a tab (press again to close it)", "1 Cast, 2 Bag, 3 Gear, 4 Lures, 5 Waters, 6 Dex, 7 Lodge"],
-  ["Esc", "Close the panel or the catch card", "Closes whatever is open on top of the water"],
-  ["F", "Full screen on or off", "Fills the whole screen. Press F again or Esc to leave."],
-  ["H", "Hide the buttons for a clean picture", "Photo mode. Press any key or click to bring the buttons back."],
-  ["P", "Save a picture of the water", "Saves a PNG with the water, the fish if one is up, and the date."],
-  ["M", "Sound on or off", "Mute"],
-  ["J", "Player 2 holds the reel too (Local Co-op)", "Shared glory: it adds to your reel"],
-];
-function Settings() {
-  const sound = useGame((s) => s.sound);
-  const motion = useGame((s) => s.motion);
-  const flash = useGame((s) => s.flash);
-  const volume = useGame((s) => s.volume);
-  const setVolume = useGame((s) => s.setVolume);
-  const cb = useGame((s) => s.cb);
-  const assist = useGame((s) => s.assist);
-  const kidSetting = useGame((s) => s.kid);
-  const setKid = useGame((s) => s.setKid);
-  const kidIn = useKidOn();
-  const assistAllowed = MODES[useGame((s) => s.mode)].assistAllowed;
-  const followClock = useGame((s) => s.followClock);
-  const gfx = useGame((s) => s.gfx);
-  const tier = useGame((s) => s.tier);
-  const setGfx = useGame((s) => s.setGfx);
-  const drag = useGame((s) => s.drag);
-  const setDrag = useGame((s) => s.setDrag);
-  const toggle = useGame((s) => s.toggleSetting);
-  const wipe = useGame((s) => s.wipe);
-  const armed = useGame((s) => s.armReset);
-  const notify = useGame((s) => s.notify);
-  const importSave = useGame((s) => s.importSave);
-  const exportCode = useGame((s) => s.exportCode);
-  const importCode = useGame((s) => s.importCode);
-  const mode = useGame((s) => s.mode);
-  const file = useRef<HTMLInputElement>(null);
-  const [code, setCode] = useState("");
-  const [codeOut, setCodeOut] = useState("");
-  return (
-    <div className="flex flex-col gap-2">
-      <Toggle on={sound} onClick={() => toggle("sound")}>
-        Sound
-      </Toggle>
-      <Toggle on={motion} onClick={() => toggle("motion")}>
-        Motion and shake
-      </Toggle>
-      <Toggle on={flash} onClick={() => toggle("flash")}>
-        Flashes
-      </Toggle>
-      <div className="rounded-2xl border border-line bg-surface p-3">
-        <label htmlFor="ambience-volume" className="flex items-center justify-between">
-          <h4 className="font-serif">Water sounds</h4>
-          <span className="text-sm text-brass">{sound ? `${volume}%` : "Sound is off"}</span>
-        </label>
-        <p className="mt-1 text-sm text-muted">
-          Quiet music of the water you are fishing: frogs, waves, wind and rain. It starts after your first tap. Turn Sound off above to
-          hush everything.
-        </p>
-        <input
-          id="ambience-volume"
-          type="range"
-          min={0}
-          max={100}
-          step={5}
-          value={volume}
-          onChange={(e) => setVolume(Number(e.target.value))}
-          className="mt-2 h-11 w-full accent-[var(--color-brass)]"
-        />
-      </div>
-      <Toggle on={cb} onClick={() => toggle("cb")}>
-        Colour-blind colours (rarity shapes always show)
-      </Toggle>
-      <div className="rounded-2xl border border-line bg-surface p-3">
-        <Toggle on={kidSetting} onClick={() => setKid(!kidSetting)}>
-          Kid Mode
-        </Toggle>
-        <p className="mt-2 text-sm text-muted">
-          For younger anglers. Helping Hand stays on and always glows, the writing gets bigger, hints come sooner and
-          the coaching never stops. Messages get a speaker button that reads them out loud. Rare fish and Rebirth ask
-          &quot;Are you sure?&quot; first. Tournaments ignore Kid Mode so every score stays fair.
-        </p>
-        {kidSetting && !assistAllowed ? <p className="mt-1 text-sm text-brass">Not used in this mode.</p> : null}
-      </div>
-      <Toggle on={assist || kidIn} onClick={() => (kidIn ? undefined : toggle("assist"))}>
-        {kidIn ? "Helping Hand (on with Kid Mode)" : "Helping Hand (a wider green when fights are tough)"}
-      </Toggle>
-      <Toggle on={followClock} onClick={() => toggle("followClock")}>
-        Follow the clock (dawn, dusk and night light)
-      </Toggle>
-      <div className="rounded-2xl border border-line bg-surface p-3">
-        <h4 className="font-serif">Graphics</h4>
-        <p className="mt-1 text-sm text-muted">
-          Auto picks the best look for this device and eases off if the game gets choppy. Pick one to keep it.
-        </p>
-        <div className="mt-2 grid grid-cols-4 gap-1">
-          {(
-            [
-              ["auto", "Auto"],
-              ["full", "Full"],
-              ["lite", "Light"],
-              ["mobile", "Mobile"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={gfx === id}
-              onClick={() => setGfx(id)}
-              className={cn(
-                "min-h-11 rounded-full px-2 text-sm",
-                gfx === id ? "bg-brass text-brass-ink" : "bg-surface-2 text-muted",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-xs text-muted">Showing: {tier === "full" ? "Full" : tier === "lite" ? "Light" : "Mobile"}</p>
-      </div>
-      <div className="rounded-2xl border border-line bg-surface p-3">
-        <h4 className="font-serif">Reel drag</h4>
-        <p className="mt-1 text-sm text-muted">
-          Loose drag is gentle on the line. Tight drag lands fish faster, but the line snaps more easily. You can also
-          change it in a fight with [ and ].
-        </p>
-        <div className="mt-2 grid grid-cols-3 gap-1">
-          {(["Loose", "Normal", "Tight"] as const).map((label, id) => (
-            <button
-              key={label}
-              type="button"
-              aria-pressed={drag === id}
-              onClick={() => setDrag(id as 0 | 1 | 2)}
-              className={cn(
-                "min-h-11 rounded-full px-2 text-sm",
-                drag === id ? "bg-brass text-brass-ink" : "bg-surface-2 text-muted",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="rounded-2xl border border-line bg-surface p-3">
-        <h4 className="font-serif">Controls</h4>
-        <ul className="mt-1 grid grid-cols-1 gap-x-4 gap-y-1 text-sm text-muted sm:grid-cols-2">
-          {CONTROLS.map(([key, what, tip]) => (
-            <li key={key} title={tip} className="flex gap-2">
-              <kbd className="min-w-8 rounded-md border border-line bg-surface-2 px-1.5 text-center text-xs text-fg">{key}</kbd>
-              <span>{what}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <CloudSettings />
-      <Button variant="ghost" onClick={downloadSave}>
-        Export ledger (file)
-      </Button>
-      <Button variant="ghost" onClick={() => file.current?.click()}>
-        Import ledger (file)
-      </Button>
-      <input
-        ref={file}
-        type="file"
-        accept="application/json"
-        className="sr-only"
-        onChange={(event) => {
-          const picked = event.target.files?.[0];
-          event.target.value = "";
-          if (!picked) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            try {
-              const ok = importSave(JSON.parse(String(reader.result)));
-              if (!ok) notify("That file is not a ledger.");
-            } catch {
-              notify("That file is not a ledger.");
-            }
-          };
-          reader.readAsText(picked);
-        }}
-      />
-      <div className="rounded-2xl border border-line bg-surface p-3">
-        <h4 className="font-serif">Save code</h4>
-        <p className="mt-1 text-sm text-muted">
-          One code carries this mode's whole ledger ({mode}). Paste it on another device to pick up where you left
-          off — importing replaces this slot's save.
-        </p>
-        <Button
-          variant="ghost"
-          className="mt-2"
-          onClick={() => {
-            setCodeOut(exportCode());
-            notify("Save code ready below.");
-          }}
-        >
-          Make my save code
-        </Button>
-        {codeOut ? (
-          <textarea
-            readOnly
-            value={codeOut}
-            rows={3}
-            onFocus={(e) => e.target.select()}
-            className="mt-2 w-full rounded-xl border border-line bg-surface-2 p-2 text-xs text-fg"
-          />
-        ) : null}
-        <textarea
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          rows={3}
-          placeholder="Paste a save code here…"
-          className="mt-2 w-full rounded-xl border border-line bg-surface-2 p-2 text-xs text-fg placeholder:text-muted"
-        />
-        <Button
-          className="mt-2"
-          disabled={!code.trim()}
-          onClick={() => {
-            if (importCode(code)) setCode("");
-            else notify("That code is not a ledger.");
-          }}
-        >
-          Import this code
-        </Button>
-      </div>
-      <Button variant="ghost" onClick={wipe}>
-        {armed ? "Tap again to erase" : "Erase this ledger"}
-      </Button>
-    </div>
-  );
+/** The old Lodge → Settings room. Settings has its own tab in the menu now; this keeps the old route working. */
+export function Settings() {
+  return <AllSettings />;
 }
-

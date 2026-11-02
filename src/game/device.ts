@@ -4,10 +4,31 @@
 
 export type Form = "phone" | "tablet" | "desktop";
 export type Gfx = "full" | "lite" | "mobile";
-/** What the player chose in Settings: a pinned tier, or "auto" (let us pick). */
-export type GfxPref = "auto" | Gfx;
+/** The five quality levels the player sees (docs/architecture/09 §1.4). Each one maps onto an internal Gfx tier. */
+export type Level = "ultra" | "high" | "medium" | "low" | "potato";
+/** What the player chose in Settings: a pinned level, or "auto" (let us pick). */
+export type GfxPref = "auto" | Level;
 
 export const GFX_LIST: readonly Gfx[] = ["full", "lite", "mobile"];
+/** Best to lightest. */
+export const LEVELS: readonly Level[] = ["ultra", "high", "medium", "low", "potato"];
+/** The internal tier each level draws with. Ultra and High share `full`; Low and Potato share `mobile`. */
+export const LEVEL_TIER: Record<Level, Gfx> = { ultra: "full", high: "full", medium: "lite", low: "mobile", potato: "mobile" };
+
+export const levelIndex = (l: Level) => LEVELS.indexOf(l);
+export const levelDown = (l: Level): Level => LEVELS[Math.min(LEVELS.length - 1, levelIndex(l) + 1)];
+export const levelUp = (l: Level): Level => LEVELS[Math.max(0, levelIndex(l) - 1)];
+
+/** Old saves said full / lite / mobile (WP-1). They mean ultra / medium / low. Anything unknown is null. */
+export function normPref(v: unknown): GfxPref | null {
+  if (v === "auto") return "auto";
+  if (typeof v !== "string") return null;
+  if ((LEVELS as readonly string[]).includes(v)) return v as Level;
+  if (v === "full") return "ultra";
+  if (v === "lite") return "medium";
+  if (v === "mobile") return "low";
+  return null;
+}
 export const DEVICE_KEY = "fac-ultra-device";
 
 export type DeviceInfo = {
@@ -32,12 +53,34 @@ export function defaultGfx(form: Form, mem = 4, cores = 4): Gfx {
   return "mobile";
 }
 
-export function resolveGfx(pref: GfxPref, form: Form, mem?: number, cores?: number): Gfx {
-  return pref === "auto" ? defaultGfx(form, mem, cores) : pref;
+/** The level a device starts at when nothing is pinned and no speed test has run yet. */
+export function defaultLevel(form: Form, mem = 4, cores = 4): Level {
+  const tier = defaultGfx(form, mem, cores);
+  return tier === "full" ? "ultra" : tier === "lite" ? "medium" : "low";
+}
+
+/** The best level Auto may ever pick on this kind of device. Phones stay safe: Auto never goes above Low there. */
+export function autoCeiling(form: Form): Level {
+  return form === "desktop" ? "ultra" : form === "tablet" ? "medium" : "low";
+}
+
+/** The level in force: a pinned level, or Auto (the speed test result if there is one, else the device default). */
+export function resolveLevel(pref: GfxPref, form: Form, mem?: number, cores?: number, probed: Level | null = null): Level {
+  if (pref !== "auto") return pref;
+  const base = defaultLevel(form, mem, cores);
+  if (!probed) return base;
+  /* The speed test may lower the start anywhere. It may raise it only on a PC. */
+  const raised = form === "desktop" ? probed : levelIndex(probed) > levelIndex(base) ? probed : base;
+  const capped = levelIndex(raised) < levelIndex(autoCeiling(form)) ? autoCeiling(form) : raised;
+  return capped;
+}
+
+export function resolveGfx(pref: GfxPref, form: Form, mem?: number, cores?: number, probed: Level | null = null): Gfx {
+  return LEVEL_TIER[resolveLevel(pref, form, mem, cores, probed)];
 }
 
 export function isGfxPref(v: unknown): v is GfxPref {
-  return v === "auto" || v === "full" || v === "lite" || v === "mobile";
+  return normPref(v) !== null;
 }
 
 export type LayoutPlan = {
@@ -139,7 +182,8 @@ export function readDeviceSettings(raw: unknown): Partial<DeviceSettings> {
   if (!raw || typeof raw !== "object") return {};
   const o = raw as Record<string, unknown>;
   const out: Partial<DeviceSettings> = {};
-  if (isGfxPref(o.gfx)) out.gfx = o.gfx;
+  const pref = normPref(o.gfx);
+  if (pref) out.gfx = pref;
   for (const k of ["sound", "motion", "flash", "followClock", "kid"] as const) {
     if (typeof o[k] === "boolean") out[k] = o[k];
   }

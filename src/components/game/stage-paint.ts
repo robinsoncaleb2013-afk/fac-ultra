@@ -8,7 +8,7 @@ import { BIOMES, BOSS_INDEX, SPECIES_PER_BIOME } from "@/game/content";
 import type { Gfx } from "@/game/device";
 import { drawFish } from "@/game/fish-draw";
 import { pickedHour, sim, useGame } from "@/game/engine";
-import { TIERS } from "@/game/graphics";
+import { tierSpec } from "@/game/graphics";
 import { spotResidents } from "@/game/match";
 import { peerBoats } from "@/game/multiplayer";
 import { eventBoats, myBubble } from "@/game/eventroom";
@@ -258,7 +258,7 @@ function drawSpots(
 
 export function paint(canvas: HTMLCanvasElement, view: View) {
   const { tier, big, menu } = view;
-  const spec = TIERS[tier];
+  const spec = tierSpec(tier);
   const box = fitCanvas(canvas, spec.dprCap);
   if (!box) return;
   const { ctx, w, h, dpr } = box;

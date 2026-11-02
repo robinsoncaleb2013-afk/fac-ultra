@@ -252,20 +252,37 @@ const post = (body: unknown): RequestInit => ({ method: "POST", headers: { "cont
 
 /* ── Friends (WP-8) ───────────────────────────────────────────────────────── */
 
-export type FriendInfo = { code: string; name: string; online: boolean; fishing: { id: string; title: string } | null };
+export type FriendInfo = { code: string; name: string; handle?: string | null; online: boolean; fishing: { id: string; title: string } | null };
+/** A player in a request or block list (WP-10). */
+export type PersonInfo = { code: string; name: string; handle: string | null };
 export type InviteInfo = {
   id: number;
   from: { code: string; name: string };
   event: { id: string; title: string; waterName: string; startsAt: number; endsAt: number };
 };
-export type FriendsReply = { serverNow: number; me: { code: string; name: string }; friends: FriendInfo[]; invites: InviteInfo[]; error?: string };
+export type FriendsReply = {
+  serverNow: number;
+  me: { code: string; name: string; handle?: string };
+  friends: FriendInfo[];
+  invites: InviteInfo[];
+  /** WP-10: people who asked you (accept or not), people you asked, and people you blocked. */
+  requests?: { incoming: PersonInfo[]; outgoing: PersonInfo[] };
+  blocked?: PersonInfo[];
+  error?: string;
+};
+export type FriendOp =
+  | "hello" | "add" | "remove" | "invite" | "dismiss"
+  | "request" | "invite_email" | "redeem" | "accept" | "decline" | "cancel" | "block" | "unblock";
 
 export const api = {
   events: (id: string, f: Fetcher = fetch) =>
     json<{ serverNow: number; events: EventInfo[]; privates?: EventInfo[]; error?: string }>(f, `/api/events?scope=open&playerId=${encodeURIComponent(id)}`),
   friends: (id: string, f: Fetcher = fetch) => json<FriendsReply>(f, `/api/friends?playerId=${encodeURIComponent(id)}`),
-  friendOp: (op: "hello" | "add" | "remove" | "invite" | "dismiss", id: string, extra: Record<string, unknown> = {}, f: Fetcher = fetch) =>
+  friendOp: (op: FriendOp, id: string, extra: Record<string, unknown> = {}, f: Fetcher = fetch) =>
     json<FriendsReply>(f, "/api/friends", post({ op, playerId: id, ...extra })),
+  /** Type-ahead for the "add by name" box (grown-up players, three letters at least). */
+  friendSearch: (id: string, q: string, f: Fetcher = fetch) =>
+    json<{ serverNow: number; matches: { handle: string; name: string }[]; error?: string }>(f, "/api/friends", post({ op: "search", playerId: id, q })),
   trophies: (id: string, f: Fetcher = fetch) => json<{ serverNow: number; results: ResultRow[]; error?: string }>(f, `/api/trophies?playerId=${encodeURIComponent(id)}`),
   byCode: (code: string, f: Fetcher = fetch) =>
     json<{ serverNow: number; event: EventInfo; error?: string }>(f, `/api/events?code=${encodeURIComponent(code)}`),

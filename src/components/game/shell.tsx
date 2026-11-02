@@ -1,11 +1,17 @@
 import { useEffect } from "react";
-import { hydrate, useGame } from "@/game/engine";
+import { applySpeedTest, hydrate, useGame } from "@/game/engine";
 import { useKeys } from "@/components/game/keys";
 import { DesktopLayout } from "@/components/game/layout/DesktopLayout";
 import { MobileLayout } from "@/components/game/layout/MobileLayout";
 import { countSession } from "@/components/game/sessions";
 import { useForm } from "@/components/game/layout/use-form";
-import { MainMenu } from "@/components/game/menu";
+import { Hub } from "@/components/game/hub/Hub";
+import { HubKeys } from "@/components/game/hub/HubKeys";
+import { TitleScreen } from "@/components/game/hub/TitleScreen";
+import { Wheel } from "@/components/game/hub/Wheel";
+import { Satchel } from "@/components/game/hub/Satchel";
+import { InviteLinkHost } from "@/components/game/hub/friends-data";
+import { runSpeedTest } from "@/game/probe";
 import { Toasts, WelcomeBack } from "@/components/game/overlays";
 import { useKidAttr } from "@/components/game/use-kid";
 import { Ambience } from "@/components/game/fun";
@@ -23,6 +29,7 @@ export function Game() {
   useEffect(() => {
     hydrate();
     countSession();
+    void runSpeedTest().then(() => applySpeedTest()).catch(() => {});
   }, []);
   useKeys();
   useKidAttr();
@@ -33,7 +40,7 @@ export function Game() {
     <div className="h-dvh bg-bg text-fg">
       {screen === "menu" ? (
         <>
-          <MainMenu plan={plan} />
+          <TitleScreen plan={plan} />
           <Toasts />
         </>
       ) : plan.kind === "desktop" ? (
@@ -41,6 +48,11 @@ export function Game() {
       ) : (
         <MobileLayout plan={plan} height={height} />
       )}
+      <Hub />
+      <HubKeys />
+      <Wheel />
+      <Satchel />
+      <InviteLinkHost />
       <Ambience />
       <TournamentTicker />
       <TournamentLobby />

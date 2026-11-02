@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { formOf, readDevice } from "@/game/device";
 import { loadArt, wantedSize } from "@/game/art";
 import { biomeSpeciesCaught, BIOMES, BOSS_INDEX, STAGE_NAMES, stageOf, WEATHER } from "@/game/content";
 import { MODES } from "@/game/modes";
@@ -6,7 +7,8 @@ import { creelLine } from "@/game/trips";
 import { act, frame, reelDown, reelUp, sim, useGame, windowFor } from "@/game/engine";
 import { WINDOW_INFO } from "@/game/presentation";
 import { nearestSpot } from "@/game/spots";
-import { FpsMeter, governorStep, shouldSkipFrame, TIERS } from "@/game/graphics";
+import { freshGovernor, FpsMeter, governorStep, shouldSkipFrame, tierSpec } from "@/game/graphics";
+import { useHubUi } from "@/game/hubstate";
 import { paint } from "@/components/game/stage-paint";
 import { FotdLine, GiftChip } from "@/components/game/fun";
 import { cn } from "@/lib/cn";
@@ -25,6 +27,10 @@ type StageProps = {
 };
 
 const LIGHTER = "Switched to lighter graphics for a smoother game — change it in Settings.";
+const BETTER = "The game is running smoothly, so the graphics went up a notch — change it in Settings.";
+
+/* One governor for the whole session (it survives the menu and the game swapping the stage). */
+let gov = freshGovernor();
 
 export function Stage({ menu = false, big = false, className, biomeOverride, onWater, children }: StageProps) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -40,8 +46,8 @@ export function Stage({ menu = false, big = false, className, biomeOverride, onW
   useEffect(() => {
     const canvas = ref.current;
     const width = canvas?.clientWidth || window.innerWidth;
-    const dpr = Math.min(TIERS[tier].dprCap, window.devicePixelRatio || 1);
-    const size = menu ? 800 : wantedSize(width, dpr, TIERS[tier].art);
+    const dpr = Math.min(tierSpec(tier).dprCap, window.devicePixelRatio || 1);
+    const size = menu ? 800 : wantedSize(width, dpr, tierSpec(tier).art);
     void loadArt(biome, { size, neighbors: !menu, unlocked: useGame.getState().ub });
   }, [biome, tier, menu]);
 
@@ -51,7 +57,11 @@ export function Stage({ menu = false, big = false, className, biomeOverride, onW
     let raf = 0;
     let last = performance.now();
     let frameNo = 0;
-    let gov = { lowFor: 0 };
+    let form = formOf(readDevice());
+    const onSize = () => {
+      form = formOf(readDevice());
+    };
+    window.addEventListener("resize", onSize);
     const meter = new FpsMeter();
     const hidden = () => document.hidden || document.visibilityState === "hidden";
     const loop = (now: number) => {
@@ -62,21 +72,24 @@ export function Stage({ menu = false, big = false, className, biomeOverride, onW
       const real = (now - last) / 1000;
       last = now;
       const dt = Math.min(0.05, real);
-      frame(dt);
-      paint(canvas, { ...view.current, dt });
+      /* The pause menu freezes the water (not in a tournament: the clock there is the server's). The painting keeps drawing. */
+      const paused = !menu && useHubUi.getState().open && st.mode !== "tournament";
+      if (!paused) frame(dt);
+      paint(canvas, { ...view.current, dt: paused ? 0 : dt });
       meter.push(Math.min(0.25, real));
       const step = governorStep(gov, {
         fps: meter.fps,
         dt: real,
         ready: meter.full,
         pinned: st.gfx !== "auto",
-        tier: st.tier,
+        level: st.level,
+        form,
       });
       gov = step.gov;
-      if (step.down) {
+      if (step.change) {
         meter.reset();
-        useGame.setState({ tier: step.down });
-        useGame.getState().notify(LIGHTER);
+        st.governLevel(step.change);
+        st.notify(step.why === "smooth" ? BETTER : LIGHTER);
       }
     };
     const start = () => {
@@ -103,6 +116,7 @@ export function Stage({ menu = false, big = false, className, biomeOverride, onW
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("resize", onSize);
       window.removeEventListener("pointerup", reelUp);
       window.removeEventListener("pointercancel", reelUp);
       window.removeEventListener("pointerdown", touch);

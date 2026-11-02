@@ -7,16 +7,14 @@ import { Toasts } from "@/components/game/overlays";
 import { Celebration } from "@/components/game/layout/Celebration";
 import { CastDock } from "@/components/game/layout/CastDock";
 import { DragButtons } from "@/components/game/layout/DragButtons";
-import { Drawer } from "@/components/game/layout/Drawer";
-import { HudBar } from "@/components/game/layout/HudBar";
-import { Rail } from "@/components/game/layout/Rail";
+import { CornerHud } from "@/components/game/hub/CornerHud";
 import { RigPopover, RigSheet, SpotChips } from "@/components/game/layout/RigControl";
 
-/** Big Water: the painting fills the screen; the rail, HUD bar, drawer and cast dock float over it. */
+/** Big Water: the painting fills the screen; the corner HUD and the cast dock float over it. Everything else lives in the pause menu (hub/). */
 export function DesktopLayout({ plan }: { plan: LayoutPlan }) {
   const photo = useGame((s) => s.photo);
   const derby = useGame((s) => !!s.derby);
-  const railW = plan.railCollapsed ? 56 : 72;
+  const railW = 0;
 
   /* Photo mode: the next key or click brings the chrome back (and does nothing else). */
   useEffect(() => {
@@ -43,14 +41,12 @@ export function DesktopLayout({ plan }: { plan: LayoutPlan }) {
       />
       {photo ? null : (
         <>
-          <HudBar left={railW} />
-          <StageChips className="absolute top-14 z-10" style={{ left: railW + 12 }} />
-          <div className="pointer-events-none absolute top-14 right-4 z-10 flex w-96 max-w-[45vw] flex-col items-end gap-2">
+          <CornerHud />
+          <StageChips className="absolute top-16 z-10" style={{ left: railW + 12 }} />
+          <div className="pointer-events-none absolute top-24 right-4 z-10 flex w-96 max-w-[45vw] flex-col items-end gap-2">
             {derby ? <DerbyBanner /> : null}
             <BountyChips />
           </div>
-          <Rail collapsed={plan.railCollapsed} />
-          <Drawer left={railW} width={plan.drawerWidth} />
           <div className="absolute bottom-7 z-20" style={{ left: railW + 12 }}>
             {plan.bigRing ? <RigSheet compact /> : <RigPopover />}
           </div>

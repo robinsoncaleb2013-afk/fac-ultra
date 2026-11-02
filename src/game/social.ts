@@ -149,6 +149,35 @@ export function cleanFriendCode(v: unknown): string | null {
   return c.length === FRIEND_CODE_LEN && [...c].every((ch) => FRIEND_ALPHABET.includes(ch)) ? c : null;
 }
 
+/** Pending friend requests one player can have out, or waiting on one player (WP-10). */
+export const MAX_PENDING = 50;
+
+/** "RiverRat#4821": the name the server knows plus the short number it handed out. */
+export const handleOf = (name: string, tag: number) => `${name}#${tag}`;
+
+/** A typed "Name#1234", tidied. Null if it cannot be one (the name is cleaned the same way names are everywhere else). */
+export function cleanHandle(v: unknown): { name: string; tag: number } | null {
+  if (typeof v !== "string") return null;
+  const m = /^\s*(.{2,20}?)\s*#\s*(\d{4})\s*$/.exec(v);
+  if (!m) return null;
+  if (/[<>"\\]/.test(m[1])) return null;
+  return { name: m[1], tag: Number(m[2]) };
+}
+
+/** What the type-ahead looks up: the first letters of a name, lower case. Needs three. */
+export function searchPrefix(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const q = v.split("#")[0].trim().toLowerCase();
+  return q.length >= 3 && q.length <= 20 && !/[<>"\\%_]/.test(q) ? q : null;
+}
+
+/** A typed email address, tidied. Null if it plainly is not one. Kept short on purpose. */
+export function cleanEmail(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const e = v.trim().toLowerCase();
+  return e.length <= 120 && /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/.test(e) ? e : null;
+}
+
 /** "ABC-XYZ" for reading out loud. */
 export const formatFriendCode = (c: string) => `${c.slice(0, 3)}-${c.slice(3)}`;
 

@@ -136,3 +136,12 @@ It is simple and already respects `motion` (reduced-motion) and `flash` settings
 - `engine.ts` gained three small exports for the cloud layer: `onPersisted(fn)`, `flushSave()` and `reloadActiveSlot()`. The save format is unchanged (version 9). Sync state lives in `localStorage["fac-cloud"]`, not in the `Save`.
 - `src/lib/auth/*` and `src/lib/app-data/*` are untouched. The game's accounts are separate from the platform's Better Auth.
 - The original biome JPGs live in `art-src/`; `public/art/biomes/` holds only the WebP set.
+
+## As built in WP-10 (menu, graphics levels, full screen)
+- **Removed:** `components/game/menu.tsx` (old main menu), `tabs.ts`, `layout/Rail.tsx`, `Drawer.tsx`, `MenuSheet.tsx`, `HudBar.tsx`. `tabsFor(mode)` is now `tabsForMode(mode)` in `src/game/hubnav.ts` and returns Hub tabs.
+- **Hub** (`src/components/game/hub/`): `TitleScreen`, `Hub` (frame, tab strip, hint bar), `PlayTab`, `TackleTab`, `LodgeTab`, `WatersTab`, `PlayersTab`, `SettingsTab` + `settings-sections`, `CornerHud`, `Wheel`, `Satchel`, `HubKeys` (keyboard + gamepad), `parts` (list/detail layout), `panel-shell` (wraps older dark panels), `art` (paintings and placeholder art), `icons` (original SVG icons), `actions`, `friends-data`. Small separate store: `src/game/hubstate.ts` (`useHubUi`: open, tab, item, detail, wheel, satchel). Pure helpers with tests: `hubnav.ts`, `hubcopy.ts`, `spatial.ts`.
+- **Graphics levels:** `device.ts` (`Level`, `LEVEL_TIER`, `resolveLevel`, `autoCeiling`), `graphics.ts` (`tierSpec`, `LEVEL_INFO`, governor), `probe.ts` (start-up speed test). See `09` §1.0.
+- **Full screen:** `fullscreen.ts` (pure), `components/game/fullscreen.tsx`.
+- **Layouts:** `DesktopLayout` and `MobileLayout` now show only the water, the corner HUD, the cast dock and (portrait phones) the inline cast panel.
+- **Self-hosting fix:** `scripts/copy-pglite-assets.mjs` runs at the end of `npm run build` and copies PGLite's `pglite.data`, `pglite.wasm` and `initdb.wasm` next to a node-server bundle (`.output/server/_libs/`); it does nothing on the Vercel build. Without it a `node-server` build with no `DATABASE_URL` answered every database route with 500.
+- **Touch-target check:** `node scripts/check-touch-targets.mjs [url]` (needs `playwright` installed and a running build).

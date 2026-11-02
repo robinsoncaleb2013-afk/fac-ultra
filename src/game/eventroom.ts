@@ -69,6 +69,29 @@ const lastFrom = new Map<string, number>();
 /** Names from other devices are cleaned again here: nothing rude is ever drawn on your screen. */
 const nameOf = (id: string) => safeName(boats.get(id)?.name || useEventRoom.getState().peers.find((p) => p.id === id)?.name, "Another angler");
 
+/* Block (WP-10): anglers you blocked are not drawn and their emotes and catches are not shown. The room only knows
+   display names, so the match is by name: if two people share a name and you block one, you will not see either. */
+let blockedNames = new Set<string>();
+const BLOCKED_KEY = "fac-ultra-blocked-names";
+export function setBlockedNames(names: readonly string[]) {
+  blockedNames = new Set(names.map((n) => safeName(n, "").toLowerCase()).filter(Boolean));
+  try {
+    localStorage.setItem(BLOCKED_KEY, JSON.stringify([...blockedNames].slice(0, 100)));
+  } catch {
+    /* private mode: the list is still used for this visit */
+  }
+}
+/** Load the names blocked on an earlier visit, so a room never shows them before the Players tab has been opened. */
+function loadBlockedNames() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(BLOCKED_KEY) ?? "[]");
+    if (Array.isArray(raw)) blockedNames = new Set(raw.filter((n): n is string => typeof n === "string").slice(0, 100));
+  } catch {
+    /* nothing saved */
+  }
+}
+export const isBlockedName = (name: string | undefined) => !!name && blockedNames.has(safeName(name, "").toLowerCase());
+
 function pushFeed(text: string) {
   useEventRoom.setState((s) => ({ feed: [...s.feed, { id: ++feedSeq, text, at: Date.now() }].slice(-FEED_MAX) }));
 }
@@ -77,6 +100,7 @@ function onMessage(from: string, data: unknown) {
   const msg: Wire | null = readWire(data);
   if (!msg) return;
   const now = Date.now();
+  if (isBlockedName(msg.k === "boat" ? msg.name : nameOf(from))) return;
   if (msg.k === "boat") {
     boats.set(from, { biome: msg.biome, name: safeName(msg.name, boats.get(from)?.name || "Another angler"), at: now });
   } else if (msg.k === "emote") {
@@ -97,6 +121,7 @@ function onMessage(from: string, data: unknown) {
 export async function joinEventRoom(eventId: string, name: string) {
   if (room && useEventRoom.getState().eventId === eventId) return;
   leaveEventRoom();
+  loadBlockedNames();
   setRoomName(name);
   const cap = meshCap(formOf(readDevice()));
   useEventRoom.setState({ status: "joining", eventId, cap, others: 0, peers: [], feed: [], error: "" });
@@ -181,7 +206,7 @@ export type EventBoat = { x: number; y: number; dir: number; name: string; emote
 export function eventBoats(biome: number, t: number, now = Date.now()): EventBoat[] {
   const out: EventBoat[] = [];
   for (const [id, b] of boats) {
-    if (b.biome !== biome || now - b.at > 15_000) continue;
+    if (b.biome !== biome || now - b.at > 15_000 || isBlockedName(b.name)) continue;
     const bub = bubbles.get(id);
     out.push({ ...driftOf(id, t), name: b.name, ...(bub && now - bub.at < EMOTE_SHOW_MS ? { emote: bub.emote } : {}) });
   }
