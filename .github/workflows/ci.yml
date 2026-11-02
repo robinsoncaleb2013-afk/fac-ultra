@@ -20,7 +20,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --no-audit --no-fund
+      # `npm install`, not `npm ci`: the committed package-lock.json is stale
+      # (it predates the sandbox's last dependency bump and `npm ci` refuses it).
+      # Switch back to `npm ci` once a regenerated lockfile is committed.
+      - run: npm install --no-audit --no-fund
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
