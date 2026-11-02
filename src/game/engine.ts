@@ -31,7 +31,7 @@ import {
   type EventsSave,
 } from "@/game/events";
 import { IDLE_MS } from "@/game/event-data";
-import { emitEventEnded, emitEventStarted, emitMutatedCatch } from "@/game/event-hooks";
+import { emitEventEnded, emitEventStarted, emitMutatedCatch, onEventStarted, onMutatedCatch } from "@/game/event-hooks";
 import { adopt, chooseGift, giftReady, isPetKind, noPet, PETS, takeGift, petUnlocked, type Pet, type PetKind } from "@/game/pet";
 import { derbyEndLine, newDerby, readDerby, recordDerby, stepDerby, derbyRank, rivalById, derbyWindow, type DerbyRun, type RivalRecord } from "@/game/rivals";
 import { frameId, newPages, pageId, rollShiny } from "@/game/stickers";
@@ -99,6 +99,7 @@ import { fightHelp, helpingHand, isHelping } from "@/game/assist";
 import {
   canKeep,
   canRelease,
+  choosesFish,
   isTournament,
   legacyMode,
   TOURNAMENT_TABS,
@@ -145,6 +146,22 @@ import {
   type SurvivalRun,
 } from "@/game/survival";
 import { assistOn, coachAlways, hintAfter, kidActive, needsSure } from "@/game/kid";
+import { bookFor, difficultyRules, isDifficulty, type Book, type Difficulty } from "@/game/difficulty";
+import {
+  freshHazards,
+  hazardLevelFor,
+  mayExhibit,
+  onCast,
+  onSnap,
+  putBack,
+  readHazards,
+  salvageCost,
+  tickTank,
+  type HazardState,
+} from "@/game/hazards";
+import { advanceStory, CHAPTERS as CHAPTER_COUNT, chapterInfo, chapterReward, freshStory, readStory, type StoryState } from "@/game/story";
+import { bumpCounter, checkAchievements, freshAch, readAch, type AchState, type AchStats } from "@/game/achievements";
+import { ACTIVE_SLOTS_KEY, clampSlot, hasSlots, readActiveSlots, slotCards, slotKey, slotName, syncId, type ActiveSlots } from "@/game/slots";
 import {
   addTrip,
   finishTrip,
@@ -239,6 +256,7 @@ import {
   multOf,
   PACKS,
   rankName,
+  rarityOf,
   REELS,
   RODS,
   rollFish,
@@ -259,7 +277,7 @@ export type Tab = "cast" | "bag" | "gear" | "lures" | "waters" | "dex" | "lodge"
 export type Phase = "idle" | "wait" | "bite" | "reel";
 export type { Mode } from "@/game/modes";
 export { MODE_KEYS } from "@/game/modes";
-export type LodgeView = "record" | "logbook" | "tank" | "derby" | "regulars" | "pet" | "crew" | "trophies" | "events" | "settings";
+export type LodgeView = "record" | "logbook" | "tank" | "derby" | "regulars" | "pet" | "crew" | "trophies" | "events" | "settings" | "pbroom" | "kidsbook" | "achievements" | "story";
 
 /** WP-6: the Derby is fished against the Regulars (rivals.ts); old random-walk Derbies are converted on load. */
 export type DerbyState = DerbyRun | null;
@@ -349,6 +367,17 @@ export type Save = {
   titles: string[];
   bobberSkin: SkinId;
   tourneyHistory: History[];
+  /* WP-16 (save v12, docs/architecture/12): the slot's name and when it was made (0 = never created on purpose), its
+     difficulty, the Kids book (Kid Mode and Super Easy fish; the main `dex` never sees them), the Story chapter,
+     achievements, the Legend-difficulty hazard state, and "keep every fish without asking". */
+  slotName: string;
+  created: number;
+  difficulty: Difficulty;
+  sideDex: Record<string, { c: number; w: number; m: number }>;
+  story: StoryState;
+  ach: AchState;
+  hz: HazardState;
+  autoKeep: boolean;
   /* WP-14 (save v11): the line workshop. Lines are crafted from duplicates and found in packs; `line` is the tier in use. */
   lineGear: LineGear;
   /* WP-15 (save v10): the long-play events. The streak clock, the event running, the events seen and the mutated fish landed. */
@@ -375,17 +404,48 @@ export type LastCatch = {
   fotd: boolean;
   /** This catch filled the last cell of the water's page. */
   page: boolean;
+  /* WP-16: which book it went in ("kids" for Kid Mode and Super Easy). */
+  book: Book;
 };
 
 type Toast = { id: number; text: string };
 
-const SAVE_VERSION = 11;
+const SAVE_VERSION = 12;
 const MARKS = [10, 25, 50, 100, 150, 200, 250, 300, 375];
 
 let currentMode: Mode = "expedition";
 
+/* WP-16: which numbered slot is open in Expedition and Story (12 §5). A device note, kept in fac-ultra-slots. */
+let activeSlots: ActiveSlots = {};
+
+export function activeSlot(mode: Mode = currentMode): number {
+  return hasSlots(mode) ? clampSlot(mode, activeSlots[mode]) : 0;
+}
+
+function loadActiveSlots() {
+  try {
+    activeSlots = readActiveSlots(localStorage.getItem(ACTIVE_SLOTS_KEY));
+  } catch {
+    activeSlots = {};
+  }
+}
+
+function saveActiveSlots() {
+  try {
+    localStorage.setItem(ACTIVE_SLOTS_KEY, JSON.stringify(activeSlots));
+  } catch {
+    /* private mode: the next visit opens slot 1 */
+  }
+}
+
+/** The localStorage key of the slot being played (the mode's original key for slot 1). */
 export function modeKey(mode: Mode = currentMode) {
-  return MODE_KEYS[mode];
+  return slotKey(mode, activeSlot(mode));
+}
+
+/** The cloud's name for the slot being played ("expedition", "expedition-s1" …). */
+export function currentSyncId(): string {
+  return syncId(currentMode, activeSlot(currentMode));
 }
 
 /** The rules of the mode being played (05 §1). Every mode branch in the game reads this. */
@@ -507,7 +567,28 @@ export const sim = {
   /* WP-7: the tournament cast in the air (never saved). Rolled once at the cast from the event's seed. */
   troll: null as null | TourneyCast,
   tAcc: 0,
+  /* WP-16: seconds since the tank checks last ran (never saved). */
+  hzAcc: 0,
 };
+
+/** The time-based dangers of the Aquarium (docs/architecture/12 §3). Cheap: it returns at once unless something is due. */
+function tickTankHazards() {
+  const s = useGame.getState();
+  if (!s.hydrated || s.screen !== "game") return;
+  const danger = hazardsNow(s);
+  if (danger === "none" && !s.hz.jump && !s.hz.grace) return;
+  const out = tickTank(s.hz, danger, s.tank, s.c, Date.now());
+  if (out.hz === s.hz && out.exhibits === s.tank.exhibits && out.c === s.c) return;
+  const patch: Partial<Store> = { hz: out.hz };
+  if (out.exhibits !== s.tank.exhibits) {
+    const lost = new Set(out.events.filter((e) => e.kind === "lost").map((e) => (e as { key: string }).key));
+    patch.tank = { ...s.tank, exhibits: out.exhibits, ped: s.tank.ped.filter((k) => !lost.has(k)) };
+  }
+  if (out.c !== s.c) patch.c = out.c;
+  useGame.setState(patch);
+  hazardSay(out.lines);
+  if (out.events.length) persistSoon();
+}
 
 /** One tournament cast: what was chosen, what the seed rolled, and when the hook went in. */
 export type TourneyCast = {
@@ -611,6 +692,14 @@ export function fresh(): Save {
     titles: [],
     bobberSkin: "plain",
     tourneyHistory: [],
+    slotName: "",
+    created: 0,
+    difficulty: "normal",
+    sideDex: {},
+    story: freshStory(),
+    ach: freshAch(),
+    hz: freshHazards((loose() * 4294967296) >>> 0),
+    autoKeep: false,
     lineGear: freeLineGear(),
     events: noEvents(),
   };
@@ -947,11 +1036,36 @@ export function sanitize(raw: unknown): Save {
     titles: readTitles(o.titles),
     bobberSkin: isSkinId(o.bobberSkin) ? o.bobberSkin : "plain",
     tourneyHistory: readHistory(o.tourneyHistory),
+    /* v11 → v12 (WP-16): eight new fields, nothing existing changed meaning. Old saves are Normal difficulty with an empty
+       Kids book, no story, no achievements (they are earned on the next check) and a hazard seed taken from the save itself. */
+    slotName: str(o.slotName, "", 20),
+    created: int(o.created, 0, 0, 1e15),
+    difficulty: isDifficulty(o.difficulty) ? o.difficulty : "normal",
+    sideDex: readSideDex(o.sideDex),
+    story: readStory(o.story),
+    ach: readAch(o.ach),
+    hz: readHazards(o.hz, seedFrom("hazard-seed", String(o.created ?? 0), String(o.tot ?? 0), String(o.caught ?? 0))),
+    autoKeep: bool(o.autoKeep, false),
     /* v10 → v11 (WP-14): lines became an inventory. An old save owned every line up to `line`: it gets one copy of each. */
     lineGear,
     /* v9 → v10 (WP-15): one new field, nothing existing changed meaning. Old saves start with no streak and no events seen. */
     events: readEvents(o.events),
   };
+}
+
+/** The Kids book from untrusted data (same shape and bounds as the dex). */
+function readSideDex(v: unknown): Save["dex"] {
+  const out: Save["dex"] = {};
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const [k, val] of Object.entries(v as object)) {
+    if (!/^\d+-\d+$/.test(k)) continue;
+    const [b, i] = k.split("-").map(Number);
+    if (b > BIOMES.length - 1 || i > SPECIES_PER_BIOME - 1) continue;
+    const e = val as { c?: number; w?: number; m?: number };
+    const c = int(e?.c, 0, 0, 1e9);
+    if (c) out[k] = { c, w: num(e?.w, 0, 0, 1e6), m: int(e?.m, 0, 0, MUTATIONS.length - 1) };
+  }
+  return out;
 }
 
 export function snapshot(s: Save): Save {
@@ -1022,6 +1136,14 @@ export function snapshot(s: Save): Save {
     titles: s.titles,
     bobberSkin: s.bobberSkin,
     tourneyHistory: s.tourneyHistory,
+    slotName: s.slotName,
+    created: s.created,
+    difficulty: s.difficulty,
+    sideDex: s.sideDex,
+    story: s.story,
+    ach: s.ach,
+    hz: s.hz,
+    autoKeep: s.autoKeep,
     lineGear: s.lineGear,
     events: s.events,
   };
@@ -1059,8 +1181,16 @@ function closeTrip(
 
 /* WP-9: the cloud layer listens for saves. It gets the mode and the exact text that was just written to
    this device; it never changes the save and the game never waits for it. */
-type PersistListener = (mode: Mode, json: string) => void;
+type PersistListener = (syncId: string, json: string) => void;
 const persistListeners = new Set<PersistListener>();
+/* WP-16: the cloud layer also hears when a slot is deleted, so the cloud copy goes too and cannot come back. */
+const removeListeners = new Set<(syncId: string) => void>();
+
+/** Call `fn` with the sync id of every slot the player deletes. Returns a function that stops listening. */
+export function onSlotRemoved(fn: (syncId: string) => void): () => void {
+  removeListeners.add(fn);
+  return () => removeListeners.delete(fn);
+}
 
 /** Call `fn` after every save to this device. Returns a function that stops listening. */
 export function onPersisted(fn: PersistListener): () => void {
@@ -1105,7 +1235,7 @@ function persistNow() {
     localStorage.setItem(key, json);
     /* Device settings follow the player across modes (07 §2). */
     localStorage.setItem(DEVICE_KEY, JSON.stringify(deviceSubset(useGame.getState())));
-    for (const fn of persistListeners) fn(currentMode, json);
+    for (const fn of persistListeners) fn(currentSyncId(), json);
   } catch {
     /* private mode or quota */
   }
@@ -1232,9 +1362,79 @@ function persistSoon() {
   saveTimer = window.setTimeout(persistNow, 400);
 }
 
+/* ── Achievements (WP-16, 12 §6): checked a moment after anything changes, never during the fight itself. ── */
+
+export function achStats(s: Save): AchStats {
+  let released = 0;
+  for (const n of Object.values(s.released)) released += n;
+  let epics = 0;
+  for (const k of Object.keys(s.dex)) if (s.dex[k]?.c && rarityOf(Number(k.split("-")[1])) >= 3) epics += 1;
+  return {
+    caught: s.caught,
+    species: dexCount(s.dex),
+    bosses: s.bosses,
+    level: s.lv,
+    money: s.c,
+    earned: s.tot,
+    rebirths: s.rb,
+    perfects: s.perfects,
+    bestStreak: s.bestStreak,
+    rod: s.rod,
+    reel: s.reel,
+    line: s.line,
+    boat: s.boat,
+    exhibits: s.tank.exhibits.length,
+    released,
+    stewards: s.stewards.species.length + s.stewards.waters.length,
+    epics,
+    records: Object.keys(s.records).length,
+    tripsDone: s.trips.length,
+    derbiesWon: s.derbiesWon,
+    chapters: s.story.rewarded.length,
+    kidsSpecies: dexCount(s.sideDex),
+    mutated: s.ach.n["catch:mutated"] ?? 0,
+    stickers: s.stickers.length,
+    trophies: s.trophies.length,
+  };
+}
+
+/** Unlock what is now earned and say so. A pile of old ones at once becomes a single notice. */
+export function runAchievements() {
+  const s = useGame.getState();
+  if (!s.hydrated || s.screen !== "game") return;
+  const r = checkAchievements(currentMode, achStats(s), s.ach, Date.now());
+  if (!r.unlocked.length) return;
+  const toasts = [...s.toasts];
+  if (r.unlocked.length > 3) pushToast(toasts, `${r.unlocked.length} achievements unlocked. See the Lodge.`);
+  else for (const d of r.unlocked) pushToast(toasts, `Achievement: ${d.name}. ${d.text}`);
+  audio.fanfare();
+  useGame.setState({ ach: r.state, toasts: toasts.slice(-3) });
+  persistSoon();
+}
+
+let achTimer = 0;
+function watchAchievements() {
+  useGame.subscribe(() => {
+    if (achTimer) return;
+    achTimer = window.setTimeout(() => {
+      achTimer = 0;
+      runAchievements();
+    }, 600);
+  });
+  /* WP-15 signals (src/game/event-hooks.ts): a mutated catch is an event catch; an event starting is one more event seen. */
+  onMutatedCatch(() => useGame.getState().signal("event:caught", 1));
+  onEventStarted(() => useGame.getState().signal("event:started", 1));
+  /* Outside systems (events, mutations) report by name without importing this file: dispatch "fac:achievement". */
+  window.addEventListener("fac:achievement", (e) => {
+    const d = (e as CustomEvent<{ name?: string; by?: number }>).detail;
+    if (d && typeof d.name === "string") useGame.getState().signal(d.name, typeof d.by === "number" ? d.by : 1);
+  });
+}
+
 function bindLifecycle() {
   if (bound) return;
   bound = true;
+  watchAchievements();
   const flush = () => {
     if (document.visibilityState === "hidden") persistNow();
   };
@@ -1342,6 +1542,25 @@ function pushToast(list: Toast[], text: string) {
 
 /** The fun layer (pet, stickers, shiny, Fish of the Day, Regulars) runs in the career and Recreational. Tournaments
     score on the server and Survival keeps its own slot, so both leave it out (05 §6). */
+/** The collection that opens a water's stages: the main book plus the Kids book, so Kid Mode and Super Easy
+    fish still help you along even though they never enter the main book (12 §1). */
+export function stageBook(s: { dex: Save["dex"]; sideDex: Save["dex"] }): Save["dex"] {
+  const side = s.sideDex;
+  let any = false;
+  for (const _k in side) {
+    void _k;
+    any = true;
+    break;
+  }
+  if (!any) return s.dex;
+  const out: Save["dex"] = { ...s.dex };
+  for (const [k, e] of Object.entries(side)) {
+    const have = out[k];
+    out[k] = have ? { c: have.c + e.c, w: Math.max(have.w, e.w), m: Math.max(have.m, e.m) } : e;
+  }
+  return out;
+}
+
 function funOn() {
   return funModeOn(modeRules());
 }
@@ -1353,6 +1572,10 @@ function withCatch(
 ) {
   let streak = s.streak;
   let bestStreak = s.bestStreak;
+  /* WP-16: the level's worth and XP multipliers, and which book this fish is written in (12 §1, §2). */
+  const level = difficultyRules(currentMode, s.difficulty);
+  const book = bookFor(currentMode, s.difficulty, kidActive(s.kid, modeRules()));
+  const side = book === "kids";
   let scale = o.auto ? 0.4 : 1;
   if (!o.auto) {
     streak += 1;
@@ -1361,17 +1584,17 @@ function withCatch(
     if (o.frenzy) scale *= 1.5;
     scale *= 1 + Math.min(streak, 12) * 0.03;
   }
-  const v = Math.round(fish.v * scale);
+  const v = Math.round(fish.v * scale * level.worth);
   const key = `${fish.b}-${fish.i}`;
-  const prev = s.dex[key];
+  const prev = (side ? s.sideDex : s.dex)[key];
   const discovered = !prev?.c;
-  /* Records are set the moment a fish lands, kept or released, with the whole story of the cast. */
-  const isBest = beatsRecord(s.records, key, fish.w, prev?.w || 0);
-  const records = o.ctx ? withRecord(s.records, key, fish.w, o.ctx, Date.now(), prev?.w || 0) : s.records;
-  const dex = {
-    ...s.dex,
-    [key]: { c: (prev?.c || 0) + 1, w: Math.max(prev?.w || 0, fish.w), m: betterMutation(prev?.m || 0, fish.m) },
-  };
+  /* Records are set the moment a fish lands, kept or released, with the whole story of the cast. The Kids book keeps none. */
+  const isBest = !side && beatsRecord(s.records, key, fish.w, prev?.w || 0);
+  const records = !side && o.ctx ? withRecord(s.records, key, fish.w, o.ctx, Date.now(), prev?.w || 0) : s.records;
+  const entry = { c: (prev?.c || 0) + 1, w: Math.max(prev?.w || 0, fish.w), m: betterMutation(prev?.m || 0, fish.m) };
+  const dex = side ? s.dex : { ...s.dex, [key]: entry };
+  const sideDex = side ? { ...s.sideDex, [key]: entry } : s.sideDex;
+  const ach = fish.m > 0 ? bumpCounter(s.ach, "catch:mutated") : s.ach;
   const item = {
     name: fish.boss ? `Tide ${fish.name}` : fish.name,
     t: fish.t,
@@ -1387,6 +1610,7 @@ function withCatch(
   let c = s.c;
   let tot = s.tot;
   let contracts = bumpCatch(s.contracts, { rarity: fish.t, biome: fish.b, boss: fish.boss && !o.auto, discovered });
+  const bookDex = side ? sideDex : dex;
   if (overflow && modeRules().economy) {
     const gained = Math.round(overflow * multOf(dex, s.rb));
     c += gained;
@@ -1394,7 +1618,7 @@ function withCatch(
     contracts = bumpBank(contracts, gained);
   }
   /* WP-6: shiny, Fish of the Day and sticker pages. Cosmetic rolls use the unseeded stream, so they never move a bite. */
-  const fun = funOn();
+  const fun = funOn() && !side;
   const date = today();
   const claim = fun && !o.auto && claimsFotd(fotdFor(date, s.ub), key, s.fotdClaimed, date);
   const shiny = fun && !o.auto && rollShiny(loose);
@@ -1404,7 +1628,9 @@ function withCatch(
   const donePages = fun ? newPages(dex, stickers) : [];
   if (donePages.length) stickers = [...stickers, ...donePages.map(pageId)];
   const fotdClaimed = claim ? addClaim(s.fotdClaimed, date) : s.fotdClaimed;
-  let xp = s.xp + catchXp(fish.t, fish.m, fish.b, fish.boss) * (claim ? FOTD_XP_MULT : 1);
+  let xpGain = catchXp(fish.t, fish.m, fish.b, fish.boss) * (claim ? FOTD_XP_MULT : 1);
+  if (level.xp !== 1) xpGain = Math.round(xpGain * level.xp);
+  let xp = s.xp + xpGain;
   let lv = s.lv;
   let gainedLv = 0;
   while (xp >= xpNeed(lv)) {
@@ -1428,11 +1654,11 @@ function withCatch(
   let derby = s.derby;
   if (derby && !o.auto && Date.now() < derby.endsAt) derby = { ...derby, score: derby.score + v };
   const toasts = [...s.toasts];
-  if (discovered) pushToast(toasts, `New species. ${BIOMES[fish.b].fish[fish.i]}.`);
+  if (discovered) pushToast(toasts, side ? `New for your Kids book. ${BIOMES[fish.b].fish[fish.i]}.` : `New species. ${BIOMES[fish.b].fish[fish.i]}.`);
   if (gainedLv) pushToast(toasts, `Level ${lv}. ${rankName(lv)}.`);
   if (found.length) pushToast(toasts, `You found ${found.length === 1 ? `a ${LINE_PACKS[found[0]].name}` : `${found.length} line packs`}. Open ${found.length === 1 ? "it" : "them"} in Tackle.`);
-  const count = dexCount(dex);
-  if (discovered && MARKS.includes(count)) pushToast(toasts, `Dex ${count} of ${TOTAL_SPECIES}.`);
+  const count = dexCount(bookDex);
+  if (discovered && !side && MARKS.includes(count)) pushToast(toasts, `Dex ${count} of ${TOTAL_SPECIES}.`);
   if (fish.boss && !o.auto) pushToast(toasts, `${BIOMES[fish.b].name} mastered. The boss is yours.`);
   if (fish.m >= FIRST_EVENT_MUTATION && fish.m < MUTATIONS.length) {
     const ev = eventOfMutation(fish.m);
@@ -1460,9 +1686,12 @@ function withCatch(
     shiny,
     fotd: claim,
     page: donePages.length > 0,
+    book,
   };
   return {
     dex,
+    sideDex,
+    ach,
     records,
     inv,
     c,
@@ -1599,7 +1828,8 @@ function assistNow() {
 
 /** Helping Hand is on: switched on in Settings, or Kid Mode (where the mode allows it). */
 function effAssist(s: { assist: boolean; kid: boolean }) {
-  return assistOn(s.assist, s.kid, modeRules());
+  const rule = level().assist;
+  return assistOn(rule === "on" ? true : rule === "off" ? false : s.assist, s.kid, modeRules());
 }
 
 /** Kid Mode is in force: switched on, and this mode allows it. */
@@ -1792,7 +2022,7 @@ function castNow(s: Save, lureIdx: number, baitIdx: number, lair: boolean): Cast
   const plan = lair
     ? null
     : planCast(s.biome, spot, p, s.weather, window, luckTotal(s, lureIdx), {
-        stage: stageIn(modeRules(), s.dex, s.biome),
+        stage: stageIn(modeRules(), stageBook(s), s.biome),
         sig: sigEffect(s.sig),
         bait: baitIdx,
       });
@@ -1808,7 +2038,7 @@ function beginBite() {
     : eventMutate(
         rollFish(s.biome, luck, {
           boss: sim.castLair,
-          stage: stageIn(modeRules(), s.dex, s.biome),
+          stage: stageIn(modeRules(), stageBook(s), s.biome),
           sig: sigEffect(s.sig),
           bait: sim.castBait,
           match: sim.cast?.ms ?? undefined,
@@ -2060,6 +2290,7 @@ function succeed() {
     lair: fish.boss ? !!s.rush : s.lair,
   });
   if (fed) commitRun(fed);
+  storyAfterCatch();
   /* Online co-op: tell the room (multiplayer.ts listens for this). */
   window.dispatchEvent(new CustomEvent("fac:catch", { detail: { name: next.lastCatch?.name, v: next.lastCatch?.value, b: fish.b, i: fish.i, w: fish.w } }));
   /* Boss Rush: a boss in the current rush water advances the gauntlet. */
@@ -2095,12 +2326,42 @@ function succeed() {
   persistSoon();
 }
 
+/** Story mode: after a catch, finish every chapter whose goals are done and pay what it promised (12 §4). */
+function storyAfterCatch() {
+  if (currentMode !== "story") return;
+  const s = useGame.getState();
+  const r = advanceStory(s.story, s.dex);
+  if (!r.finished.length) return;
+  let c = s.c;
+  let tot = s.tot;
+  let ub = s.ub;
+  let baitBox = s.baitBox;
+  let box = s.box;
+  let toasts = s.toasts;
+  let message = s.message;
+  let detail = s.detail;
+  for (const ch of r.finished) {
+    const reward = chapterReward(ch);
+    c += reward.coins;
+    tot += reward.coins;
+    if (reward.unlockWater !== null && !ub.includes(reward.unlockWater)) ub = [...ub, reward.unlockWater];
+    baitBox = { ...baitBox, [String(BOSS_CHUM_INDEX)]: (baitBox[String(BOSS_CHUM_INDEX)] ?? 0) + reward.chum };
+    if (reward.lurePack !== null) box = { ...box, [String(reward.lurePack)]: (box[String(reward.lurePack)] ?? 0) + 10 };
+    toasts = pushToast([...toasts], `Chapter done: ${chapterInfo(ch).title}. ${reward.lines.join(", ")}.`);
+    message = chapterInfo(ch).outro;
+    detail = r.state.chapter < CHAPTER_COUNT ? `Next: ${chapterInfo(r.state.chapter).title}. ${chapterInfo(r.state.chapter).intro}` : "The Story is complete. You are a legend.";
+  }
+  useGame.setState({ story: r.state, c, tot, ub, baitBox, box, toasts: toasts.slice(-3), message, detail });
+  persistSoon();
+}
+
 /** Why a fight was lost: the pill always names the cause (pillar 3). */
 type Why = "bite" | "line" | "jump" | "snap" | "gear" | "worn";
 
 function fail(kind: "slip" | "snap", why: Why = kind === "snap" ? "snap" : "bite", note?: { message: string; detail: string }) {
   /* An event cast that ends in a loss is still a cast: it goes to the server like any other. */
   tourneyEnd(sim.fight ? "lost" : "missed", null);
+  const lostFish = sim.fish;
   const wasLair = sim.castLair;
   sim.phase = "idle";
   sim.fish = null;
@@ -2150,6 +2411,16 @@ function fail(kind: "slip" | "snap", why: Why = kind === "snap" ? "snap" : "bite
   });
   /* Survival: even a lost fight takes game time (a snapped hand line took a few seconds). */
   if (modeRules().survival) survivalFightCost(why === "gear" ? 4 : hookedSeconds());
+  /* WP-16: a snapped line can cost a lure, or even the rod (Legend, and a taste on Hard). It always says so. */
+  const danger = hazardsNow(useGame.getState());
+  if (kind === "snap" && (why === "snap" || why === "worn") && danger !== "none" && lostFish) {
+    const now = useGame.getState();
+    const out = onSnap(now.hz, danger, now, { rarity: lostFish.t, boss: lostFish.boss });
+    if (out.hz !== now.hz) {
+      useGame.setState({ hz: out.hz, ...out.gear });
+      hazardSay(out.lines);
+    }
+  }
   persistSoon();
 }
 
@@ -2175,7 +2446,7 @@ function autoCatch() {
   const at = castNow(s, castLure, -1, false);
   const fish = eventMutate(
     rollFish(s.biome, luck, {
-      stage: stageIn(modeRules(), s.dex, s.biome),
+      stage: stageIn(modeRules(), stageBook(s), s.biome),
       sig: sigEffect(s.sig),
       match: at.ms ?? undefined,
       sizeMul: sizeMulOf(s.stewards, s.biome),
@@ -2350,6 +2621,13 @@ export function frame(dt: number) {
     }
   }
 
+  /* WP-16: the Legend-difficulty tank checks (a fish jumps out, a visitor complains or sues), about once a second. */
+  sim.hzAcc += dt;
+  if (sim.hzAcc >= 1) {
+    sim.hzAcc = 0;
+    tickTankHazards();
+  }
+
   /* Derby: the Regulars cast over time (seeded, real fishing model); expiry pays the purse and files the head-to-head. */
   if (s.derby) {
     const now = Date.now();
@@ -2403,7 +2681,7 @@ export function frame(dt: number) {
       const c = sim.cast;
       const spot = spotById(s.biome, c.spotId);
       const hint = spot
-        ? hintForCast(s.biome, spot, c.p, c.weather, c.window, stageIn(modeRules(), s.dex, s.biome), (i) => !!s.dex[`${s.biome}-${i}`]?.c)
+        ? hintForCast(s.biome, spot, c.p, c.weather, c.window, stageIn(modeRules(), stageBook(s), s.biome), (i) => !!s.dex[`${s.biome}-${i}`]?.c)
         : null;
       if (hint) useGame.setState({ message: hint, detail: "Quiet here." });
     }
@@ -2461,12 +2739,51 @@ export function frame(dt: number) {
   }
 }
 
-function startCast() {
+/** The fish just landed has no decision yet, and this mode makes you decide (12 §7). */
+function choicePending(): boolean {
   const s = useGame.getState();
+  return !!s.celebration && choosesFish(modeRules()) && !s.autoKeep;
+}
+
+export const PENDING_FISH = "You haven't chosen what to do with this fish yet.";
+
+/** Say so, in the pill and as a notice (never twice in a row). */
+function nagChoice() {
+  const st = useGame.getState();
+  const last = st.toasts[st.toasts.length - 1];
+  useGame.setState({
+    message: PENDING_FISH,
+    detail: "Keep it or let it go (K or R), then you can cast.",
+    ...(last?.text === PENDING_FISH ? {} : { toasts: pushToast([...st.toasts], PENDING_FISH) }),
+  });
+}
+
+/** How hard the water is for this save: the difficulty row in force (12 §2). */
+function level(s: { difficulty: Difficulty } = useGame.getState()) {
+  return difficultyRules(currentMode, s.difficulty);
+}
+
+/** Which Legend-difficulty dangers are on right now: none in Kid Mode, Tournament, Recreational, Survival, Co-op or Story. */
+function hazardsNow(s: { difficulty: Difficulty; kid: boolean } = useGame.getState()) {
+  return hazardLevelFor(currentMode, level(s).hazards, kidOn(s));
+}
+
+/** Tell the player what a danger took (pill and notices) in plain English. */
+function hazardSay(lines: string[]) {
+  if (!lines.length) return;
+  const st = useGame.getState();
+  let toasts = st.toasts;
+  for (const line of lines) toasts = pushToast([...toasts], line);
+  useGame.setState({ toasts, message: lines[lines.length - 1], detail: "" });
+}
+
+function startCast() {
+  let s = useGame.getState();
   if (sim.phase !== "idle") return;
   noteActivity();
   audio.unlock();
   if (isTournament(modeRules())) return startTourneyCast();
+  if (choicePending()) return nagChoice();
   /* Survival: no cast in the dark or after the run, and every cast rolls from the run's own seed. */
   if (modeRules().survival) {
     if (survivalBlocksCast()) return;
@@ -2474,7 +2791,7 @@ function startCast() {
     setRng(makeRng(seedFrom("cast", run.seed, run.casts)));
   }
   const inRush = !!s.rush;
-  const lair = s.lair && (stageIn(modeRules(), s.dex, s.biome) >= 3 || inRush);
+  const lair = s.lair && (stageIn(modeRules(), stageBook(s), s.biome) >= 3 || inRush);
   if (s.lair && !lair) {
     useGame.setState((st) => ({
       lair: false,
@@ -2493,6 +2810,16 @@ function startCast() {
     baitBox = { ...baitBox, [String(BOSS_CHUM_INDEX)]: baitBox[String(BOSS_CHUM_INDEX)] - 1 };
     if (baitBox[String(BOSS_CHUM_INDEX)] <= 0) delete baitBox[String(BOSS_CHUM_INDEX)];
   }
+  /* WP-16: the boat and the wallet can be lost as you cast (Legend, and a taste on Hard). */
+  const danger = hazardsNow(s);
+  if (danger !== "none") {
+    const out = onCast(s.hz, danger, s, { weather: s.weather, biome: s.biome });
+    if (out.hz !== s.hz) {
+      useGame.setState({ hz: out.hz, ...out.gear });
+      hazardSay(out.lines);
+      s = useGame.getState();
+    }
+  }
   sim.castLure = s.lure;
   sim.castLair = lair;
   sim.bossCast = lair;
@@ -2506,7 +2833,7 @@ function startCast() {
   const fx = sigEffect(s.sig);
   if (fx?.kind === "bite") factor *= fx.mult;
   if (sim.castBait === 0) factor *= 0.85;
-  factor *= modeRules().biteSpeed;
+  factor *= modeRules().biteSpeed * level(s).biteSpeed;
   if (s.survival && modeRules().survival) factor *= biteMul(s.survival);
   /* WP-2: the better the spot and rig suit the fish around, the sooner they bite. */
   const at = castNow(s, sim.castLure, sim.castBait, lair);
@@ -2556,9 +2883,9 @@ function hook() {
   /* Gear still matters: a better rod widens the green, a better reel gains line faster, a
      stronger line takes more strain, and a calm lure takes some fight out of the fish. */
   let pullMul = 1;
-  if (stageIn(modeRules(), s.dex, s.biome) === 2) pullMul *= 1.1;
-  pullMul *= modeRules().fightSpeed;
-  let bandPad = Math.max(0, RODS[s.rod].zone - 18) * 0.0015;
+  if (stageIn(modeRules(), stageBook(s), s.biome) === 2) pullMul *= 1.1;
+  pullMul *= modeRules().fightSpeed * level(s).fightSpeed;
+  let bandPad = Math.max(0, RODS[s.rod].zone - 18) * 0.0015 + level(s).forgiveness * 0.005;
   if (fx?.kind === "calm") {
     pullMul *= Math.sqrt(fx.speed);
     bandPad += fx.zone * 0.004;
@@ -2568,7 +2895,7 @@ function hook() {
   /* Line wear (10 §1): the line's health, and how forgiving this mode is. `difficulty` is WP-16's hook (1 = normal). */
   const tierHealth = healthOf(s.line);
   const lineHealth = sv ? healthOf(0) * holdMulOfGear(sv.gear) : tierHealth;
-  const wearMul = wearMulFor({ recreational: modeRules().id === "recreational", kid: kidOn(s), difficulty: difficulty.wear });
+  const wearMul = wearMulFor({ recreational: modeRules().id === "recreational", kid: kidOn(s), difficulty: difficultyRules(modeRules().id, s.difficulty).lineDrain * difficulty.wear });
   const F = sim.troll
     ? newFight(fightInitOf(sim.troll.roll, s.drag, tourneyRules(s.tourney)))
     : newFight({
@@ -2817,7 +3144,22 @@ type Store = Save &
     pin: (key: string) => void;
     rebirth: () => void;
     wipe: () => void;
-    toggleSetting: (key: "sound" | "motion" | "flash" | "assist" | "followClock" | "cb") => void;
+    toggleSetting: (key: "sound" | "motion" | "flash" | "assist" | "followClock" | "cb" | "autoKeep") => void;
+    /* WP-16 (12 §5): save slots. The slot picker calls these; the cloud follows each slot by its own id. */
+    /** Open a slot that has been made (Expedition and Story have three each). */
+    openSlot: (mode: Mode, slot: number) => void;
+    /** Make a new slot: a name and (Expedition only) a difficulty. Refuses a slot that already holds a game. */
+    createSlot: (mode: Mode, slot: number, name: string, difficulty: Difficulty) => boolean;
+    renameSlot: (mode: Mode, slot: number, name: string) => void;
+    /** Delete a slot for good (the picker asks first). */
+    deleteSlot: (mode: Mode, slot: number) => void;
+    /* WP-16 (12 §3): answering the Legend-difficulty dangers. */
+    /** Put the fish that jumped out of the tank back in. */
+    putFishBack: () => void;
+    /** Bring a sunk boat back up, for a price. */
+    raiseBoat: () => void;
+    /** Report something for the achievements by name (events and other systems call this; see achievements.ts). */
+    signal: (name: string, by?: number) => void;
     /** WP-6: ambience volume, 0 to 100. */
     setVolume: (v: number) => void;
     /** WP-6: pick (or change) the pet. Opens at level 5. */
@@ -3086,7 +3428,11 @@ export const useGame = create<Store>((set, get) => ({
     sessionLevel = level;
     set(levelPatch(level));
   },
-  dismissCelebration: () => set({ celebration: null }),
+  dismissCelebration: () => {
+    /* WP-16: where the choice is yours, nothing but Keep or Release closes the card (12 §7). */
+    if (choicePending()) return nagChoice();
+    set({ celebration: null });
+  },
   keepCatch: () => {
     /* A mode that only lets fish go turns every Keep into a release. */
     if (!canKeep(modeRules())) return get().releaseCatch();
@@ -3126,6 +3472,105 @@ export const useGame = create<Store>((set, get) => ({
       message: note.message,
       detail: note.detail,
     });
+    persistSoon();
+  },
+  openSlot: (mode, slot) => {
+    if (!hasSlots(mode)) return;
+    const to = clampSlot(mode, slot);
+    if (get().hydrated && mode === currentMode && to === activeSlot(mode) && cardAt(mode, to).empty === false) {
+      set({ screen: "game" });
+      return;
+    }
+    if (cardAt(mode, to).empty) return;
+    persistNow();
+    activeSlots = { ...activeSlots, [mode]: to };
+    saveActiveSlots();
+    loadSlot(mode, true);
+  },
+  createSlot: (mode, slot, name, difficulty) => {
+    if (!hasSlots(mode)) return false;
+    const to = clampSlot(mode, slot);
+    if (!cardAt(mode, to).empty) return false;
+    persistNow();
+    const base = fresh();
+    base.slotName = slotName(name, mode, to);
+    base.created = Date.now();
+    base.difficulty = mode === "story" ? "easy" : isDifficulty(difficulty) ? difficulty : "normal";
+    /* Story: the first boss's Chum is a gift, so chapter one can end with its boss. */
+    if (mode === "story") base.baitBox = { [String(BOSS_CHUM_INDEX)]: 1 };
+    activeSlots = { ...activeSlots, [mode]: to };
+    saveActiveSlots();
+    try {
+      localStorage.setItem(slotKey(mode, to), JSON.stringify(snapshot(base)));
+      localStorage.removeItem(slotKey(mode, to) + "-bak");
+    } catch {
+      /* private mode: the slot lives for this visit */
+    }
+    loadSlot(mode, true);
+    return true;
+  },
+  renameSlot: (mode, slot, name) => {
+    if (!hasSlots(mode)) return;
+    const to = clampSlot(mode, slot);
+    const nm = slotName(name, mode, to);
+    if (get().hydrated && mode === currentMode && to === activeSlot(mode)) {
+      set({ slotName: nm });
+      persistNow();
+      return;
+    }
+    try {
+      const key = slotKey(mode, to);
+      const raw = JSON.parse(localStorage.getItem(key) || "null") as Record<string, unknown> | null;
+      if (!raw || typeof raw !== "object") return;
+      raw.slotName = nm;
+      const json = JSON.stringify(raw);
+      localStorage.setItem(key, json);
+      for (const fn of persistListeners) fn(syncId(mode, to), json);
+    } catch {
+      /* nothing to rename */
+    }
+  },
+  deleteSlot: (mode, slot) => {
+    if (!hasSlots(mode)) return;
+    const to = clampSlot(mode, slot);
+    try {
+      const key = slotKey(mode, to);
+      localStorage.removeItem(key);
+      localStorage.removeItem(key + "-bak");
+      if (mode === "expedition" && to === 0) localStorage.removeItem("facultra");
+    } catch {
+      /* nothing to delete */
+    }
+    for (const fn of removeListeners) fn(syncId(mode, to));
+    /* If it was the open game, the title screen shows the slot empty. */
+    if (get().hydrated && mode === currentMode && to === activeSlot(mode)) {
+      resetSim();
+      loadSlot(mode, false);
+    }
+  },
+  putFishBack: () => {
+    const s = get();
+    const r = putBack(s.hz, Date.now());
+    if (!r.ok) return;
+    audio.release();
+    set({ hz: r.hz, toasts: pushToast([...s.toasts], "Back in the tank. Phew.") });
+    persistSoon();
+  },
+  raiseBoat: () => {
+    const s = get();
+    if (s.hz.sunk < 0) return;
+    const cost = salvageCost(s.hz.sunk);
+    if (s.c < cost) {
+      audio.fail("slip");
+      set({ toasts: pushToast([...s.toasts], `You need ${cost} coins to raise the boat.`) });
+      return;
+    }
+    audio.coin();
+    set({ c: s.c - cost, boat: s.hz.sunk, hz: { ...s.hz, sunk: -1 }, toasts: pushToast([...s.toasts], "Your boat is back on the water.") });
+    persistSoon();
+  },
+  signal: (name, by = 1) => {
+    set((s) => ({ ach: bumpCounter(s.ach, name, by) }));
     persistSoon();
   },
   setTab: (tab) => {
@@ -3326,6 +3771,8 @@ export const useGame = create<Store>((set, get) => ({
     const s = get();
     const slots = TANK_TIERS[s.tank.tier].slots;
     if (!s.dex[key]?.c || s.tank.exhibits.includes(key) || s.tank.exhibits.length >= slots) return;
+    const away = mayExhibit(s.hz, key, Date.now());
+    if (!away.ok) return set({ toasts: pushToast([...s.toasts], `That fish is still getting over its jump. Try again in ${away.minutes} min.`) });
     set({ tank: { ...s.tank, exhibits: [...s.tank.exhibits, key] } });
     persistSoon();
   },
@@ -3355,7 +3802,7 @@ export const useGame = create<Store>((set, get) => ({
     const s = get();
     const slots = TANK_TIERS[s.tank.tier].slots;
     const ranked = Object.keys(s.dex)
-      .filter((k) => s.dex[k]?.c)
+      .filter((k) => s.dex[k]?.c && mayExhibit(s.hz, k, Date.now()).ok)
       .map((k) => {
         const [b, i] = k.split("-").map(Number);
         return { k, v: exhibitValue(s.dex[k], b, i) };
@@ -3408,7 +3855,7 @@ export const useGame = create<Store>((set, get) => ({
       seed: (loose() * 4294967296) >>> 0,
       biome: s.biome,
       luck: luckTotal(s, s.lure),
-      stage: stageIn(modeRules(), s.dex, s.biome),
+      stage: stageIn(modeRules(), stageBook(s), s.biome),
       weather: s.weather,
       window: derbyWindow(now.getHours() + now.getMinutes() / 60, s.weather),
     });
@@ -3636,6 +4083,10 @@ export const useGame = create<Store>((set, get) => ({
       volume: s.volume,
       cb: s.cb,
       drag: s.drag,
+      slotName: s.slotName,
+      created: s.created,
+      difficulty: s.difficulty,
+      autoKeep: s.autoKeep,
       hydrated: true,
       tab,
       phase: "idle",
@@ -3731,6 +4182,17 @@ function runCamp(fn: (r: SurvivalRun) => Step, morning = false) {
   if (morning && !step.run.over) useGame.setState({ tab: "cast", detail: "A new day. Check the sky and cast a line." });
 }
 
+/** What a slot holds, read straight from storage (the slot picker and the guards above use it). */
+function cardAt(mode: Mode, slot: number) {
+  return slotCards(mode, (k) => {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  })[slot];
+}
+
 function loadSlot(mode: Mode, toGame: boolean) {
   currentMode = mode;
   let raw: unknown = null;
@@ -3739,7 +4201,7 @@ function loadSlot(mode: Mode, toGame: boolean) {
   } catch {
     raw = null;
   }
-  if (!raw && mode === "expedition") {
+  if (!raw && mode === "expedition" && activeSlot(mode) === 0) {
     try {
       raw = JSON.parse(localStorage.getItem("facultra") || "null");
     } catch {
@@ -3837,6 +4299,7 @@ function loadSlot(mode: Mode, toGame: boolean) {
 const WHO_KEY = "fac-ultra-who";
 
 export function hydrate(mode: Mode = "expedition") {
+  loadActiveSlots();
   /* A brand-new device (no save in any slot, question never answered) gets asked who is fishing. */
   let first = false;
   try {

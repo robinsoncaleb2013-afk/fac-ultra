@@ -9,7 +9,7 @@ import { CloudButton } from "@/components/game/account";
 import { FullscreenButton } from "@/components/game/fullscreen";
 import { Icon, Logo } from "@/components/game/hub/icons";
 import { Motes } from "@/components/game/hub/Hub";
-import { lastPlayed, openCard } from "@/components/game/hub/PlayTab";
+import { continueGame } from "@/components/game/hub/PlayTab";
 import { Button } from "@/components/ui/button";
 import { TestingLine } from "@/components/game/test-phase";
 
@@ -82,7 +82,7 @@ export function TitleScreen({ plan }: { plan: LayoutPlan }) {
           </Button>
           <div className="flex gap-3">
             {started ? (
-              <Button variant="ghost" className="flex-1" onClick={() => openCard(lastPlayed() ?? "expedition")}>
+              <Button variant="ghost" className="flex-1" onClick={continueGame}>
                 Continue
               </Button>
             ) : null}

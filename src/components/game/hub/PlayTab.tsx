@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { dexCount, rankName, TOTAL_SPECIES } from "@/game/content";
-import { useGame } from "@/game/engine";
+import { activeSlot, useGame } from "@/game/engine";
+import { openSlotPicker } from "@/components/game/slots";
+import { slotCards } from "@/game/slots";
 import { playMeta } from "@/game/hubcopy";
 import { useHubUi } from "@/game/hubstate";
 import { EXPEDITION_EXTRA_IDS, MENU_CARDS, MODE_SELECT_IDS, type MenuCard } from "@/game/modes";
@@ -55,8 +57,32 @@ export function openCard(id: string) {
   const c = MENU_CARDS.find((m) => m.id === id);
   if (!c) return;
   if (c.lobby) return g.openLobby();
+  /* WP-16: Expedition and Story each have save slots: pick one (or start a new one) first. */
+  if (id === "expedition" || id === "story") return openSlotPicker(c.mode);
   g.switchMode(c.mode);
   if (c.view) useGame.getState().setLodgeView(c.view);
+}
+
+/** Title screen "Continue": straight back into the slot you were last in, with no picker in the way. */
+export function continueGame() {
+  const id = lastPlayed() ?? "expedition";
+  const c = MENU_CARDS.find((m) => m.id === id);
+  if ((id === "expedition" || id === "story") && c) {
+    const slot = activeSlot(c.mode);
+    const card = slotCards(c.mode, (k) => {
+      try {
+        return localStorage.getItem(k);
+      } catch {
+        return null;
+      }
+    })[slot];
+    if (card && !card.empty) {
+      closeHub();
+      return useGame.getState().openSlot(c.mode, slot);
+    }
+    return openSlotPicker(c.mode);
+  }
+  openCard(id);
 }
 
 function CardView({ id, selected, onHighlight, stack }: { id: string; selected: boolean; onHighlight: () => void; stack: boolean }) {

@@ -22,6 +22,8 @@ import { TournamentTicker } from "@/components/game/tournament";
 import { TournamentLobby } from "@/components/game/lobby";
 import { CloudHost } from "@/components/game/account";
 import { ResetNotice } from "@/components/game/test-phase";
+import { SlotPicker } from "@/components/game/slots";
+import { HazardAlerts } from "@/components/game/hazard-alerts";
 import { startEpochGate } from "@/game/epoch-gate";
 import { resetCloudMemory } from "@/lib/accounts/client";
 
@@ -70,6 +72,8 @@ export function Game() {
       <CloudHost />
       <ResetNotice />
       <WelcomeBack />
+      <SlotPicker />
+      <HazardAlerts />
       <TripCard />
       <TripStart />
       <SurvivalStart />

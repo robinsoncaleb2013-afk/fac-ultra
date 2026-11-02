@@ -5,6 +5,7 @@ import { HOME_SCREEN_HINT, landscapeLockWanted, setLandscapeLockWanted } from "@
 import { LEVEL_INFO } from "@/game/graphics";
 import { probeResult } from "@/game/probe";
 import { bookOf } from "@/game/hubcopy";
+import { difficultyRules } from "@/game/difficulty";
 import { MODES } from "@/game/modes";
 import { CloudSettings } from "@/components/game/account";
 import { useFullscreen } from "@/components/game/fullscreen";
@@ -159,6 +160,8 @@ export function HelpSection() {
   const setKid = useGame((s) => s.setKid);
   const kidIn = useKidOn();
   const assistAllowed = MODES[useGame((s) => s.mode)].assistAllowed;
+  const autoKeep = useGame((s) => s.autoKeep);
+  const rule = useGame((s) => difficultyRules(s.mode, s.difficulty).assist);
   const toggle = useGame((s) => s.toggleSetting);
   return (
     <div className="flex flex-col gap-2">
@@ -177,13 +180,16 @@ export function HelpSection() {
         </Toggle>
         <p className="mt-2 text-sm text-muted">
           For younger anglers. Helping Hand stays on and always glows, the writing gets bigger, hints come sooner and the coaching never stops.
-          Messages get a speaker button that reads them out loud. Rare fish and Rebirth ask &quot;Are you sure?&quot; first. Tournaments ignore Kid
+          Messages get a speaker button that reads them out loud. Rare fish and Rebirth ask &quot;Are you sure?&quot; first. Fish you catch go in a separate Kids book, never the main fish book. Tournaments ignore Kid
           Mode so every score stays fair.
         </p>
         {kidSetting && !assistAllowed ? <p className="mt-1 text-sm text-brass">Not used in this mode.</p> : null}
       </Card>
-      <Toggle on={assist || kidIn} onClick={() => (kidIn ? undefined : toggle("assist"))}>
-        {kidIn ? "Helping Hand (on with Kid Mode)" : "Helping Hand (a wider green when fights are tough)"}
+      <Toggle on={assist || kidIn || rule === "on"} onClick={() => (kidIn || rule !== "allowed" ? undefined : toggle("assist"))}>
+        {kidIn ? "Helping Hand (on with Kid Mode)" : rule === "on" ? "Helping Hand (always on at this difficulty)" : rule === "off" ? "Helping Hand (not offered at this difficulty)" : "Helping Hand (a wider green when fights are tough)"}
+      </Toggle>
+      <Toggle on={autoKeep} onClick={() => toggle("autoKeep")}>
+        Keep every fish without asking (no Keep or Release question)
       </Toggle>
     </div>
   );

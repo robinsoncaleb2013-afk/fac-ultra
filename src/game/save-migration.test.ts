@@ -573,6 +573,40 @@ test("hostile events data is clamped or dropped", () => {
   assert.ok(s.events.rolled <= 1e5);
 });
 
+test("v12 fixture keeps the slot, difficulty, Kids book, story, achievements and hazard state (WP-16)", () => {
+  const raw = JSON.parse(readFileSync(join(dir, "save-v12.json"), "utf8")) as Record<string, unknown>;
+  const s = sanitize(raw);
+  assert.equal(s.version, fresh().version);
+  assert.equal(s.slotName, "Grandpa's Pond");
+  assert.equal(s.difficulty, "hard");
+  assert.equal(Object.keys(s.sideDex).length, 3);
+  assert.equal(s.story.chapter, 2);
+  assert.equal(s.ach.got["catch-1"], 1793000100000);
+  assert.equal(s.hz.seed, 1234567);
+  assert.equal(s.hz.n, 4);
+  assert.equal(s.events.active?.id, "blood-moon", "WP-15 events survive beside it");
+  assert.deepEqual(sanitize(JSON.parse(JSON.stringify(snapshot(s)))).sideDex, s.sideDex);
+});
+
+test("a v11 save (events, line workshop, no slots) migrates to v12 as a Normal difficulty save with an empty Kids book", () => {
+  const raw = JSON.parse(readFileSync(join(dir, "save-v10.json"), "utf8")) as Record<string, unknown>;
+  const s = sanitize(raw);
+  assert.equal(s.version, fresh().version);
+  assert.equal(s.difficulty, "normal");
+  assert.deepEqual(s.sideDex, {});
+  assert.equal(s.story.chapter, 0);
+  assert.equal(s.events.active?.id, "blood-moon", "nothing from WP-15 is lost");
+});
+
+test("hostile WP-16 data is clamped or dropped", () => {
+  const s = sanitize({ ...fresh(), difficulty: "godmode", sideDex: { "99-99": { c: 5 }, "0-0": { c: -4 }, "0-1": { c: 2, w: 1, m: 99 } }, story: { chapter: 999, rewarded: "x" }, hz: "junk", slotName: 5 });
+  assert.equal(s.difficulty, "normal");
+  assert.deepEqual(Object.keys(s.sideDex), ["0-1"]);
+  assert.ok(s.story.chapter <= 15);
+  assert.equal(typeof s.hz.seed, "number");
+  assert.equal(s.slotName, "");
+});
+
 /* ── WP-14 (save v11): lines became an inventory ─────────────────────────── */
 
 test("an older save's single line becomes one copy of each line up to it, and stays in use", () => {

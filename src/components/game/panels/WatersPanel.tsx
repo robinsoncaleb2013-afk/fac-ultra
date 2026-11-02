@@ -5,7 +5,7 @@ import {
   money,
   STAGE_NAMES,
 } from "@/game/content";
-import { useGame } from "@/game/engine";
+import { stageBook, useGame } from "@/game/engine";
 import { MODES, stageIn } from "@/game/modes";
 import { cn } from "@/lib/cn";
 
@@ -16,6 +16,7 @@ export function WatersPanel() {
   const travel = useGame((s) => s.travel);
   const phase = useGame((s) => s.phase);
   const dex = useGame((s) => s.dex);
+  const sideDex = useGame((s) => s.sideDex);
   const mode = useGame((s) => s.mode);
   const mastered = useGame((s) => s.mastered);
   const locked = phase !== "idle";
@@ -29,7 +30,7 @@ export function WatersPanel() {
           const here = biome === index;
           const afford = coins >= place.price;
           const caught = biomeSpeciesCaught(dex, index);
-          const stage = stageIn(MODES[mode], dex, index);
+          const stage = stageIn(MODES[mode], stageBook({ dex, sideDex }), index);
           const isMastered = mastered.includes(index);
           return (
             <button

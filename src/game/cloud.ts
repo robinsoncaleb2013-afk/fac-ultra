@@ -3,13 +3,22 @@
    browser uses `decideSync` to choose between pushing, pulling and asking the player. */
 
 import { dexCount } from "./content.ts";
+import { allSyncIds, modeOfSyncId, parseSyncId, slotKey } from "./slots.ts";
 
 /** The modes whose saves go to the cloud. Tournaments keep their truth on the tournament server; Co-op
     is a local two-player slot but is still the family's save, so it travels too. */
-export const SYNC_MODES = ["expedition", "recreational", "survival", "coop"] as const;
-export type SyncMode = (typeof SYNC_MODES)[number];
+export const SYNC_MODES: readonly string[] = allSyncIds();
+/** A sync id: a mode ("recreational") or a numbered slot of Expedition or Story ("expedition-s1", "story-s2"). WP-16 (12 §5)
+    gave each slot its own cloud row, keyed by this id in the `mode` column, so no table changed. */
+export type SyncMode = string;
 
-export const isSyncMode = (v: unknown): v is SyncMode => typeof v === "string" && (SYNC_MODES as readonly string[]).includes(v);
+export const isSyncMode = (v: unknown): v is SyncMode => parseSyncId(v) !== null;
+
+/** The localStorage key a sync id lives under on this device ("" for anything that is not a real id). */
+export function keyOfSyncId(id: string): string {
+  const p = parseSyncId(id);
+  return p ? slotKey(p.mode, p.slot) : "";
+}
 
 /** At most this many family profiles under one account (07 §3). */
 export const MAX_PROFILES = 4;
@@ -36,7 +45,7 @@ export function summarize(mode: SyncMode, data: unknown): Summary {
   const o = data as Record<string, unknown>;
   const dex = (o.dex && typeof o.dex === "object" ? o.dex : {}) as Parameters<typeof dexCount>[0];
   const species = dexCount(dex);
-  if (mode === "survival") {
+  if (modeOfSyncId(mode) === "survival") {
     let caught = 0;
     for (const e of Object.values(dex as Record<string, { c?: number }>)) caught += n(e?.c);
     const history = Array.isArray(o.history) ? o.history.length : 0;
@@ -87,9 +96,10 @@ function same(a: Summary, b: Summary): SyncAction {
 
 /** "212 fish, $48K" for the chooser. `money` formats the coins (content.money). */
 export function describe(s: Summary, money: (v: number) => string, mode: SyncMode): string {
-  if (mode === "survival") return `${s.species} kinds of fish, ${s.tot} ${s.tot === 1 ? "run" : "runs"}`;
+  const base = modeOfSyncId(mode);
+  if (base === "survival") return `${s.species} kinds of fish, ${s.tot} ${s.tot === 1 ? "run" : "runs"}`;
   /* Relaxed Fishing has no money: say how many kinds of fish are in its own book instead. */
-  if (mode === "recreational") return `${s.caught} fish, ${s.species} kinds of fish`;
+  if (base === "recreational") return `${s.caught} fish, ${s.species} kinds of fish`;
   return `${s.caught} fish, ${money(s.c)}`;
 }
 

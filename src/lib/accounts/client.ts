@@ -7,8 +7,8 @@
    The copy you did not keep is stashed for 7 days. Nothing here touches game rules. */
 
 import { useSyncExternalStore } from "react";
-import { changeKey, decideSync, hasProgress, isSyncMode, newerOf, summarize, BACKUP_MS, PUSH_DEBOUNCE_MS, SYNC_MODES, type Summary, type SyncMode } from "@/game/cloud";
-import { MODE_KEYS, flushSave, onPersisted, reloadActiveSlot, sanitize, useGame } from "@/game/engine";
+import { changeKey, decideSync, hasProgress, isSyncMode, keyOfSyncId, newerOf, summarize, BACKUP_MS, PUSH_DEBOUNCE_MS, SYNC_MODES, type Summary, type SyncMode } from "@/game/cloud";
+import { currentSyncId, flushSave, onPersisted, onSlotRemoved, reloadActiveSlot, sanitize, useGame } from "@/game/engine";
 import { sanitizeSurvival } from "@/game/survival";
 import { PLAYER_KEY, playerId } from "@/game/tourney";
 import { currentEpoch } from "@/lib/test-phase";
@@ -181,7 +181,7 @@ function deviceName(): string {
 type Local = { text: string | null; raw: unknown; summary: Summary | null; key: string };
 
 function readLocal(mode: SyncMode): Local {
-  const text = read(MODE_KEYS[mode]);
+  const text = read(keyOfSyncId(mode));
   if (!text) return { text: null, raw: null, summary: null, key: "" };
   let raw: unknown = null;
   try {
@@ -189,7 +189,7 @@ function readLocal(mode: SyncMode): Local {
   } catch {
     return { text, raw: null, summary: null, key: "" };
   }
-  const clean = mode === "survival" ? sanitizeSurvival(raw) : sanitize(raw);
+  const clean = mode === "survival" ? sanitizeSurvival(raw) : sanitize(raw); /* slots of Expedition and Story are career-shaped */
   return { text, raw, summary: summarize(mode, clean), key: changeKey(raw) };
 }
 
@@ -277,7 +277,7 @@ async function fetchData(profileId: string, mode: SyncMode): Promise<unknown | n
 /** Put a cloud save on this device. */
 function adopt(mode: SyncMode, profileId: string, data: unknown, rev: number) {
   const text = JSON.stringify(data);
-  write(MODE_KEYS[mode], text);
+  write(keyOfSyncId(mode), text);
   const meta = readMeta();
   meta.slots[profileId] = { ...meta.slots[profileId], [mode]: { rev, key: changeKey(data) } };
   meta.touch[mode] = { key: changeKey(data), at: Date.now() };
@@ -303,8 +303,8 @@ async function swapTo(profileId: string, cloud: Map<SyncMode, CloudRow>): Promis
       const data = await fetchData(profileId, mode);
       if (data) adopt(mode, profileId, data, row.rev);
     } else {
-      write(MODE_KEYS[mode], null);
-      write(MODE_KEYS[mode] + "-bak", null);
+      write(keyOfSyncId(mode), null);
+      write(keyOfSyncId(mode) + "-bak", null);
     }
     changed.push(mode);
   }
@@ -386,7 +386,7 @@ export async function reconcile() {
       saveMeta(meta);
       if (conflicts.length) patch({ conflicts, sheet: false });
     }
-    if (reloaded.has(useGame.getState().mode as SyncMode)) {
+    if (reloaded.has(currentSyncId())) {
       reloadActiveSlot();
       rekey(profileId, reloaded);
     }
@@ -424,7 +424,7 @@ export async function resolveConflict(mode: SyncMode, choice: Choice) {
   if (failed) return patch({ busy: false, error: "Couldn't reach the cloud. Nothing was changed. Try again in a moment." });
   const rest = state.conflicts.filter((x) => x.mode !== mode);
   patch({ conflicts: rest, busy: false, error: "" });
-  if (pick === "cloud" && useGame.getState().mode === mode) {
+  if (pick === "cloud" && currentSyncId() === mode) {
     reloadActiveSlot();
     rekey(profileId, [mode]);
   }
@@ -436,9 +436,9 @@ export function restoreBackup(mode: SyncMode): boolean {
   const b = readBackups().find((x) => x.mode === mode);
   if (!b) return false;
   stash(mode, readLocal(mode).text);
-  write(MODE_KEYS[mode], b.json);
+  write(keyOfSyncId(mode), b.json);
   write(BACKUP_KEY, JSON.stringify(readBackups().filter((x) => x.mode !== mode || x.json !== b.json)));
-  if (useGame.getState().mode === mode) reloadActiveSlot();
+  if (currentSyncId() === mode) reloadActiveSlot();
   patch({ backups: readBackups(), notice: "Put back. It will go to the cloud with your next save." });
   schedulePush();
   return true;
@@ -613,6 +613,15 @@ export async function startCloud() {
       saveMeta(meta);
       schedulePush();
     }
+  });
+  /* WP-16: deleting a slot on this device deletes its cloud copy too (otherwise the next sync would bring it back). */
+  onSlotRemoved((id) => {
+    const meta = readMeta();
+    delete meta.touch[id];
+    for (const pid of Object.keys(meta.slots)) delete meta.slots[pid]?.[id];
+    saveMeta(meta);
+    if (state.signedIn && state.profileId) void exclusive(async () => void (await api("/api/save", { profile: state.profileId, op: "delete", mode: id, epoch: currentEpoch() })));
+    patch({ conflicts: state.conflicts.filter((c) => c.mode !== id) });
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden" && state.signedIn && state.profileId && !state.conflicts.length) void exclusive(() => lightSync(true));

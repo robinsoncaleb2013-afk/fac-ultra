@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { HUB_TABS, MAIN_MENU_FORBIDDEN, MAIN_TABS, resolveHubTarget, tabsFor, tabsForMode } from "./hubnav.ts";
 import { EXPEDITION_EXTRA_IDS, hasShop, MENU_CARDS, MODE_LIST, MODES, MODE_SELECT_IDS } from "./modes.ts";
-import { COLLECTION_MODES, peekMode, peekText } from "./peek.ts";
+import { COLLECTION_MODES, collectionEntries, peekMode, peekText } from "./peek.ts";
+import { slotKey } from "./slots.ts";
 import { leaveLabel, leaveLines, needsLeaveConfirm, leaveTitle } from "./leave.ts";
 import { allHubCopy, JARGON } from "./hubcopy.ts";
 
@@ -23,7 +24,7 @@ test("Shop & Sell is a tab exactly where the economy is on", () => {
     assert.equal(MODES[id].menuTabs.includes("shop"), MODES[id].economy, id);
     assert.equal(hasShop(MODES[id]), MODES[id].economy, id);
   }
-  assert.deepEqual(MODE_LIST.filter((m) => hasShop(MODES[m])).sort(), ["coop", "expedition"]);
+  assert.deepEqual(MODE_LIST.filter((m) => hasShop(MODES[m])).sort(), ["coop", "expedition", "story"]);
 });
 
 test("the main menu has no game tab: nothing to sell, shop, tackle, camp, travel or cast", () => {
@@ -49,8 +50,8 @@ test("an old request lands on the tab each mode really has for it", () => {
   assert.equal(r("expedition", "lodge", "tank").tab, "lodge");
 });
 
-test("mode select shows the five modes; the extras are Expedition shortcuts", () => {
-  assert.deepEqual([...MODE_SELECT_IDS], ["expedition", "recreational", "survival", "tournaments", "local"]);
+test("mode select shows the six modes; the extras are Expedition shortcuts", () => {
+  assert.deepEqual([...MODE_SELECT_IDS], ["expedition", "story", "recreational", "survival", "tournaments", "local"]);
   const modes = MODE_SELECT_IDS.map((id) => MENU_CARDS.find((c) => c.id === id)!.mode);
   assert.deepEqual(new Set(modes), new Set(MODE_LIST), "every mode has a card");
   for (const id of EXPEDITION_EXTRA_IDS) assert.equal(MENU_CARDS.find((c) => c.id === id)?.mode, "expedition", id);
@@ -91,6 +92,13 @@ test("collections peek: reads saved text, never invents, survives junk", () => {
   assert.equal(p.trophies, 2);
   assert.equal(p.level, 7);
   for (const m of COLLECTION_MODES) assert.equal(peekMode(m, () => null).saved, false);
+  /* WP-16: slots and the Kids book show up as their own read-only rows. */
+  const slot = JSON.stringify({ slotName: "Mia", created: 1, dex: { "0-1": { c: 1, w: 1, m: 0 } }, sideDex: { "0-2": { c: 1, w: 1, m: 0 }, "1-0": { c: 2, w: 1, m: 0 } } });
+  const rows = collectionEntries((k) => (k === slotKey("expedition", 1) ? slot : null));
+  assert.ok(rows.some((r) => r.id === "expedition-s1" && r.peek.found === 1 && /Mia/.test(r.title)));
+  const kidsRow = rows.find((r) => r.id === "expedition-s1-kids");
+  assert.ok(kidsRow && kidsRow.kids && kidsRow.peek.found === 2);
+  assert.ok(rows.some((r) => r.id === "story" && !r.peek.saved), "an unused mode still gets one row");
   assert.equal(peekMode("expedition", () => { throw new Error("blocked"); }).saved, false);
 });
 

@@ -5,13 +5,14 @@
 
 import type { Sql } from "@/lib/db";
 import { isSyncMode, MAX_SAVE_BYTES, summarize, type SyncMode } from "@/game/cloud";
+import { modeOfSyncId } from "@/game/slots";
 import { asObject, fail, MINUTE, ok, sameSite, windowHit, WRITES_PER_MINUTE_ACCOUNT, type AccReq, type AccRes } from "./common.server.ts";
 import { sessionOf } from "./session.server.ts";
 import { currentEpoch, resetSwitchOn } from "@/lib/test-phase";
 
 /** Anything in, a safe save of that mode out (the same functions the game loads with). */
 export async function cleanSave(mode: SyncMode, raw: unknown): Promise<Record<string, unknown>> {
-  if (mode === "survival") {
+  if (modeOfSyncId(mode) === "survival") {
     const { sanitizeSurvival } = await import("@/game/survival");
     return sanitizeSurvival(raw) as unknown as Record<string, unknown>;
   }
@@ -59,6 +60,11 @@ export async function handleSave(sql: Sql, req: AccReq): Promise<AccRes> {
   if (typeof body.epoch === "string" && resetSwitchOn(process.env) && body.epoch !== currentEpoch(process.env)) return fail(412, "old_build");
   const mode = body.mode;
   if (!isSyncMode(mode)) return fail(400, "bad_mode");
+  /* WP-16: deleting a save slot on the device deletes its cloud copy (only that profile's own row). */
+  if (body.op === "delete") {
+    await sql.query("delete from saves where profile_id = $1 and mode = $2", [profileId, mode]);
+    return ok({ deleted: true });
+  }
   if (!asObject(body.data)) return fail(400, "bad_save");
   const baseRev = Number.isInteger(body.baseRev) && (body.baseRev as number) >= 0 ? (body.baseRev as number) : -1;
   if (baseRev < 0 && body.force !== true) return fail(400, "bad_rev");
