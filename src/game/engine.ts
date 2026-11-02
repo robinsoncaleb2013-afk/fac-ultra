@@ -1018,6 +1018,9 @@ export function reloadActiveSlot() {
 }
 
 function persistNow() {
+  /* Before the first load nothing is real yet: writing the empty starting state would overwrite the player's save
+     (and, on a test-phase update, the device settings the reset keeps). */
+  if (!useGame.getState().hydrated) return;
   try {
     const key = modeKey();
     const st = useGame.getState();

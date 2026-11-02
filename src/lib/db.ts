@@ -1,5 +1,6 @@
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
 import { pgliteDataDir } from "./db-config.ts";
+import { applyTestPhaseReset } from "./test-reset.server.ts";
 
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
@@ -191,7 +192,14 @@ async function createSql(): Promise<Sql> {
  * both backends — define tables there, never inline in server functions.
  */
 export function getSql(): Promise<Sql> {
-  sqlPromise ??= createSql().catch((err) => {
+  /* Test phase (docs/TEST-PHASE.md): the first access after a boot checks the build epoch and, when it is a
+     new build and the switch is on, wipes progress once. Fails open: it never blocks the game. */
+  sqlPromise ??= createSql()
+    .then(async (sql) => {
+      await applyTestPhaseReset(sql);
+      return sql;
+    })
+    .catch((err) => {
     sqlPromise = null; // don't memoize failures — let the next call retry
     throw err;
   });

@@ -31,7 +31,8 @@ Docs-only PRs #7 (self-hosting plan) and #10 (project page record) were merged t
 5. **Google sign-in** (optional, hidden until keys are set) alongside the email link.
 6. **Art cleanup** removed the old JPG fallback; the game loads WebP only.
 7. **Recreational is fully separate (owner decision, 2026-11-02).** The plan said Recreational writes to the career collection and records. It does not. Recreational keeps its own fish book, stickers, records, logbook, Fish of the Day, pet and Regulars record, everything is unlocked from the start, and nothing in either mode reads or changes the other. Fish already merged into a career save by earlier builds stay there. See `05` section 11.
-8. **Small decisions** where the documents were silent are written in each PR under "Spec decisions".
+8. **Test-phase auto-reset (WP-13, new).** While the game is in testing, every new build wipes all progress and saves (this device's saves, cloud saves, tournaments, trophies, friend requests) and keeps accounts, family profiles, friends and device settings. One switch turns it off: `FAC_TEST_RESET=0`. Read [`docs/TEST-PHASE.md`](TEST-PHASE.md), including the checklist before real launch.
+9. **Small decisions** where the documents were silent are written in each PR under "Spec decisions".
 
 ## Things only a person can check (nothing is blocked on them)
 

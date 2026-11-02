@@ -11,6 +11,7 @@ import { changeKey, decideSync, hasProgress, isSyncMode, newerOf, summarize, BAC
 import { MODE_KEYS, flushSave, onPersisted, reloadActiveSlot, sanitize, useGame } from "@/game/engine";
 import { sanitizeSurvival } from "@/game/survival";
 import { PLAYER_KEY, playerId } from "@/game/tourney";
+import { currentEpoch } from "@/lib/test-phase";
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 
@@ -132,6 +133,12 @@ const subscribe = (fn: () => void) => {
 };
 export const useCloud = <T,>(pick: (s: CloudState) => T): T => useSyncExternalStore(subscribe, () => pick(state), () => pick(state));
 
+/** Test phase (docs/TEST-PHASE.md): the saves and sync notes in storage were just wiped, so forget what this
+    page remembered about them too. Nothing is pushed or pulled from before the reset. */
+export function resetCloudMemory() {
+  patch({ backups: [], conflicts: [], lastSync: 0, notice: "", error: "" });
+}
+
 export const openSheet = () => patch({ sheet: true, error: "", notice: "" });
 export const cancelSent = () => patch({ sentTo: "", error: "" });
 export const closeSheet = () => patch({ sheet: false, sentTo: "", error: "", notice: "" });
@@ -195,7 +202,7 @@ type PushResult = "ok" | "conflict" | "offline" | "error" | "signed-out";
 async function pushMode(mode: SyncMode, profileId: string, baseRev: number, opts: { force?: boolean; keepalive?: boolean } = {}): Promise<{ result: PushResult; cloud?: Record<string, unknown> }> {
   const local = readLocal(mode);
   if (local.raw === null) return { result: "ok" };
-  const r = await api("/api/save", { profile: profileId, mode, baseRev, data: local.raw, device: deviceName(), force: opts.force === true }, opts.keepalive);
+  const r = await api("/api/save", { profile: profileId, mode, baseRev, epoch: currentEpoch(), data: local.raw, device: deviceName(), force: opts.force === true }, opts.keepalive);
   if (r.status === 0) return { result: "offline" };
   if (r.status === 401) return { result: "signed-out" };
   if (r.status === 409) return { result: "conflict", cloud: (r.body.save as Record<string, unknown> | null) ?? undefined };

@@ -10,6 +10,7 @@ import { CloudSettings } from "@/components/game/account";
 import { useFullscreen } from "@/components/game/fullscreen";
 import { useKidOn } from "@/components/game/use-kid";
 import { Toggle } from "@/components/game/panels/shared";
+import { TestingLine } from "@/components/game/test-phase";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
@@ -351,6 +352,7 @@ export const SETTINGS_SECTIONS = [
 export function AllSettings() {
   return (
     <div className="flex flex-col gap-4">
+      <TestingLine className="text-muted" />
       {SETTINGS_SECTIONS.map(({ id, title, View }) => (
         <section key={id} aria-label={title}>
           <h3 className="mb-2 font-serif text-xl">{title}</h3>

@@ -21,15 +21,26 @@ import { SurvivalEnd, SurvivalStart } from "@/components/game/survival";
 import { TournamentTicker } from "@/components/game/tournament";
 import { TournamentLobby } from "@/components/game/lobby";
 import { CloudHost } from "@/components/game/account";
+import { ResetNotice } from "@/components/game/test-phase";
+import { startEpochGate } from "@/game/epoch-gate";
+import { resetCloudMemory } from "@/lib/accounts/client";
 
 /** The screen router: menu or game, in the layout this device gets (docs/architecture/03 §1, 09 §2). */
 export function Game() {
   const screen = useGame((s) => s.screen);
   const { ready, plan, height } = useForm();
   useEffect(() => {
-    hydrate();
-    countSession();
-    void runSpeedTest().then(() => applySpeedTest()).catch(() => {});
+    let alive = true;
+    /* Test phase: on a new build, old progress is wiped BEFORE any save is read (docs/TEST-PHASE.md). */
+    void startEpochGate(resetCloudMemory).then(() => {
+      if (!alive) return;
+      hydrate();
+      countSession();
+      void runSpeedTest().then(() => applySpeedTest()).catch(() => {});
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
   useKeys();
   useKidAttr();
@@ -57,6 +68,7 @@ export function Game() {
       <TournamentTicker />
       <TournamentLobby />
       <CloudHost />
+      <ResetNotice />
       <WelcomeBack />
       <TripCard />
       <TripStart />

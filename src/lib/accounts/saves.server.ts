@@ -7,6 +7,7 @@ import type { Sql } from "@/lib/db";
 import { isSyncMode, MAX_SAVE_BYTES, summarize, type SyncMode } from "@/game/cloud";
 import { asObject, fail, MINUTE, ok, sameSite, windowHit, WRITES_PER_MINUTE_ACCOUNT, type AccReq, type AccRes } from "./common.server.ts";
 import { sessionOf } from "./session.server.ts";
+import { currentEpoch, resetSwitchOn } from "@/lib/test-phase";
 
 /** Anything in, a safe save of that mode out (the same functions the game loads with). */
 export async function cleanSave(mode: SyncMode, raw: unknown): Promise<Record<string, unknown>> {
@@ -54,6 +55,8 @@ export async function handleSave(sql: Sql, req: AccReq): Promise<AccRes> {
   if (!(await windowHit(sql, `wr:${who.accountId}`, WRITES_PER_MINUTE_ACCOUNT, MINUTE, req.now))) return fail(429, "slow_down");
   const body = asObject(req.body);
   if (!body) return fail(400, "bad_request");
+  /* Test phase: a tab left open from an older build must not push its old save back after a reset. */
+  if (typeof body.epoch === "string" && resetSwitchOn(process.env) && body.epoch !== currentEpoch(process.env)) return fail(412, "old_build");
   const mode = body.mode;
   if (!isSyncMode(mode)) return fail(400, "bad_mode");
   if (!asObject(body.data)) return fail(400, "bad_save");
