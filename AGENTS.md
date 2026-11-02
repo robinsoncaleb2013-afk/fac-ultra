@@ -374,6 +374,8 @@ touching the website record. The short version:
   project, or DNS. Caleb's side proposes through the record; Chris's
   side screens and publishes. A Play URL in the record is a request;
   Chris's side verifies it live before the public play address moves.
-- For a NEW project repo: copy `docs/project-page-template.md` and
-  `docs/WEBSITE-UPDATES.md` from this repo and follow Workflow B in the
-  playbook.
+- For a NEW project repo: copy `docs/project-page-template.md`,
+  `docs/WEBSITE-UPDATES.md`, and `docs/WEBSITE-KIT.md` from this repo and
+  follow Workflow B in the playbook. The kit is the design-time setup:
+  the website part of a project is planned when the project starts, not
+  bolted on afterwards.

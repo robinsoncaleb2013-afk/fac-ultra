@@ -26,6 +26,30 @@ is deliberate: it means nothing done in a project repo can break or
 deface the public site, and Caleb's side never has to think about the
 website's internals at all.
 
+## Build the website in from the start
+
+Treat the website as part of the project design, not paperwork after the
+project is done. When a project starts, decide how it will use Caleb's
+section of the website:
+
+- **Access point** — the page carries the play address that forwards to
+  wherever the project is hosted (today: Chris's gaming PC). The
+  record's Play URL is the important part.
+- **Progress updates** — the page is a build journal: dated Updates
+  entries as milestones land, even before anything is playable.
+- **Launch page** — when a project is ready to show people, the page
+  carries the summary, the verified feature list, and the shareable
+  address. "Launch marketing" here means the public page copy only — no
+  ads, no posts to other platforms; nothing leaves through the record
+  except the website page itself.
+
+A project can use one, two, or all three. The starter kit for doing this
+in any repo is `docs/WEBSITE-KIT.md`: copy it (plus this playbook and the
+template) into a new project repo at setup time, before the first
+feature lands. Caleb does not need to understand the mechanics — he only
+needs to point his agent at the kit: "Set this project up for the
+website using the website kit."
+
 ## The record: `docs/project-page.md`
 
 Every project repository carries exactly one website record at
