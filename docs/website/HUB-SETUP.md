@@ -19,9 +19,11 @@ helping him. The hub is **one front door**:
 - room for projects that are not code repos at all (a story world, a robot,
   a video series) — they get a folder and a record, same as a game.
 
-The hub changes **staging**, never **publishing**: the website still only
-changes through Chris's side (screen → PR → Chris's merge), exactly as the
-playbook describes.
+The hub changes **staging**, never **publishing**: the website itself
+still only changes through Chris's side — they screen and publish every
+record update, and every section redesign arrives as a pull request from
+Caleb's fork that only their side can merge — exactly as the playbook
+describes (W1 for news, W7 for the section itself).
 
 ## The repo
 

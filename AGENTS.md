@@ -362,19 +362,24 @@ Caleb's website docs live in `docs/website/` — read `docs/website/README.md`
 first, then `docs/website/AGENT-PLAYBOOK.md`, before touching any
 website-related file. The short version:
 
-- The website input for this project is `docs/project-page.md` and nothing
-  else. Keep it updated in the same PR as any change that affects what the
-  public page should say, with a dated entry under its Updates heading.
+- The website input for this project's page content is `docs/project-page.md`
+  and nothing else. Keep it updated in the same PR as any change that affects
+  what the public page should say, with a dated entry under its Updates
+  heading. (The *design* of Caleb's website section — layout, styles, pages —
+  is edited separately, in Caleb's fork of the website repo: playbook W7.)
 - Features in the record are claims: only what the current build actually
   contains, verified. No personal information and no secrets in docs.
 - **This game has its own page rules:** `docs/website/FAC-ULTRA-PAGE-RULES.md`
   — what counts as website-worthy news for FAC Ultra (milestones and big
   features only; fixes, tuning, and plumbing stay off the page) and how
   tight to keep the Features list. Follow it for every record update.
-- Never attempt to edit the website itself — no PRs, pushes, or access
-  requests against any Robinson AI Systems repository, hosting project,
-  or DNS. This side proposes through the record; Chris's side screens
-  and publishes.
+- Never attempt to edit the real website repo directly, its hosting
+  project, or any DNS — Caleb's account is read-only there, by design.
+  Game news flows through the record above; Chris's side screens and
+  publishes. Section redesigns go through Caleb's **fork** of the website
+  repo as a pull request, inside his fenced area only, under that repo's
+  own guide (its `docs/caleb` folder) — see the playbook's W7. If you
+  somehow hold write access to the real website repo, stop and tell Chris.
 - Starting a NEW project: follow `docs/website/new-project-checklist.md`.
   The docs also recommend setting up a separate reference repo,
   `robinsoncaleb2013-afk/caleb-projects`, as the shared home for how all
