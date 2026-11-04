@@ -6,6 +6,13 @@ playbook (`AGENT-PLAYBOOK.md` in this folder). The general package travels
 to Caleb's other projects one day; this file does not — it is FAC Ultra's
 own editorial judgment, written down so every agent applies the same one.
 
+*How* judged content reaches the page is not this file's job: game news
+flows through the record (`docs/project-page.md`) and the playbook's W1
+signal; changes to the section itself (layout, styles, pages) go through
+Caleb's fork of the website repo under the playbook's W7 and that repo's
+`docs/caleb` guide. These rules judge *what belongs*; those documents
+carry *how it gets there*.
+
 ## The one-sentence rule
 
 **The page is a storefront window, not a changelog.** A change belongs on

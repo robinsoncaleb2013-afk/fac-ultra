@@ -27,8 +27,11 @@ understand any of it; explain the result to him in one plain sentence.
 - [ ] Put one line in the project's own plan/roadmap: "Website page:
       /caleb/<slug> — updates flow through docs/project-page.md."
 - [ ] Signal Chris that a new project exists (playbook signal format) and
-      ask for the page to be created. Until he publishes it, Caleb's
-      address is "coming soon", not live.
+      ask for the page to be created. (Caleb's agent can also add the
+      project's record directly in his fork of the website repo — playbook
+      W7 — but the page shell and any play redirect are Chris's side's to
+      create.) Until Chris's side publishes it, Caleb's address is
+      "coming soon", not live.
 
 ## While building
 
