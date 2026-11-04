@@ -26,8 +26,10 @@ home.)
    registry/front door for all of Caleb's projects once it is created.
 
 The website-side rules (Chris's repo) are in the `robinson-ai-systems`
-repo's `docs/WEBSITE-BLUEPRINT.md`, "The Caleb Robinson projects section".
-If anything here ever disagrees with that blueprint, the blueprint wins and
+repo's `docs/WEBSITE-BLUEPRINT.md`, "The Caleb Robinson projects section",
+and the working guide for editing Caleb's section itself is that repo's
+`docs/caleb` folder (he edits in his own fork; his agents read that guide
+before website work). If anything here ever disagrees with that blueprint, the blueprint wins and
 the difference gets reported to Chris.
 
 ## FAC Ultra only

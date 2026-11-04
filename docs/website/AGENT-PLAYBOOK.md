@@ -24,16 +24,21 @@ hosting and publishing are. Therefore:
 | Thing | Where it is | Who can change it |
 | --- | --- | --- |
 | This project (code + these docs) | This repository, owned by Caleb | Caleb and his agents |
-| Caleb's public pages | `www.robinsonaisystems.com/caleb` and `/caleb/<slug>` | Chris (Dad) and his agents only |
+| Caleb's public pages | `www.robinsonaisystems.com/caleb` and `/caleb/<slug>` | Caleb edits his section in his own fork of the website repo; Chris (Dad) and his agents screen and publish |
 | A project's play address | `www.robinsonaisystems.com/caleb/<slug>/play` | A redirect set only by Chris's side |
 | The live game itself | Wherever it is hosted (FAC Ultra: Dad's gaming PC) | Whoever hosts it |
 | A Grok/builder **preview** | Inside the builder tool | Caleb — and it is **never** the public link |
 
 ## Hard rules — never do these
 
-1. **Never edit the Robinson AI Systems website repo, its Vercel project, or
-   any DNS.** You have no access; if you somehow get access, stop and tell
-   Chris. Publishing is his side's job, by design, so Caleb's side can never
+1. **Never try to edit the Robinson AI Systems website repo directly, its
+   Vercel project, or any DNS.** Caleb's account is read-only there, by design.
+   His section edits happen in his **fork** of that repo, inside his fenced
+   area only (`src/caleb/`, `assets/caleb/`, `docs/caleb/`, `tests/caleb*.test.mjs`
+   there), under that repo's own agent guide (its `docs/caleb` folder — read it
+   before any section work; it wins for website work). If you somehow get write
+   access to the real website repo, stop and tell Chris — the fence depends on
+   him not having it. Publishing is his side's job, so Caleb's side can never
    break or deface the company site.
 2. **Never put personal information in anything public-facing:** no age,
    school, location, contact details, account names, or anyone else's
@@ -125,6 +130,15 @@ record, one slug — forever; slugs don't get renamed.
 **W6 — Retire a project.** Set *Status* to `Paused` and add an *Updates* entry
 saying it's retired, then signal Chris and ask for the page to be pulled.
 Only Chris's side removes pages.
+
+**W7 — Redesign Caleb's website section.** This is website work, not game
+work: follow the website repo's own agent guide (the `docs/caleb` folder in
+`Robinson-AI-Systems/robinson-ai-systems` — Caleb's fork of it). In short:
+sync the fork, branch `caleb/<slug>-<topic>`, edit only his area there (pages,
+styles, records — full edit), `npm run check` green, pull request to the real
+repo, preview through Dad's side's intake, Dad's side screens and publishes.
+The record workflow above (W1) still governs *news*; W7 governs the section
+itself.
 
 ## How to signal Chris
 
