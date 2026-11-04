@@ -377,8 +377,10 @@ website-related file. The short version:
   project, or any DNS — Caleb's account is read-only there, by design.
   Game news flows through the record above; Chris's side screens and
   publishes. Section redesigns go through Caleb's **fork** of the website
-  repo as a pull request, inside his fenced area only, under that repo's
-  own guide (its `docs/caleb` folder) — see the playbook's W7. If you
+  repo as a pushed `caleb/*` branch — Dad's side opens the pull request
+  (Caleb's connection may only use his own account) — inside his fenced
+  area only, under that repo's own guide (its `docs/caleb` folder) — see
+  the playbook's W7. If you
   somehow hold write access to the real website repo, stop and tell Chris.
 - Starting a NEW project: follow `docs/website/new-project-checklist.md`.
   The docs also recommend setting up a separate reference repo,

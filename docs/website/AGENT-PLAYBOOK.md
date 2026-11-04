@@ -135,8 +135,11 @@ Only Chris's side removes pages.
 work: follow the website repo's own agent guide (the `docs/caleb` folder in
 `Robinson-AI-Systems/robinson-ai-systems` — Caleb's fork of it). In short:
 sync the fork, branch `caleb/<slug>-<topic>`, edit only his area there (pages,
-styles, records — full edit), `npm run check` green, pull request to the real
-repo, preview through Dad's side's intake, Dad's side screens and publishes.
+styles, records — full edit), `npm run check` green, then push the branch to
+the fork — that push is the handoff (your connection can only use Caleb's own
+account, so it cannot open a pull request in the real repo; Dad's side's
+watcher spots the branch and opens the pull request within about a minute),
+preview through Dad's side's intake, Dad's side screens and publishes.
 The record workflow above (W1) still governs *news*; W7 governs the section
 itself.
 
