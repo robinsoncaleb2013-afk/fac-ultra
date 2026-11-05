@@ -7,7 +7,7 @@ import { Stage } from "@/components/game/stage";
 import { FotdLine } from "@/components/game/fun";
 import { CloudButton } from "@/components/game/account";
 import { FullscreenButton } from "@/components/game/fullscreen";
-import { Icon, Logo } from "@/components/game/hub/icons";
+import { Icon } from "@/components/game/hub/icons";
 import { Motes } from "@/components/game/hub/Hub";
 import { continueGame } from "@/components/game/hub/PlayTab";
 import { Button } from "@/components/ui/button";
@@ -70,8 +70,8 @@ export function TitleScreen({ plan }: { plan: LayoutPlan }) {
       )}
       <main className="safe-top safe-bot safe-x absolute inset-0 flex flex-col items-center justify-center gap-5 px-6 text-center text-[#fff4d6]">
         <div className="hub-in flex flex-col items-center gap-2 drop-shadow-[0_4px_14px_rgb(0_0_0/0.65)]">
-          <Logo className="size-24" />
-          <h1 className="font-serif text-6xl leading-none tracking-wide sm:text-7xl">FAC Ultra</h1>
+          <h1 className="sr-only">FAC Ultra</h1>
+          <img src="/brand/fac-ultra-logo-master.png" alt="FAC Ultra — Fish and Collect" className="h-auto w-64 max-w-[80vw] sm:w-80" />
         </div>
         <p className="max-w-md text-sm text-[#f1e5c9] [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
           {started ? `${rankName(lv)} · Lv ${lv} · ${dex}/${TOTAL_SPECIES} fish found` : "A painted fishing game. Fifteen waters, fifteen big fish."}
