@@ -7,7 +7,7 @@ import { leaveLabel } from "@/game/leave";
 import { showsMoney, MODES } from "@/game/modes";
 import { FullscreenButton } from "@/components/game/fullscreen";
 import { closeHub, hubBack, hubFocusFirst, hubLeave, hubTab } from "@/components/game/hub/actions";
-import { Icon, type IconName } from "@/components/game/hub/icons";
+import { Icon, Logo, type IconName } from "@/components/game/hub/icons";
 import { LeaveDialog } from "@/components/game/hub/LeaveDialog";
 import { useHubLayout } from "@/components/game/hub/parts";
 import { PlayTab } from "@/components/game/hub/PlayTab";
@@ -194,6 +194,7 @@ export function Hub() {
                 <Icon name="back" className="size-5" />
               </button>
             ) : null}
+            <Logo className="h-9 w-auto shrink-0" />
             <div className="min-w-0">
               <p className="truncate font-serif text-2xl leading-none">{inGame ? rules.title : "FAC Ultra"}</p>
               <p className="mt-1 truncate text-[13px] text-[#c9b890]">

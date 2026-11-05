@@ -141,20 +141,8 @@ export function Icon({ name, className, ...rest }: { name: IconName } & SVGProps
   );
 }
 
-/** The game's mark: a leaping fish over a hook, in one brass stroke. Drawn for this game. */
+/** The game's mark: the FAC Ultra emblem — shield, bass and bent rod.
+ * The real artwork asset (public/brand/fac-ultra-emblem.png), not a drawn glyph. */
 export function Logo({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 64 64" className={className} role="img" aria-label="FAC Ultra">
-      <defs>
-        <linearGradient id="logo-g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#ffd37a" />
-          <stop offset="1" stopColor="#d08a1e" />
-        </linearGradient>
-      </defs>
-      <circle cx="32" cy="32" r="29" fill="#16303c" stroke="url(#logo-g)" strokeWidth="3" />
-      <path d="M12 38c6-12 18-16 30-9l9-6-2 10 5 6-9-1c-8 9-24 8-33 0z" fill="url(#logo-g)" />
-      <circle cx="42" cy="29" r="1.8" fill="#16303c" />
-      <path d="M16 46c5 3 11 3 16 0s11-3 16 0" fill="none" stroke="#2fbfa8" strokeWidth="2.6" strokeLinecap="round" />
-    </svg>
-  );
+  return <img src="/brand/fac-ultra-emblem.png" alt="FAC Ultra" className={className} />;
 }
