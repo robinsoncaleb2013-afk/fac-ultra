@@ -74,7 +74,7 @@ export function TitleScreen({ plan }: { plan: LayoutPlan }) {
           <img src="/brand/fac-ultra-logo-master.png" alt="FAC Ultra — Fish and Collect" className="h-auto w-64 max-w-[80vw] sm:w-80" />
         </div>
         <p className="max-w-md text-sm text-[#f1e5c9] [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
-          {started ? `${rankName(lv)} · Lv ${lv} · ${dex}/${TOTAL_SPECIES} fish found` : "A painted fishing game. Fifteen waters, fifteen big fish."}
+          {started ? `${rankName(lv)} · Lv ${lv} · ${dex}/${TOTAL_SPECIES} fish found` : "A painted fishing game. Twenty waters, twenty big fish."}
         </p>
         <div className="flex w-full max-w-xs flex-col gap-3">
           <Button data-testid="title-play" className="min-h-14 text-xl" onClick={() => openHub("play")} autoFocus>

@@ -80,7 +80,7 @@ test("each mode has its own save slot, and the career is not touched by Recreati
   let s = useGame.getState();
   assert.equal(s.mode, "recreational");
   assert.equal(s.screen, "game");
-  assert.equal(s.ub.length, 15, "every water is unlocked");
+  assert.equal(s.ub.length, 20, "every water is unlocked");
   assert.equal(s.contracts.length, 0, "no contracts");
   assert.equal(s.trip, null, "no trip yet: the game asks for one");
   assert.ok(slot("recreational"), "Recreational has its own slot");

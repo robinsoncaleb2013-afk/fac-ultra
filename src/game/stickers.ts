@@ -22,8 +22,8 @@ export function rollShiny(r: Rng, odds: number = SHINY_ODDS): boolean {
 export const pageId = (biome: number) => `page-${biome}`;
 export const frameId = (key: string) => `frame-${key}`;
 
-const MAX_STICKERS = 400;
-const MAX_SHINY = 375;
+const MAX_STICKERS = 600;
+const MAX_SHINY = BIOMES.length * SPECIES_PER_BIOME;
 
 const SPECIES_KEY = /^\d{1,2}-\d{1,2}$/;
 

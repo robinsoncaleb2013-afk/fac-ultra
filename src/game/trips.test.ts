@@ -42,7 +42,7 @@ test("a new trip is empty, open, and clamps its inputs", () => {
   assert.equal(t.best, null);
   assert.equal(t.window, "dawn");
   assert.equal(t.weather, 1);
-  assert.equal(startTrip(T0, 99, "clock", 4).water, 14, "water clamps to the last one");
+  assert.equal(startTrip(T0, 99, "clock", 4).water, 19, "water clamps to the last one");
   assert.equal(startTrip(T0, -3).water, 0);
   assert.equal(startTrip(T0, 0, "clock", 4).weather, -1, "Night is a time of day, not a trip weather");
   assert.equal(startTrip(T0, 0, "clock", 9).weather, -1);
@@ -178,7 +178,7 @@ test("readTrip cleans hostile data and rejects non-trips", () => {
   assert.ok(t);
   assert.equal(t.end, 0);
   assert.equal(t.last, T0, "a bad last-activity time falls back to the start");
-  assert.equal(t.water, 14);
+  assert.equal(t.water, 19);
   assert.equal(t.window, "clock");
   assert.equal(t.weather, 3);
   assert.equal(t.caught, 4);

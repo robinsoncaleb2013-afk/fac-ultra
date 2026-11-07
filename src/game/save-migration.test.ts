@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { fresh, list, sanitize, snapshot, str } from "./engine.ts";
 import { dexCount } from "./content.ts";
+import { CHAPTERS } from "./story.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dir = join(here, "__fixtures__");
@@ -295,7 +296,7 @@ test("hostile WP-3 values are cleaned: unknown species, bad numbers, wrong shape
       "3-4": null,
     },
     released: { "0-1": 3.6, "0-2": -2, "99-9": 5, nope: 1, "2-2": "many" },
-    stewards: { species: ["0-1", "99-1", 7, "x"], waters: [0, 15, -1, 2.4, "1", 3, 3] },
+    stewards: { species: ["0-1", "99-1", 7, "x"], waters: [0, 99, -1, 2.4, "1", 3, 3] },
     coached: { runner: 500, kraken: 3, diver: "lots", bulldog: -4 },
     drag: 9,
   });
@@ -602,7 +603,7 @@ test("hostile WP-16 data is clamped or dropped", () => {
   const s = sanitize({ ...fresh(), difficulty: "godmode", sideDex: { "99-99": { c: 5 }, "0-0": { c: -4 }, "0-1": { c: 2, w: 1, m: 99 } }, story: { chapter: 999, rewarded: "x" }, hz: "junk", slotName: 5 });
   assert.equal(s.difficulty, "normal");
   assert.deepEqual(Object.keys(s.sideDex), ["0-1"]);
-  assert.ok(s.story.chapter <= 15);
+  assert.ok(s.story.chapter <= CHAPTERS, "chapter clamps to the number of waters (15 before Update Three, 20 after)");
   assert.equal(typeof s.hz.seed, "number");
   assert.equal(s.slotName, "");
 });
@@ -628,4 +629,37 @@ test("a v11 save keeps its spares, its packs and the line in use; a line with no
   assert.deepEqual(s.lineGear.last, [1, 0, 3]);
   const gone = sanitize({ ...raw, line: 7 });
   assert.equal(gone.line, 0, "no copy of tier 7 is owned");
+});
+
+/* ── Update Three (save v13): promo codes, Prestige, tutorial, night fishing ── */
+
+test("v13 fixture keeps its claimed codes, Prestige, tutorial flag and night state (Update Three)", () => {
+  const raw = JSON.parse(readFileSync(join(dir, "save-v13.json"), "utf8")) as Record<string, unknown>;
+  const s = sanitize(raw);
+  assert.equal(s.version, fresh().version);
+  assert.deepEqual(s.promo, ["UPD3"]);
+  assert.equal(s.prestige, 1);
+  assert.equal(s.tutored, true);
+  assert.equal(s.night.on, true);
+  assert.equal(s.night.since, 1793912400000);
+  assert.equal(s.slotName, "Grandpa's Pond", "WP-16 fields survive beside the new ones");
+  assert.deepEqual(sanitize(JSON.parse(JSON.stringify(snapshot(s)))).promo, s.promo);
+});
+
+test("a v12 save migrates to v13 with no codes claimed, no Prestige, the tutorial undone and night off", () => {
+  const raw = JSON.parse(readFileSync(join(dir, "save-v12.json"), "utf8")) as Record<string, unknown>;
+  const s = sanitize(raw);
+  assert.equal(s.version, fresh().version);
+  assert.deepEqual(s.promo, []);
+  assert.equal(s.prestige, 0);
+  assert.equal(s.tutored, false);
+  assert.deepEqual(s.night, { on: false, since: 0 });
+  assert.equal(s.c, 4321, "money is preserved");
+});
+
+test("hostile Update Three data is clamped or dropped", () => {
+  const s = sanitize({ ...fresh(), promo: ["upd3", "UPD3", 42, "", "x".repeat(40)], prestige: 100000, night: { on: "yes", since: -5 } });
+  assert.deepEqual(s.promo, ["UPD3", "X".repeat(24)]);
+  assert.equal(s.prestige, 999);
+  assert.deepEqual(s.night, { on: false, since: 0 });
 });

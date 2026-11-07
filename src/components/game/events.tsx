@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useGame } from "@/game/engine";
-import { activeEvent, countdown, eventOfMutation, effectLine, eventModeOn, EVENT_RARITIES, EVENTS, eventTitle, mutationOfEvent, mutationTitle, nextChanceHint, requirementLine, type EventDef } from "@/game/events";
+import { activeEvent, countdown, eventOfMutation, effectLine, eventModeOn, EVENT_RARITIES, EVENTS, eventTitle, holidayOn, mutationOfEvent, mutationTitle, nextChanceHint, requirementLine, type EventDef } from "@/game/events";
 import { MODES } from "@/game/modes";
 import { useKidOn } from "@/components/game/use-kid";
 import { useMutationText } from "@/components/game/use-mutation";
@@ -18,24 +18,29 @@ const hue = (e: EventDef, a = 1) => `hsl(${e.look.hue} ${e.look.sat}% ${Math.max
 /** The corner chip (always there while an event runs) and the announcement banner (first few seconds). */
 export function EventLayer({ className }: { className?: string }) {
   const events = useGame((s) => s.events);
+  const mode = useGame((s) => s.mode);
   const banner = useGame((s) => s.eventBanner);
   const dismiss = useGame((s) => s.dismissEventBanner);
   const motion = useGame((s) => s.motion);
   const kid = useKidOn();
   useTick(1000);
   const act = activeEvent(events, Date.now());
+  /* Update Three: a holiday shows its own chip beside the event's — the two stack. */
+  const hol = eventModeOn(MODES[mode]) ? holidayOn(new Date()) : null;
   useEffect(() => {
     if (!banner) return;
     const t = window.setTimeout(dismiss, BANNER_MS);
     return () => window.clearTimeout(t);
   }, [banner, dismiss]);
-  if (!act) return null;
-  const { def, leftMs } = act;
-  const r = EVENT_RARITIES[def.rarity];
-  const showBanner = banner?.id === def.id;
+  if (!act && !hol) return null;
+  const def = act?.def;
+  const leftMs = act?.leftMs ?? 0;
+  const r = def ? EVENT_RARITIES[def.rarity] : null;
+  const showBanner = !!def && banner?.id === def.id;
+  const holHue = hol ? `hsl(${hol.def.look.hue} ${hol.def.look.sat}% ${Math.max(45, hol.def.look.light)}%)` : "";
   return (
     <div className={cn("pointer-events-none absolute inset-x-0 z-30 flex flex-col items-center gap-2 px-4", className)}>
-      {showBanner ? (
+      {showBanner && def && r ? (
         <div
           role="status"
           aria-live="polite"
@@ -53,20 +58,34 @@ export function EventLayer({ className }: { className?: string }) {
           <p className="mt-1 text-sm font-semibold">{effectLine(def, kid)} on some fish</p>
         </div>
       ) : null}
-      <div
-        data-testid="event-chip"
-        className="pointer-events-auto flex items-center gap-2 rounded-full border bg-black/55 px-3 py-1 text-sm text-[#fff4d6] backdrop-blur-sm"
-        style={{ borderColor: hue(def) }}
-        title={`${effectLine(def, kid)} on some fish`}
-      >
-        <span aria-hidden style={{ color: hue(def) }}>
-          {def.look.glyph}
-        </span>
-        <span className="font-serif">{eventTitle(def, kid)}</span>
-        <span className="tabular-nums" aria-label={`${countdown(leftMs)} left`}>
-          {countdown(leftMs)}
-        </span>
-      </div>
+      {def ? (
+        <div
+          data-testid="event-chip"
+          className="pointer-events-auto flex items-center gap-2 rounded-full border bg-black/55 px-3 py-1 text-sm text-[#fff4d6] backdrop-blur-sm"
+          style={{ borderColor: hue(def) }}
+          title={`${effectLine(def, kid)} on some fish`}
+        >
+          <span aria-hidden style={{ color: hue(def) }}>
+            {def.look.glyph}
+          </span>
+          <span className="font-serif">{eventTitle(def, kid)}</span>
+          <span className="tabular-nums" aria-label={`${countdown(leftMs)} left`}>
+            {countdown(leftMs)}
+          </span>
+        </div>
+      ) : null}
+      {hol ? (
+        <div
+          data-testid="holiday-chip"
+          className="pointer-events-auto flex items-center gap-2 rounded-full border bg-black/55 px-3 py-1 text-sm text-[#fff4d6] backdrop-blur-sm"
+          style={{ borderColor: holHue }}
+          title={hol.def.announce}
+        >
+          <span aria-hidden>{hol.def.look.glyph}</span>
+          <span className="font-serif">{hol.def.name}</span>
+          <span>50x luck, worth and XP</span>
+        </div>
+      ) : null}
     </div>
   );
 }

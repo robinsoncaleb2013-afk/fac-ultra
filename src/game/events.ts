@@ -10,16 +10,22 @@ import {
   COOLDOWN_MS,
   EVENT_RARITIES,
   EVENTS,
+  HOLIDAY_FISH_SHARE,
+  HOLIDAY_MULT,
   HOUR_MS,
   IDLE_MS,
   type EventDef,
   type EventRarityDef,
 } from "./event-data.ts";
+import { holidayOn, type ActiveHoliday } from "./holidays.ts";
 import { makeRng, seedFrom } from "./rng.ts";
 import type { ModeRules } from "./modes.ts";
 
 export { EVENTS, EVENT_RARITIES, HOUR_MS, IDLE_MS, AWAY_RESET_MS, COOLDOWN_MS };
 export type { EventDef, EventRarityDef };
+/* The holiday API, re-exported so the engine and UI keep importing everything event-shaped from here. */
+export { HOLIDAYS, burstDue, holidayDateInYear, holidayMultipliers, holidayMutationName, holidayOn, nextHoliday } from "./holidays.ts";
+export type { ActiveHoliday, HolidayDef, HolidayMultipliers, HolidayPhase } from "./holidays.ts";
 
 /** Index of the Astral Sea (the Mythic event's water). */
 export const ASTRAL_BIOME = BIOMES.findIndex((b) => b.id === "astral");
@@ -245,6 +251,78 @@ export function requirementLine(e: EventDef): string {
 export function countLanded(st: EventsSave, m: number): EventsSave {
   const e = eventOfMutation(m);
   return e ? { ...st, fish: { ...st.fish, [e.id]: (st.fish[e.id] ?? 0) + 1 } } : st;
+}
+
+/* ── Holidays on a catch (Update Three, P5) ──────────────────────────────────
+   INTERACTION RULE (holiday x random event): the two systems multiply, they never replace each other.
+   - The holiday's 50x is GLOBAL: every fish caught in the window gets its worth x50 here, including
+     bosses and fish carrying a rolled or random-event mutation. XP x50 and luck x50 are the same
+     multipliers, applied at their own seams (keep.ts catchXp and content.ts luckTotal take the date).
+   - A random event running at the same time keeps working exactly as before: mutateFish runs first,
+     so its mutation takes the fish's single `m` slot and its own multiplier applies first; the
+     holiday x50 then applies on top (a Trembling fish in a holiday window is worth 2 x 50 = 100x).
+   - The holiday mutation is a NAME, not a second `m`: holiday mutations are not rows in MUTATIONS
+     (the New Year name changes every year), so an eligible fish gets the holiday name as a prefix
+     plus a `holidayMutation` field, and NO extra multiplier — the global 50x already counted it.
+     Eligibility and dice mirror mutateFish exactly: bosses never carry it, a fish that already
+     carries any mutation (m > 0, rolled or random-event) keeps that one instead, and the draw
+     comes from the events save's own stream (seedFrom(seed, "holiday-mutation", draws)), never
+     the shared fishing stream. */
+
+/** A fish that may also carry a holiday mutation name alongside its ordinary fields. */
+export type HolidayMutable<F> = F & { holidayMutation?: string };
+
+/** Apply one holiday to one fish: worth x50 for every fish, plus the holiday mutation name on a
+    share of eligible fish (see the rule above). Pure, apart from advancing the save's draw counter. */
+export function holidayMutateFish<F extends Mutable>(
+  st: EventsSave,
+  fish: F,
+  holiday: ActiveHoliday,
+  speciesName: string,
+): { fish: HolidayMutable<F>; state: EventsSave; hit: boolean } {
+  const state = { ...st, draws: st.draws + 1 };
+  const boosted: HolidayMutable<F> = { ...fish, v: Math.round(fish.v * HOLIDAY_MULT) };
+  if (fish.boss || fish.m > 0) return { fish: boosted, state, hit: false };
+  const r = makeRng(seedFrom(st.seed, "holiday-mutation", st.draws))();
+  if (r >= HOLIDAY_FISH_SHARE) return { fish: boosted, state, hit: false };
+  return {
+    fish: { ...boosted, holidayMutation: holiday.mutation, name: `${holiday.mutation} ${speciesName}` },
+    state,
+    hit: true,
+  };
+}
+
+/** THE catch seam for events of both kinds: random event first (if one is running), holiday second
+    (if `date` is inside a holiday window). The engine's eventMutate should call this for every
+    rolled fish — with randomDef = null when no random event is running — instead of calling
+    mutateFish only when a random event is active, so holidays work on their own. Mode gating
+    stays where it already lives: the caller checks eventModeOn first (off in Tournament and
+    Survival, exactly like random events, so a tournament replay never sees a holiday). */
+export function applyEventsToFish<F extends Mutable>(
+  st: EventsSave,
+  fish: F,
+  randomDef: EventDef | null,
+  date: Date,
+  speciesName: string,
+): { fish: HolidayMutable<F>; state: EventsSave; randomHit: boolean; holidayHit: boolean; holiday: ActiveHoliday | null } {
+  let state = st;
+  let out: HolidayMutable<F> = fish;
+  let randomHit = false;
+  let holidayHit = false;
+  if (randomDef) {
+    const r = mutateFish(state, out, randomDef, speciesName);
+    state = r.state;
+    out = r.fish;
+    randomHit = r.hit;
+  }
+  const holiday = holidayOn(date);
+  if (holiday) {
+    const h = holidayMutateFish(state, out, holiday, speciesName);
+    state = h.state;
+    out = h.fish;
+    holidayHit = h.hit;
+  }
+  return { fish: out, state, randomHit, holidayHit, holiday };
 }
 
 /* ── Reading a save (untrusted data) ── */

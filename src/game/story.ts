@@ -1,4 +1,4 @@
-/* Story mode (docs/architecture/12 §4): a guided trip through the fifteen waters. Each water is a chapter with a few
+/* Story mode (docs/architecture/12 §4): a guided trip through the waters. Each water is a chapter with a few
    plain objectives and a boss at the end. Chapters are DATA; progress is DERIVED from the Story save's own fish book,
    so there are no counters to drift and an old save can never be stuck. Pure: no store, no browser. */
 
@@ -9,7 +9,7 @@ export type Dex = Record<string, { c: number; w: number; m: number }>;
 export type ObjectiveKind = "catch" | "kinds" | "rare" | "boss";
 export type Objective = { id: string; kind: ObjectiveKind; goal: number; text: string; biome: number };
 
-/** Where the player is in the story. `chapter` is the water being worked on (15 = the story is finished). */
+/** Where the player is in the story. `chapter` is the water being worked on (chapter === CHAPTERS = the story is finished). */
 export type StoryState = { chapter: number; rewarded: number[] };
 
 export const freshStory = (): StoryState => ({ chapter: 0, rewarded: [] });
@@ -31,7 +31,12 @@ const NARRATIVE: readonly { title: string; intro: string; outro: string }[] = [
   { title: "Sunken City", intro: "Old towers rest under the waves, full of fish who call them home.", outro: "The city's guardian is yours. Fire is next." },
   { title: "Volcano Waters", intro: "Hot water beside a rumbling mountain. Fish here fight hard.", outro: "You cooled the volcano's king. Now to the clouds." },
   { title: "Fishing in the Sky", intro: "You cast from the clouds. The wind carries your line far.", outro: "The sky titan fell for your lure. Only the stars are left." },
-  { title: "The Astral Sea", intro: "The last sea, among the stars. One more boss, one last cast.", outro: "You did it. You have fished every water. You are a legend." },
+  { title: "The Astral Sea", intro: "A sea among the stars. Strange lights swim in the dark.", outro: "The star beast is yours. But the water ahead of you now is stranger still." },
+  { title: "The Mirror Sea", intro: "The water here is a mirror. Every fish has a twin looking back.", outro: "You beat the reflection itself. The deep below is dreaming." },
+  { title: "The Dreaming Deep", intro: "Down where the sea sleeps. The fish here dream out loud.", outro: "The great sleeper wakes no more. Old bones rest ahead." },
+  { title: "The Bone Shoals", intro: "White bones and quiet water. The oldest fish swim here.", outro: "The bone father rests at last. A storm is building far away." },
+  { title: "The Storm Forge", intro: "Thunder rolls over black water. Fish here are forged in lightning.", outro: "You out-fished the storm itself. One water remains, the first of all." },
+  { title: "The First Water", intro: "The very first water, where fishing began. Only prestige opens the way.", outro: "You did it. You have fished every water. You are a legend." },
 ];
 
 export const chapterInfo = (i: number) => NARRATIVE[Math.min(NARRATIVE.length - 1, Math.max(0, i))];

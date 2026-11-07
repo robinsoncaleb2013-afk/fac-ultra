@@ -89,7 +89,7 @@ test("best in a water ignores other waters", () => {
 test("species keys: only real waters and slots", () => {
   assert.deepEqual(speciesKey("0-24"), { b: 0, i: 24 });
   assert.deepEqual(speciesKey("14-0"), { b: 14, i: 0 });
-  for (const bad of ["15-0", "0-25", "a-b", "0-", "-1-2", "0-1-2", ""]) assert.equal(speciesKey(bad), null, bad);
+  for (const bad of ["20-0", "0-25", "a-b", "0-", "-1-2", "0-1-2", ""]) assert.equal(speciesKey(bad), null, bad);
 });
 
 test("saved records are cleaned", () => {
