@@ -59,3 +59,12 @@ Last reviewed after WP-16 (main `0075b66`). The per-package status table is in [
 - The achievements count in the WP-16 pull request said about 47; the table has 50 rows. Docs now say 50 and the test is not pinned to a number.
 - `lineDrain` in the difficulty table had a comment saying nothing read it yet; the engine has read it since WP-16. The comment was fixed.
 - `src/game/modes.ts` still has the `sandbox` and `career` names in `legacyMode` (old links and saves). That is correct, just worth knowing when grepping for "sandbox".
+
+## 5. Update Three (2026-11-07) — known limits
+
+- **The five new waters have no painted artwork yet.** Their stage and hub views use the extended fallback gradients and waterlines (`stage-paint.ts`, `water.ts`); the fishing-spot positions for the new waters are placed by eye to the same spacing rules and should be re-placed when real paintings land in `public/art/biomes/`.
+- **Night fishing settles at the summary level.** Away catches credit gold and XP directly and fill the book, but do not roll mutations, records, stickers, contracts or achievements (`src/game/night.ts` says so in its header). In Kid Mode a night catch lands in the main book, not the Kids book.
+- **New-water balance is unplayed.** Prices run to 2.3 billion gold and fish values scale with the existing `2.1 ** biome` formula; the curve is inherited, not tuned.
+- **The Lodge Events list has no Holidays section yet.** A live holiday shows its chip on the water (name + "50x luck, worth and XP") and its fish carry the holiday name; the list view is a later nicety.
+- **Recreational's all-unlocked sandbox includes the final water without Prestige**, as it includes every water; the Prestige gate guards the career buy path (`travel` + `checkMap`).
+- **Holiday mutation names are not recorded in the book.** The caught fish's display name carries the prefix ("jolly Perch"); the book entry keeps the species name, like event mutations' bookkeeping.

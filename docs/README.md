@@ -100,10 +100,10 @@ Developer tooling only (not for running the game): `PREVIEW_READY_TIMEOUT_MS`, `
 
 These markers are compared with the code by `npm test`. If you change the thing, change the number here and in the doc that explains it.
 
-<!-- docs-check:save-version 12 -->
+<!-- docs-check:save-version 13 -->
 <!-- docs-check:rules-version 2 -->
 <!-- docs-check:migrations 0001 0007 0008 0009 0010 0011 -->
-<!-- docs-check:fixtures 3 4 5 6 7 8 9 10 11 12 -->
+<!-- docs-check:fixtures 3 4 5 6 7 8 9 10 11 12 13 -->
 <!-- docs-check:modes expedition recreational survival coop tournament story -->
 <!-- docs-check:routes account board catch entry epoch events friends google-callback google-start profiles rtc save survival-board trophies -->
 
