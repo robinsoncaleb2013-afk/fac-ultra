@@ -10,11 +10,11 @@ import type { Mode } from "./modes.ts";
 
 /** One loop per group of waters. Canyon is dry wind, so it sits with the wind loop (decision, 05 lists no canyon). */
 export const AMBIENCE_GROUPS = [
-  { id: "pond-river", label: "Pond and River", file: "/audio/amb-pond-river.ogg", waters: [0, 1] },
+  { id: "pond-river", label: "Pond and River", file: "/audio/amb-pond-river.ogg", waters: [0, 1, 19] },
   { id: "lake-swamp", label: "Lake, Swamp and Mangrove", file: "/audio/amb-lake-swamp.ogg", waters: [2, 3, 4] },
-  { id: "coast-reef", label: "Coast, Reef and Kelp", file: "/audio/amb-coast-reef.ogg", waters: [5, 7, 8] },
-  { id: "cold-deep", label: "Arctic, Deep and Sunken City", file: "/audio/amb-cold-deep.ogg", waters: [9, 10, 11] },
-  { id: "fire-sky", label: "Canyon, Volcano, Sky and Astral", file: "/audio/amb-fire-sky.ogg", waters: [6, 12, 13, 14] },
+  { id: "coast-reef", label: "Coast, Reef and Kelp", file: "/audio/amb-coast-reef.ogg", waters: [5, 7, 8, 15] },
+  { id: "cold-deep", label: "Arctic, Deep and Sunken City", file: "/audio/amb-cold-deep.ogg", waters: [9, 10, 11, 16, 17] },
+  { id: "fire-sky", label: "Canyon, Volcano, Sky and Astral", file: "/audio/amb-fire-sky.ogg", waters: [6, 12, 13, 14, 18] },
 ] as const;
 
 export const DEFAULT_VOLUME = 35;

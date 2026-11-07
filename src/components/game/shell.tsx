@@ -24,12 +24,17 @@ import { CloudHost } from "@/components/game/account";
 import { ResetNotice } from "@/components/game/test-phase";
 import { SlotPicker } from "@/components/game/slots";
 import { HazardAlerts } from "@/components/game/hazard-alerts";
+import { TutorialOverlay } from "@/components/game/TutorialOverlay";
 import { startEpochGate } from "@/game/epoch-gate";
 import { resetCloudMemory } from "@/lib/accounts/client";
 
 /** The screen router: menu or game, in the layout this device gets (docs/architecture/03 §1, 09 §2). */
 export function Game() {
   const screen = useGame((s) => s.screen);
+  const tutorial = useGame((s) => s.tutorial);
+  const tutorialNext = useGame((s) => s.tutorialNext);
+  const finishTutorial = useGame((s) => s.finishTutorial);
+  const soundOn = useGame((s) => s.sound);
   const { ready, plan, height } = useForm();
   useEffect(() => {
     let alive = true;
@@ -72,6 +77,7 @@ export function Game() {
       <CloudHost />
       <ResetNotice />
       <WelcomeBack />
+      {tutorial ? <TutorialOverlay state={tutorial} onNext={tutorialNext} onSkip={finishTutorial} soundOn={soundOn} /> : null}
       <SlotPicker />
       <HazardAlerts />
       <TripCard />

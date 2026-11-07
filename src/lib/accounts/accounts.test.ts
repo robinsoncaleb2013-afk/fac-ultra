@@ -252,7 +252,7 @@ test("cloud save: Relaxed Fishing is its own slot, kept whole by the server and 
   assert.deepEqual(back.data.fotdClaimed, ["2026-11-02"]);
   assert.equal(back.data.pet.kind, "otter");
   assert.deepEqual(back.data.rivalRecord, { tilly: { w: 2, l: 1 } });
-  assert.equal(back.data.ub.length, 15, "everything unlocked comes back unlocked");
+  assert.equal(back.data.ub.length, 20, "everything unlocked comes back unlocked");
   assert.equal(back.summary.species, 1);
   const careerAfter = (await a.save("GET", `/api/save?profile=${p.id}&mode=expedition`)).body.save as { rev: number; data: Record<string, unknown> };
   assert.equal(careerAfter.rev, careerStored.rev, "the Expedition revision did not move");

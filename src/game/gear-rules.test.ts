@@ -156,7 +156,7 @@ test("the table lists every gated thing once", () => {
 /* ── The walk: a scripted player who does only what the rules ask reaches the end, and cannot skip ahead ── */
 
 test("a full progression walk: meet each requirement, buy in order, reach the last of everything", () => {
-  const p = start();
+  const p: Progress & { prestige: number } = { ...start(), prestige: 0 };
   const log: string[] = [];
   let safety = 2000;
   while (safety-- > 0) {
@@ -175,6 +175,12 @@ test("a full progression walk: meet each requirement, buy in order, reach the la
       p.ub = [...p.ub, nextMap];
       acted = true;
     }
+    /* Update Three: the final water asks for Prestige, not a level — earn it the player's way. */
+    if (p.ub.length === BIOMES.length - 1 && p.prestige < 1) {
+      if (p.lv < 100) p.lv = 100;
+      else p.prestige = 1;
+      acted = true;
+    }
     if (acted) continue;
     /* beat the boss of the newest water, if it is not yet beaten */
     const newest = p.ub[p.ub.length - 1];
@@ -188,7 +194,7 @@ test("a full progression walk: meet each requirement, buy in order, reach the la
       const max = (kind === "rod" ? RODS : kind === "reel" ? REELS : BOATS).length - 1;
       if (p[kind] < max) asks.push(gateTable().find((r) => r.kind === kind && r.index === p[kind] + 1)!.lv);
     }
-    if (p.ub.length < BIOMES.length) asks.push(MAP_LEVEL[p.ub.length]);
+    if (p.ub.length < BIOMES.length - 1) asks.push(MAP_LEVEL[p.ub.length]);
     const want = Math.min(...asks.filter((n) => n > p.lv));
     if (!Number.isFinite(want)) break;
     p.lv = want;
@@ -197,7 +203,7 @@ test("a full progression walk: meet each requirement, buy in order, reach the la
   assert.equal(p.reel, REELS.length - 1);
   assert.equal(p.boat, BOATS.length - 1);
   assert.equal(p.ub.length, BIOMES.length);
-  assert.ok(p.lv <= 70, "the last of everything is reachable by about level 66");
+  assert.ok(p.lv <= MAP_LEVEL[BIOMES.length - 2], "the last level-gated water sets the level bar");
   /* every purchase happened strictly in order */
   const rods = log.filter((l) => l.startsWith("rod")).map((l) => Number(l.slice(3)));
   assert.deepEqual(rods, RODS.map((_, i) => i).slice(1));

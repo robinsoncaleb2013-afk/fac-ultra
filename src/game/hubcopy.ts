@@ -20,14 +20,14 @@ export const PLAY_META: readonly PlayMeta[] = [
   {
     id: "expedition",
     title: "Expedition",
-    summary: "Your big adventure: travel to fifteen waters, fill your fish book and beat every boss.",
+    summary: "Your big adventure: travel to twenty waters, fill your fish book and beat every boss.",
     facts: ["Pick how hard it is, from Super Easy to Legend", "Three save slots", "Earn coins and buy better gear"],
     art: "river",
   },
   {
     id: "story",
     title: "Story",
-    summary: "A guided adventure through the fifteen waters, with goals and a boss to beat in each one.",
+    summary: "A guided adventure through the twenty waters, with goals and a boss to beat in each one.",
     facts: ["Goals like catch three fish at the pond", "A boss at the end of every water", "Three save slots of its own"],
     art: "swamp",
   },
@@ -126,7 +126,12 @@ export const WATER_BLURB: readonly string[] = [
   "A city sunk long ago, now home to fish.",
   "Hot water beside a rumbling volcano.",
   "Fishing from the clouds, high above the world.",
-  "The last sea, among the stars.",
+  "A sea among the stars.",
+  "A sea like a mirror. Every fish has a twin.",
+  "The dreaming deep, where the sea sleeps.",
+  "Quiet shoals of white bone and old fish.",
+  "Black water under a rolling storm.",
+  "The first water of all. Prestige opens the way.",
 ];
 
 export const waterBlurb = (i: number) => WATER_BLURB[i] ?? "";

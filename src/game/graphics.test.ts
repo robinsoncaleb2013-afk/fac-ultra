@@ -125,9 +125,9 @@ test("the brass fanfare is for epic catches, new species and bosses", () => {
   assert.equal(wantsFanfare({ ...c, boss: true }), true);
 });
 
-test("every one of the 15 waters has a waterline and a sun position", () => {
-  assert.equal(WATER_LINE.length, 15);
-  assert.equal(SUN_X.length, 15);
+test("every one of the waters has a waterline and a sun position", () => {
+  assert.equal(WATER_LINE.length, 20);
+  assert.equal(SUN_X.length, 20);
   for (const v of [...WATER_LINE, ...SUN_X]) assert.ok(v > 0 && v < 1);
   assert.equal(waterLineOf(99), 0.5);
   assert.equal(WATER_LINE[0], 0.52);

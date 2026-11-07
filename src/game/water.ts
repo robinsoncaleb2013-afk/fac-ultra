@@ -22,6 +22,11 @@ export const WATER_LINE: number[] = [
   0.55, // Volcano
   0.6, // Sky
   0.5, // Astral Sea
+  0.5, // Mirror Sea
+  0.18, // Dreaming Deep (underwater scene, like Kelp/Deep)
+  0.48, // Bone Shoals
+  0.52, // Storm Forge
+  0.46, // The First Water
 ];
 
 export const SUN_X: number[] = [
@@ -40,6 +45,11 @@ export const SUN_X: number[] = [
   0.5, // Volcano
   0.6, // Sky
   0.5, // Astral Sea
+  0.5, // Mirror Sea
+  0.5, // Dreaming Deep
+  0.35, // Bone Shoals
+  0.65, // Storm Forge
+  0.72, // The First Water (dawn light)
 ];
 
 export function waterLineOf(biome: number): number {

@@ -62,5 +62,5 @@ test("saved stickers and shinies are cleaned: known ids only, no repeats, bounde
   assert.deepEqual(readShiny(["0-1", "0-1", "99-1", "3-30", "x", "14-24"]), ["0-1", "14-24"]);
   assert.deepEqual(readShiny({}), []);
   assert.equal(frameId("3-4"), "frame-3-4");
-  assert.ok(BIOMES.length === 15);
+  assert.equal(BIOMES.length, 20);
 });

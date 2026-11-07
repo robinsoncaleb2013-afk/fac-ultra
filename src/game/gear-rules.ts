@@ -18,7 +18,7 @@ import { BIOMES, BOATS, PACKS, REELS, RODS } from "./content.ts";
 export type GateKind = "rod" | "reel" | "boat" | "map" | "pack";
 
 /** Level needed to unlock each water (index = water). The same level opens its bundle of gear. */
-export const MAP_LEVEL: readonly number[] = [1, 3, 6, 9, 12, 15, 19, 23, 27, 31, 36, 42, 49, 57, 66];
+export const MAP_LEVEL: readonly number[] = [1, 3, 6, 9, 12, 15, 19, 23, 27, 31, 36, 42, 49, 57, 66, 76, 87, 99, 112, 126];
 
 /** How many rods come with each water's bundle (index = water). Sums to the number of rods (28). */
 export const ROD_BUNDLE: readonly number[] = [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 2];
@@ -93,9 +93,14 @@ const bossWord = (n: number) => (n === 1 ? "1 boss" : `${n} bosses`);
 const bossOf = (water: number) => `${BIOMES[water].name} boss`;
 
 /** Can this water be unlocked? Level, and the water before it must have had its boss beaten. */
-export function checkMap(index: number, p: Pick<Progress, "lv" | "ub" | "mastered">): Check {
+export function checkMap(index: number, p: Pick<Progress, "lv" | "ub" | "mastered"> & { prestige?: number }): Check {
   if (index <= 0 || p.ub.includes(index)) return done;
   const missing: string[] = [];
+  /* Update Three: the final water is not opened by levels or bosses — it opens at Prestige 1. */
+  if (index === BIOMES.length - 1) {
+    if ((p.prestige ?? 0) < 1) missing.push("reach Prestige 1");
+    return { ok: !missing.length, missing, text: say(missing) };
+  }
   if (p.lv < MAP_LEVEL[index]) missing.push(`reach level ${MAP_LEVEL[index]}`);
   if (!p.mastered.includes(index - 1)) missing.push(`beat the ${bossOf(index - 1)}`);
   return { ok: !missing.length, missing, text: say(missing) };

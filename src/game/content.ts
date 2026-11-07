@@ -1,5 +1,6 @@
 import type { LureFamily } from "./presentation.ts";
 import { EVENT_RARITIES, EVENTS } from "./event-data.ts";
+import { holidayMultipliers } from "./holidays.ts";
 import { rng, weighted } from "./rng.ts";
 
 export type DexEntry = { c: number; w: number; m: number };
@@ -118,7 +119,7 @@ export function archetypeOf(name: string): Arch {
   return "fish";
 }
 
-/* ── The world: 15 biomes × 25 species ───────────────────────────────────
+/* ── The world: 20 biomes × 25 species ───────────────────────────────────
    Per biome: 9 common (0–8), 7 uncommon (9–15), 5 rare (16–20),
    3 epic (21–23), and the boss at slot 24. */
 
@@ -156,6 +157,16 @@ const FISH: string[][] = [
   "Cloud Minnow,Wind Perch,Mist Carp,Rain Trout,Storm Eel,Aero Bass,Zephyr Ray,Thunder Pike,Breeze Tetra,Cirrus Koi,Nimbus Cat,Sun Fish,Moon Fish,Star Ray,Comet Eel,Halo Fish,Tempest Ray,Rainbow Serpent,Celestial Koi,Sky Whale,Aurora Dragon,Eclipse Whale,Nova Dragon,Cosmic Leviathan,Cloud King".split(","),
   // Astral Sea (new)
   "Nebula Minnow,Void Tetra,Singularity Shrimp,Star Dust Fish,Orbit Perch,Moon Moth Fish,Cosmo Guppy,Photon Tetra,Gravity Goby,Quasar Eel,Pulsar Ray,Eclipse Koi,Dark Matter Carp,Comet Shark,Zenith Ray,Astro Crab,Supernova Koi,Event Horizon Eel,Celestial Sturgeon,Void Whale,Starforge Carp,Galaxy Leviathan,Eternal Comet,The First Star,The Last Constellation".split(","),
+  // Mirror Sea (new, Update Three)
+  "Glass Minnow,Mirror Tetra,Silver Dace,Twin Perch,Pale Goby,Reflection Roach,Quiet Shiner,Paleback Minnow,Glasswing Darter,Silverfin Carp,Doubled Trout,Mirror Pike,Glass Catfish,Echo Bream,Reflected Eel,Looking Glass Koi,Prism Bream,Silver Serpent,Crystal Sturgeon,Twinmoon Carp,Mirrored Ray,The Pale Twin,Glass Leviathan,The Silent Double,The Reflection".split(","),
+  // Dreaming Deep (new, Update Three)
+  "Sleepy Minnow,Drowsy Tetra,Pillow Goby,Yawning Dace,Slumber Shiner,Dream Guppy,Velvet Perch,Dozing Loach,Lullaby Darter,Nightcap Trout,Sleeping Carp,Dreamwalker Perch,Snoring Catfish,Velvet Eel,Pastel Koi,Dreaming Crab,Reverie Ray,Lucid Sturgeon,Nightmare Serpent,Dream Seahorse,Starlit Sleeper,Sandman Shark,Dream Leviathan,The First Dream,The Great Sleeper".split(","),
+  // Bone Shoals (new, Update Three)
+  "Bone Minnow,Rib Tetra,Skull Goby,Marrow Dace,Fossil Shiner,Grave Perch,Tusk Darter,Dust Perch,Hollow Roach,Fossil Trout,Ribcage Catfish,Bone Pike,Graveyard Eel,Tusked Carp,Ancient Loach,Skull Crab,Ivory Sturgeon,Fossil Shark,Bone Serpent,Tomb Ray,Marrow Whale,Titan Rib,Ghost Leviathan,The Hollow Titan,The Bone Father".split(","),
+  // Storm Forge (new, Update Three)
+  "Spark Minnow,Emberback Tetra,Anvil Goby,Copper Dace,Static Shiner,Hammer Perch,Bellows Fish,Galvanic Guppy,Cloudburst Darter,Lightning Trout,Anvil Catfish,Copper Carp,Thunder Eel,Storm Pike,Voltaic Koi,Bellows Crab,Cyclone Ray,Thunder Shark,Spark Serpent,Iron Sturgeon,Stormforge Carp,The Living Anvil,Tempest Leviathan,The Storm That Swims,The Stormsmith".split(","),
+  // The First Water (new, Update Three) — the Prestige-gated final water; price 0, see INTEGRATION-P2.md
+  "Dawn Minnow,Primordial Tetra,Origin Goby,Seed Perch,Firstfin Dace,Source Shiner,Trilobite Crab,Dawn Darter,Origin Fish,First Trout,Dawn Carp,Source Catfish,Primordial Eel,Elder Pike,First Koi,Ancestor Loach,Giant Trilobite,First Shark,Dawn Serpent,Origin Sturgeon,The Second Fish,The First Predator,The First Whale,The First Dragon,The First Fish".split(","),
 ];
 
 const BIOME_META = [
@@ -174,6 +185,11 @@ const BIOME_META = [
   ["volcano", "Volcano", 1_200_000],
   ["sky", "Sky", 4_000_000],
   ["astral", "Astral Sea", 15_000_000],
+  ["mirror", "Mirror Sea", 50_000_000],
+  ["dream", "Dreaming Deep", 180_000_000],
+  ["bones", "Bone Shoals", 650_000_000],
+  ["forge", "Storm Forge", 2_300_000_000],
+  ["first", "The First Water", 0],
 ] as const;
 
 export const BIOMES = BIOME_META.map(([id, name, price], i) => ({
@@ -473,14 +489,18 @@ type LuckInput = {
   sig?: number;
 };
 
-export function luckTotal(s: LuckInput, lure: number) {
+/** Total luck for a cast. Holiday seam (P5): pass the cast's date and a holiday window multiplies
+    the total by holidayMultipliers(date).luck (50 in a window, 1 outside, so passing a date is
+    always safe). With no date the result is exactly what it has always been — the tournament
+    replay (replay.ts) and the rivals leave it off, so their seeded casts never see a holiday. */
+export function luckTotal(s: LuckInput, lure: number, date?: Date) {
   const lureLuck = lure >= 0 ? LURES[lure].luck : 0;
   let sigLuck = 0;
   const fx = typeof s.sig === "number" ? sigEffect(s.sig) : null;
   if (fx?.kind === "weather") sigLuck = s.weather === fx.weather ? fx.luck : 5;
   const masteredLuck =
     typeof s.biome === "number" && Array.isArray(s.mastered) && s.mastered.includes(s.biome) ? 10 : 0;
-  return (
+  const total =
     RODS[s.rod].luck +
     BOATS[s.boat].luck +
     lureLuck +
@@ -489,8 +509,8 @@ export function luckTotal(s: LuckInput, lure: number) {
     s.rb * 10 +
     dexCount(s.dex) * 0.1 +
     sigLuck +
-    masteredLuck
-  );
+    masteredLuck;
+  return date ? total * holidayMultipliers(date).luck : total;
 }
 
 export function rankName(lv: number) {

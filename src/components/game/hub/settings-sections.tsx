@@ -8,6 +8,10 @@ import { bookOf } from "@/game/hubcopy";
 import { difficultyRules } from "@/game/difficulty";
 import { MODES } from "@/game/modes";
 import { CloudSettings } from "@/components/game/account";
+import { CodesCard } from "@/components/game/hub/CodesCard";
+import { NightCard } from "@/components/game/NightCard";
+import { NIGHT_BOSSES_NEEDED, NIGHT_LEVEL_NEEDED } from "@/game/night";
+import { PRESTIGE_LEVEL } from "@/game/prestige";
 import { useFullscreen } from "@/components/game/fullscreen";
 import { useKidOn } from "@/components/game/use-kid";
 import { Toggle } from "@/components/game/panels/shared";
@@ -346,6 +350,39 @@ export function SavesSection() {
 
 /* `at: "game"` sections are only in the in-game Settings (WP-12): the main menu has its own Account tab, and "Your saves" works on
    the save of the mode you are in (export, import, start over), which the main menu must not change. */
+/** Update Three: promo codes. The card holds the typing; the rules live in src/game/promo.ts via the engine action. */
+export function CodesSection() {
+  const claimed = useGame((s) => s.promo);
+  const claimPromo = useGame((s) => s.claimPromo);
+  return <CodesCard claimed={claimed} onClaim={claimPromo} />;
+}
+
+/** Update Three: night fishing and prestige. Display only — the gates live in src/game/night.ts and prestige.ts. */
+export function NightSection() {
+  const bosses = useGame((s) => s.bosses);
+  const lv = useGame((s) => s.lv);
+  const nightOn = useGame((s) => s.night.on);
+  const startNightFishing = useGame((s) => s.startNightFishing);
+  const collectNight = useGame((s) => s.collectNight);
+  const prestigeNow = useGame((s) => s.prestigeNow);
+  return (
+    <NightCard
+      progress={{
+        bosses,
+        bossesNeeded: NIGHT_BOSSES_NEEDED,
+        level: lv,
+        levelNeeded: NIGHT_LEVEL_NEEDED,
+        unlocked: bosses >= NIGHT_BOSSES_NEEDED && lv >= NIGHT_LEVEL_NEEDED,
+      }}
+      nightOn={nightOn}
+      prestigeReadyNow={lv >= PRESTIGE_LEVEL}
+      onStart={startNightFishing}
+      onCollect={collectNight}
+      onPrestige={prestigeNow}
+    />
+  );
+}
+
 export const SETTINGS_SECTIONS = [
   { id: "sound", title: "Sound", sub: "Music, water sounds and volume", icon: "sound", View: SoundSection, at: "both" },
   { id: "picture", title: "Picture quality", sub: "Auto, or Ultra down to Potato", icon: "eye", View: GraphicsSection, at: "both" },
@@ -354,6 +391,8 @@ export const SETTINGS_SECTIONS = [
   { id: "controls", title: "Controls", sub: "Keys, gamepad and reel drag", icon: "pad", View: ControlsSection, at: "both" },
   { id: "account", title: "Account and cloud saves", sub: "Sign in, family profiles, keep your fish safe", icon: "cloud", View: AccountSection, at: "game" },
   { id: "saves", title: "Your saves", sub: "Files, save codes, start over", icon: "satchel", View: SavesSection, at: "game" },
+  { id: "codes", title: "Codes", sub: "Type a code, claim its reward", icon: "flag", View: CodesSection, at: "game" },
+  { id: "night", title: "Night fishing & Prestige", sub: "Fish while you are away, and the final water", icon: "lodge", View: NightSection, at: "game" },
 ] as const;
 
 /** The sections each level shows. */

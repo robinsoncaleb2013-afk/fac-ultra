@@ -5,6 +5,8 @@ import { useHubUi } from "@/game/hubstate";
 import { cleanEmail, cleanFriendCode, cleanHandle, formatFriendCode, searchPrefix } from "@/game/social";
 import { api, playerId, playerName } from "@/game/tourney";
 import { closeHub } from "@/components/game/hub/actions";
+import { FightRoomSection } from "@/components/game/fight-room";
+import { useKidOn } from "@/components/game/use-kid";
 import { friendProblem, saveName, useFriends, type FriendsState } from "@/components/game/hub/friends-data";
 import { Icon } from "@/components/game/hub/icons";
 import { DarkPanel } from "@/components/game/hub/panel-shell";
@@ -332,6 +334,7 @@ function Events() {
 function Friends({ split, scope }: { split: boolean; scope: "main" | "game" }) {
   const tabId = scope === "main" ? "friends" : "players";
   const saved = useHubUi((s) => s.item[tabId]);
+  const kidOn = useKidOn();
   const f = useFriends(true);
   const inc = f.data?.requests?.incoming.length ?? 0;
   const all: (HubItem & { body: ReactNode; title2: string; main?: boolean; game?: boolean })[] = [
@@ -340,6 +343,8 @@ function Friends({ split, scope }: { split: boolean; scope: "main" | "game" }) {
     { id: "add", title: "Add a friend", sub: "By name, email or code", icon: <Icon name="hook" className="size-5" />, title2: "Add a friend", body: <AddFriend key="a" f={f} />, main: true },
     { id: "blocked", title: "Blocked", sub: "Players you don't want to see", icon: <Icon name="lock" className="size-5" />, title2: "Blocked players", body: <BlockedList key="b" f={f} />, main: true },
     { id: "events", title: "Events", sub: "Tournaments to join", icon: <Icon name="waters" className="size-5" />, title2: "Events", body: <Events key="e" />, game: true },
+    /* Fish-fight rooms (P6) are NOT part of Kids Mode: the row itself is hidden while it is on, not just the section. */
+    ...(kidOn ? [] : [{ id: "fight", title: "Fish fight", sub: "Fight your fish against another angler", icon: <Icon name="hook" className="size-5" />, title2: "Fish fight rooms", body: <FightRoomSection key="ff" />, main: true, game: true }]),
   ];
   const here = all.filter((x) => (scope === "main" ? x.main : x.game));
   const items: HubItem[] = here.map(({ body: _b, title2: _t, main: _m, game: _g, ...item }) => item);

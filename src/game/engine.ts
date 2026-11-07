@@ -19,17 +19,33 @@ import { addClaim, claimsFotd, FOTD_XP_MULT, fotdFor, today } from "@/game/fotd"
 import { funModeOn, readFun } from "@/game/fun";
 import {
   activeEvent,
+  applyEventsToFish,
   catchLine,
   countLanded,
+  eventById,
   eventModeOn,
   eventOfMutation,
   eventTitle,
-  mutateFish,
   noEvents,
   readEvents,
   stepEvents,
   type EventsSave,
 } from "@/game/events";
+import { burstDue, holidayOn } from "@/game/holidays";
+import { redeemCode } from "@/game/promo";
+import { nightProgress, settleNight, startNight, type NightReport } from "@/game/night";
+import { canUnlockFinalBiome, doPrestige, finalBiomeIndex } from "@/game/prestige";
+import {
+  advance as tutAdvance,
+  currentStep as tutStep,
+  isTutorialDone,
+  shouldForceFirstCatch,
+  startTutorial,
+  stopSpeaking,
+  TUTORIAL_FIRST_CATCH,
+  type TutorialEvent,
+  type TutorialState,
+} from "@/game/tutorial";
 import { IDLE_MS } from "@/game/event-data";
 import { emitEventEnded, emitEventStarted, emitMutatedCatch, onEventStarted, onMutatedCatch } from "@/game/event-hooks";
 import { adopt, chooseGift, giftReady, isPetKind, noPet, PETS, takeGift, petUnlocked, type Pet, type PetKind } from "@/game/pet";
@@ -238,6 +254,8 @@ import {
   BOATS,
   BOSS_CHUM_INDEX,
   BOSS_INDEX,
+  baseValue,
+  baseWeight,
   bossChumPrice,
   type Contract,
   dexCount,
@@ -382,6 +400,12 @@ export type Save = {
   lineGear: LineGear;
   /* WP-15 (save v10): the long-play events. The streak clock, the event running, the events seen and the mutated fish landed. */
   events: EventsSave;
+  /* Update Three (save v13): promo codes this save has claimed (canonical upper-case), the Prestige count,
+     whether the guided tutorial is finished, and the night-fishing state (on, and when it was switched on). */
+  promo: string[];
+  prestige: number;
+  tutored: boolean;
+  night: { on: boolean; since: number };
 };
 
 export type LastCatch = {
@@ -410,8 +434,8 @@ export type LastCatch = {
 
 type Toast = { id: number; text: string };
 
-const SAVE_VERSION = 12;
-const MARKS = [10, 25, 50, 100, 150, 200, 250, 300, 375];
+const SAVE_VERSION = 13;
+const MARKS = [10, 25, 50, 100, 150, 200, 250, 300, 375, 400, 450, 500];
 
 let currentMode: Mode = "expedition";
 
@@ -702,6 +726,10 @@ export function fresh(): Save {
     autoKeep: false,
     lineGear: freeLineGear(),
     events: noEvents(),
+    promo: [],
+    prestige: 0,
+    tutored: false,
+    night: { on: false, since: 0 },
   };
 }
 
@@ -1050,7 +1078,20 @@ export function sanitize(raw: unknown): Save {
     lineGear,
     /* v9 → v10 (WP-15): one new field, nothing existing changed meaning. Old saves start with no streak and no events seen. */
     events: readEvents(o.events),
+    /* v12 -> v13 (Update Three): four new fields, nothing existing changed meaning. Old saves have
+       claimed no codes, never prestiged, not done the guided tutorial, and never fished at night. */
+    promo: [...new Set(list(o.promo, (x) => (typeof x === "string" && x.trim() ? x.trim().toUpperCase().slice(0, 24) : undefined), 100))],
+    prestige: int(o.prestige, 0, 0, 999),
+    tutored: bool(o.tutored, false),
+    night: readNight(o.night),
   };
+}
+
+/** Night-fishing state from untrusted data. */
+function readNight(v: unknown): Save["night"] {
+  if (!v || typeof v !== "object") return { on: false, since: 0 };
+  const n = v as Record<string, unknown>;
+  return { on: bool(n.on, false), since: int(n.since, 0, 0, 1e15) };
 }
 
 /** The Kids book from untrusted data (same shape and bounds as the dex). */
@@ -1146,6 +1187,10 @@ export function snapshot(s: Save): Save {
     autoKeep: s.autoKeep,
     lineGear: s.lineGear,
     events: s.events,
+    promo: s.promo,
+    prestige: s.prestige,
+    tutored: s.tutored,
+    night: s.night,
   };
 }
 
@@ -1313,6 +1358,60 @@ export function noteActivity(now = Date.now()) {
 }
 
 /** Advance the events clock to now. Called about once a second from frame(); the pure rules live in events.ts. */
+/* ── Update Three wiring ─────────────────────────────────────────────────
+   The pure packages (promo, tutorial, night, prestige, holidays) hold the rules;
+   these helpers and the store actions below are the only engine glue. */
+
+/** The stored-level loop the catch pipeline runs (withCatch): xp past a level becomes the level. */
+function applyLevelUps(xp: number, lv: number): { xp: number; lv: number; gained: number } {
+  let gained = 0;
+  while (xp >= xpNeed(lv)) {
+    xp -= xpNeed(lv);
+    lv += 1;
+    gained += 1;
+  }
+  return { xp, lv, gained };
+}
+
+/**
+ * Settle a finished night on `base`: run the pure settle, then apply the level loop it
+ * deliberately leaves to the engine, granting the per-level line packs a normal stretch
+ * of catches would (economy modes only, exactly like withCatch).
+ */
+function applyNightSettled(base: Save, now: number): { s: Save; report: NightReport; gainedLv: number; found: number[] } {
+  const { s, report } = settleNight(base, now, rng);
+  const up = applyLevelUps(s.xp, s.lv);
+  let lineGear = s.lineGear;
+  const found: number[] = [];
+  if (modeRules().economy && up.gained > 0) {
+    for (let L = s.lv + 1; L <= up.lv; L++) found.push(packForLevel(L));
+    for (const k of found) lineGear = givePack(lineGear, k);
+  }
+  return { s: { ...s, xp: up.xp, lv: up.lv, lineGear }, report, gainedLv: up.gained, found };
+}
+
+/** Advance the guided tutorial after the player really did the thing; finishing lands in finishTutorial. */
+function bumpTutorial(event: TutorialEvent) {
+  const st = useGame.getState();
+  const tut = st.tutorial;
+  if (!tut) return;
+  const next = tutAdvance(tut, event);
+  if (isTutorialDone(next)) {
+    st.finishTutorial();
+    return;
+  }
+  const patch: Partial<Store> = { tutorial: next };
+  /* The pack step must never strand a new player: a fresh save owns no line pack and
+     cannot afford one, so hand over one Bronze pack the moment the step arrives. */
+  if (tutStep(next)?.id === "pack" && st.lineGear.packs.every((n) => n <= 0)) {
+    patch.lineGear = givePack(st.lineGear, 0);
+  }
+  useGame.setState(patch);
+}
+
+/** The year the New Year midnight burst last fired for (module latch: once per year). */
+let burstYear = -1;
+
 export function stepEventsLive(now = Date.now()) {
   const s = useGame.getState();
   const on = eventModeOn(modeRules());
@@ -1341,18 +1440,34 @@ export function stepEventsLive(now = Date.now()) {
     audio.event(res.started.rarity);
     emitEventStarted(res.started);
   }
-  if (res.ended || res.started) patch.toasts = toasts.slice(-3);
+  /* Update Three: the New Year midnight burst — once a year, in the first minutes of
+     Jan 1, a gift of gold equal to the new year. Latched by year so it fires once. */
+  let burstFired = false;
+  const nowD = new Date(now);
+  if (burstDue(nowD) && burstYear !== nowD.getFullYear()) {
+    burstYear = nowD.getFullYear();
+    burstFired = true;
+    const gift = nowD.getFullYear();
+    pushToast(toasts, `Happy New Year! The midnight burst gives you ${money(gift)} gold.`);
+    patch.c = s.c + gift;
+    patch.tot = s.tot + gift;
+    audio.fanfare();
+  }
+  if (res.ended || res.started || burstFired) patch.toasts = toasts.slice(-3);
   useGame.setState(patch);
-  if (res.ended || res.started) persistSoon();
+  if (res.ended || res.started || burstFired) persistSoon();
 }
 
-/** Give the fish the running event's mutation, if the dice say so. Off in Tournaments (server replay) and Survival. */
+/** Give the fish the running event's mutation, if the dice say so — and, on a holiday, the
+ *  holiday's name and 50x worth (Update Three: the two systems multiply, never replace).
+ *  Off in Tournaments (server replay) and Survival. */
 function eventMutate(fish: Rolled): Rolled {
   const s = useGame.getState();
   if (!eventModeOn(modeRules())) return fish;
-  const act = activeEvent(s.events, Date.now());
-  if (!act) return fish;
-  const res = mutateFish(s.events, fish, act.def, BIOMES[fish.b].fish[fish.i]);
+  const now = new Date();
+  const act = activeEvent(s.events, now.getTime());
+  if (!act && !holidayOn(now)) return fish;
+  const res = applyEventsToFish(s.events, fish, act?.def ?? null, now, BIOMES[fish.b].fish[fish.i]);
   useGame.setState({ events: res.state });
   return res.fish;
 }
@@ -1628,7 +1743,7 @@ function withCatch(
   const donePages = fun ? newPages(dex, stickers) : [];
   if (donePages.length) stickers = [...stickers, ...donePages.map(pageId)];
   const fotdClaimed = claim ? addClaim(s.fotdClaimed, date) : s.fotdClaimed;
-  let xpGain = catchXp(fish.t, fish.m, fish.b, fish.boss) * (claim ? FOTD_XP_MULT : 1);
+  let xpGain = catchXp(fish.t, fish.m, fish.b, fish.boss, new Date()) * (claim ? FOTD_XP_MULT : 1);
   if (level.xp !== 1) xpGain = Math.round(xpGain * level.xp);
   let xp = s.xp + xpGain;
   let lv = s.lv;
@@ -2021,7 +2136,7 @@ function castNow(s: Save, lureIdx: number, baitIdx: number, lair: boolean): Cast
   /* The Boss Lair is its own place: the boss is not matched to a spot. */
   const plan = lair
     ? null
-    : planCast(s.biome, spot, p, s.weather, window, luckTotal(s, lureIdx), {
+    : planCast(s.biome, spot, p, s.weather, window, luckTotal(s, lureIdx, new Date()), {
         stage: stageIn(modeRules(), stageBook(s), s.biome),
         sig: sigEffect(s.sig),
         bait: baitIdx,
@@ -2031,20 +2146,37 @@ function castNow(s: Save, lureIdx: number, baitIdx: number, lair: boolean): Cast
 
 function beginBite() {
   const s = useGame.getState();
-  const luck = luckTotal(s, sim.castLure);
+  const luck = luckTotal(s, sim.castLure, new Date());
+  /* Update Three tutorial: a brand-new player's first catch is always the Bluegill — plain
+     and unmutated. Never on the tournament path (server-rolled), never for the auto-reel. */
+  const forced =
+    !sim.troll &&
+    s.biome === TUTORIAL_FIRST_CATCH.biome &&
+    shouldForceFirstCatch({ tutored: s.tutored, caught: s.caught, tutorialActive: !!s.tutorial });
   /* In an event the fish was rolled at the cast, from the seed (replay.ts); the server rolls the same one. */
-  const fish = sim.troll
-    ? sim.troll.roll.fish
-    : eventMutate(
-        rollFish(s.biome, luck, {
-          boss: sim.castLair,
-          stage: stageIn(modeRules(), stageBook(s), s.biome),
-          sig: sigEffect(s.sig),
-          bait: sim.castBait,
-          match: sim.cast?.ms ?? undefined,
-          sizeMul: sizeMulOf(s.stewards, s.biome),
-        }),
-      );
+  const fish: Rolled = forced
+    ? {
+        b: TUTORIAL_FIRST_CATCH.biome,
+        i: TUTORIAL_FIRST_CATCH.species,
+        t: rarityOf(TUTORIAL_FIRST_CATCH.species),
+        m: 0,
+        name: BIOMES[TUTORIAL_FIRST_CATCH.biome].fish[TUTORIAL_FIRST_CATCH.species],
+        w: baseWeight(TUTORIAL_FIRST_CATCH.biome, TUTORIAL_FIRST_CATCH.species),
+        v: baseValue(TUTORIAL_FIRST_CATCH.biome, TUTORIAL_FIRST_CATCH.species),
+        boss: false,
+      }
+    : sim.troll
+      ? sim.troll.roll.fish
+      : eventMutate(
+          rollFish(s.biome, luck, {
+            boss: sim.castLair,
+            stage: stageIn(modeRules(), stageBook(s), s.biome),
+            sig: sigEffect(s.sig),
+            bait: sim.castBait,
+            match: sim.cast?.ms ?? undefined,
+            sizeMul: sizeMulOf(s.stewards, s.biome),
+          }),
+        );
   sim.fish = fish;
   sim.phase = "bite";
   sim.biteMax = sim.troll ? sim.troll.roll.biteMax : (1300 + RODS[s.rod].zone * 8) / 1000 + assistNow().biteBonus;
@@ -2289,6 +2421,7 @@ function succeed() {
     detail: sim.cast && !fish.boss ? (missNote(habitOf(fish.b, fish.i), sim.cast.p) ?? "") : "",
     lair: fish.boss ? !!s.rush : s.lair,
   });
+  bumpTutorial("reel");
   if (fed) commitRun(fed);
   storyAfterCatch();
   /* Online co-op: tell the room (multiplayer.ts listens for this). */
@@ -2441,7 +2574,7 @@ function autoCatch() {
   if (sim.phase !== "idle" || !s.auto || !s.autoOn || isTournament(modeRules())) return;
   const castLure = s.lure;
   const spent = consumeLure(s);
-  const luck = luckTotal(s, castLure);
+  const luck = luckTotal(s, castLure, new Date());
   /* The auto-reel fishes the spot and rig you set, so knowing fish pays there too. */
   const at = castNow(s, castLure, -1, false);
   const fish = eventMutate(
@@ -3052,6 +3185,10 @@ type Ui = {
   mode: Mode;
   lodgeView: LodgeView;
   welcomeBack: { gain: number; hours: number } | null;
+  /** Update Three: what night fishing caught while the game was closed (or on Collect). */
+  nightBack: NightReport | null;
+  /** Update Three: the guided tutorial's step machine while it runs (never saved; only `tutored` is). */
+  tutorial: TutorialState | null;
   /** WP-15: the "something is happening" announcement, shown for a few seconds when an event starts. */
   eventBanner: { id: string; at: number } | null;
   /* WP-1 */
@@ -3106,6 +3243,15 @@ type Store = Save &
     setLodgeView: (view: LodgeView) => void;
     switchMode: (mode: Mode) => void;
     dismissWelcome: () => void;
+    dismissNightBack: () => void;
+    /* Update Three */
+    claimPromo: (raw: string) => { ok: boolean; message: string };
+    startNightFishing: () => void;
+    collectNight: () => void;
+    prestigeNow: () => void;
+    tutorialNext: () => void;
+    finishTutorial: () => void;
+    maybeStartTutorial: () => void;
     dismissEventBanner: () => void;
     dismissToast: (id: number) => void;
     notify: (text: string) => void;
@@ -3219,6 +3365,8 @@ export const useGame = create<Store>((set, get) => ({
   mode: "expedition",
   lodgeView: "record",
   welcomeBack: null,
+  nightBack: null,
+  tutorial: null,
   eventBanner: null,
   tier: "full",
   level: "ultra",
@@ -3447,7 +3595,7 @@ export const useGame = create<Store>((set, get) => ({
     const gone = releaseFish(
       s,
       { name: lc.name, t: lc.rarity, v: lc.value, w: lc.weight, i: lc.species, b: lc.biome, m: lc.mutation },
-      catchXp(lc.rarity, lc.mutation, lc.biome, lc.boss),
+      catchXp(lc.rarity, lc.mutation, lc.biome, lc.boss, new Date()),
     );
     if (!gone.ok) {
       /* Already sold: it cannot be let go. Just close the card. */
@@ -3602,6 +3750,87 @@ export const useGame = create<Store>((set, get) => ({
     syncHub("lodge", view);
   },
   dismissWelcome: () => set({ welcomeBack: null }),
+  dismissNightBack: () => set({ nightBack: null }),
+  /* ── Update Three actions: the rules live in the pure packages; these only wire them. ── */
+  claimPromo: (raw) => {
+    const s = get();
+    if (isTournament(modeRules()) || modeRules().survival) return { ok: false, message: "Codes do not work in this mode." };
+    const r = redeemCode(snapshot(s), raw, Date.now());
+    if (r.ok) {
+      const patch: Partial<Store> = { c: r.s.c, baitBox: r.s.baitBox, promo: r.s.promo, events: r.s.events };
+      const act = r.s.events.active;
+      if (act && (s.events.active?.id !== act.id || s.events.active?.startedAt !== act.startedAt)) {
+        const def = eventById(act.id);
+        if (def) {
+          patch.eventBanner = { id: def.id, at: Date.now() };
+          audio.event(def.rarity);
+          emitEventStarted(def);
+        }
+      }
+      set(patch);
+      persistSoon();
+    }
+    return { ok: r.ok, message: r.message };
+  },
+  startNightFishing: () => {
+    const s = get();
+    if (s.night.on) return;
+    const out = startNight(snapshot(s), Date.now());
+    if (!out.night.on) {
+      const p = nightProgress(s);
+      set((st) => ({
+        toasts: pushToast([...st.toasts], `Night fishing unlocks after 5 bosses and level 45. So far: ${p.bosses} of 5 bosses, level ${p.level}.`),
+      }));
+      return;
+    }
+    set({ night: out.night, toasts: pushToast([...s.toasts], "Night fishing is on. Fish will bite while you are away.") });
+    persistSoon();
+  },
+  collectNight: () => {
+    const s = get();
+    if (!s.night.on) return;
+    const { s: settled, report, gainedLv, found } = applyNightSettled(snapshot(s), Date.now());
+    const toasts = [...s.toasts];
+    if (gainedLv) pushToast(toasts, `Level ${settled.lv}. ${rankName(settled.lv)}.`);
+    if (found.length)
+      pushToast(toasts, `You found ${found.length === 1 ? `a ${LINE_PACKS[found[0]].name}` : `${found.length} line packs`}. Open ${found.length === 1 ? "it" : "them"} in Tackle.`);
+    set({
+      night: settled.night,
+      dex: settled.dex,
+      c: settled.c,
+      tot: settled.tot,
+      xp: settled.xp,
+      lv: settled.lv,
+      caught: settled.caught,
+      lineGear: settled.lineGear,
+      toasts: toasts.slice(-3),
+      nightBack: report.count > 0 ? report : null,
+    });
+    persistSoon();
+  },
+  prestigeNow: () => {
+    const s = get();
+    const out = doPrestige(snapshot(s));
+    if (out.prestige === s.prestige) {
+      set((st) => ({ toasts: pushToast([...st.toasts], `Prestige unlocks at level 100. You are level ${s.lv}.`) }));
+      return;
+    }
+    audio.fanfare();
+    set({ prestige: out.prestige, toasts: pushToast([...s.toasts], `Prestige ${out.prestige}! The First Water is open.`) });
+    persistSoon();
+  },
+  tutorialNext: () => bumpTutorial("next"),
+  finishTutorial: () => {
+    stopSpeaking();
+    set({ tutored: true, tutorial: null });
+    persistNow();
+  },
+  maybeStartTutorial: () => {
+    const s = get();
+    if (s.tutorial || s.tutored || s.caught > 0) return;
+    if (s.mode !== "expedition" || s.screen !== "game") return;
+    set({ tutorial: startTutorial() });
+  },
   dismissEventBanner: () => set({ eventBanner: null }),
   switchMode: (mode) => {
     if (mode === currentMode) {
@@ -3663,6 +3892,7 @@ export const useGame = create<Store>((set, get) => ({
       lineGear: gear,
       toasts: pushToast([...st.toasts], `${LINE_PACKS[kind].name}: ${gear.last.map((t) => LINES[t].name).join(", ")}.`),
     }));
+    bumpTutorial("pack");
     persistSoon();
   },
   buyAuto: () => {
@@ -3697,6 +3927,7 @@ export const useGame = create<Store>((set, get) => ({
     }
     audio.coin();
     set({ c: s.c - pack.price, box, pull: names.join(", ") });
+    bumpTutorial("pack");
     persistSoon();
   },
   equipLure: (index) => {
@@ -3774,6 +4005,7 @@ export const useGame = create<Store>((set, get) => ({
     const away = mayExhibit(s.hz, key, Date.now());
     if (!away.ok) return set({ toasts: pushToast([...s.toasts], `That fish is still getting over its jump. Try again in ${away.minutes} min.`) });
     set({ tank: { ...s.tank, exhibits: [...s.tank.exhibits, key] } });
+    bumpTutorial("tank");
     persistSoon();
   },
   removeExhibit: (key) => {
@@ -3938,6 +4170,12 @@ export const useGame = create<Store>((set, get) => ({
     const owned = s.ub.includes(index);
     const price = BIOMES[index].price;
     if (!owned) {
+      /* Update Three: the final water opens at Prestige 1, never for gold. */
+      if (index === finalBiomeIndex(BIOMES.length) && !canUnlockFinalBiome(s)) {
+        audio.fail("slip");
+        set((st) => ({ toasts: pushToast([...st.toasts], "The First Water opens at Prestige 1.") }));
+        return;
+      }
       const gate = gateOf(s, "map", index);
       if (!gate.ok) {
         audio.fail("slip");
@@ -4015,6 +4253,11 @@ export const useGame = create<Store>((set, get) => ({
       perfects: s.perfects,
       bestStreak: s.bestStreak,
       taught: true,
+      /* Update Three: prestige is meta-progress and claimed codes stay claimed across a rebirth;
+         a rebirthed angler is never re-tutored. */
+      prestige: s.prestige,
+      promo: s.promo,
+      tutored: true,
       pins: s.pins.filter((k) => s.dex[k]?.c),
       sound: s.sound,
       motion: s.motion,
@@ -4262,6 +4505,13 @@ function loadSlot(mode: Mode, toGame: boolean) {
     save.tot += gain;
     welcomeBack = { gain, hours };
   }
+  /* Update Three: a night left fishing settles too — summary-level, like the tank. */
+  let nightBack: NightReport | null = null;
+  if (save.night.on) {
+    const settled = applyNightSettled(save, Date.now());
+    save = settled.s;
+    if (settled.report.count > 0) nightBack = settled.report;
+  }
   audio.setEnabled(save.sound);
   resetSim();
   /* Leaving Survival: its seeded dice stop, casual play is unpredictable again. */
@@ -4289,10 +4539,14 @@ function loadSlot(mode: Mode, toGame: boolean) {
     lastCatch: null,
     pull: "",
     welcomeBack,
+    nightBack,
+    tutorial: null,
     eventBanner: null,
   });
   noteActivity();
   persistNow();
+  /* A brand-new Expedition save meets the guided tutorial (Update Three). */
+  if (toGame) useGame.getState().maybeStartTutorial();
 }
 
 /** Set once the "Who's fishing today?" question has been answered. */

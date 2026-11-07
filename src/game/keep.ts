@@ -8,6 +8,7 @@
    All pure; the engine calls `releaseFish` and `stewardNote` and writes the result. */
 
 import { BIOMES, FIRST_EVENT_MUTATION, MUTATIONS, xpNeed } from "./content.ts";
+import { holidayMultipliers } from "./holidays.ts";
 
 /** XP from releasing is the catch's XP times this. */
 export const RELEASE_XP = 1.2;
@@ -25,11 +26,16 @@ export type Stewards = { species: string[]; waters: number[] };
 
 export const noStewards = (): Stewards => ({ species: [], waters: [] });
 
-/** The XP a landed fish is worth before any release bonus. */
-export function catchXp(rarity: number, mutation: number, biome: number, boss: boolean): number {
+/** The XP a landed fish is worth before any release bonus.
+    Holiday seam (P5): pass the catch's date and a holiday window multiplies the XP by
+    holidayMultipliers(date).xp (50 in a window, 1 outside, so passing a date is always safe).
+    With no date the result is exactly what it has always been — callers that must stay
+    reproducible (tests, replays) simply leave it off. */
+export function catchXp(rarity: number, mutation: number, biome: number, boss: boolean, date?: Date): number {
   /* A rolled mutation adds 5 XP per step. An event mutation (WP-15) has no step: it multiplies the whole catch instead. */
   const base = 3 + rarity * 8 + (mutation < FIRST_EVENT_MUTATION ? mutation * 5 : 0) + biome * 2 + (boss ? 12 : 0);
-  return Math.round(base * (MUTATIONS[mutation]?.xp ?? 1));
+  const xp = Math.round(base * (MUTATIONS[mutation]?.xp ?? 1));
+  return date ? Math.round(xp * holidayMultipliers(date).xp) : xp;
 }
 
 /** The extra XP a release adds on top of the catch's own. */

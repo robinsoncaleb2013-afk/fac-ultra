@@ -131,6 +131,100 @@ export const EVENTS: readonly EventDef[] = [
 
 export const EVENT_IDS = EVENTS.map((e) => e.id);
 
+/* ── Holiday events (Update Three, P5) ─────────────────────────────────────
+   Limited calendar events, separate from the random long-play events above: each one runs for three local
+   calendar days (the eve, the day itself, and the day after), and while it runs EVERYTHING gets the holiday
+   multiplier on luck, fish worth and XP. The pure calendar maths lives in holidays.ts; this table is only
+   the definitions and the tunable numbers, in the same style as EVENTS. Holiday mutations are NOT entries
+   in content.ts MUTATIONS: that table is indexed by the saved `m` number, and the New Year mutation is
+   named for the incoming year, so it cannot be a fixed row. Holiday mutation names ride on the fish as a
+   name prefix plus a `holidayMutation` field instead (see events.ts holidayMutateFish). */
+
+export type HolidayDateRule =
+  /** A fixed calendar day every year (month 1-12, day 1-31). */
+  | { type: "fixed"; month: number; day: number }
+  /** The n-th weekday of a month (weekday 0 = Sunday ... 4 = Thursday), e.g. US Thanksgiving. */
+  | { type: "nth-weekday"; month: number; weekday: number; n: number }
+  /** Western (Gregorian) Easter Sunday, computed with the Computus in holidays.ts. */
+  | { type: "easter" };
+
+export type HolidayDef = {
+  id: string;
+  name: string;
+  /** The mutation's name, or (New Year) a function of the incoming year: (2027) => "2027". */
+  mutation: string | ((incomingYear: number) => string);
+  date: HolidayDateRule;
+  /** New Year only: a bonus burst at the turn of the year (see burstDue in holidays.ts). */
+  burst?: true;
+  /** What the player sees when it starts (plain English). */
+  announce: string;
+  /** One line for a holidays list. */
+  blurb: string;
+  /** How the holiday mutation looks, from the same shape set as the event mutations. */
+  look: { hue: number; sat: number; light: number; shape: MutationShape; glyph: string };
+};
+
+/** While any holiday runs: luck x this, fish worth x this, XP x this. One number, all three. */
+export const HOLIDAY_MULT = 50;
+/** Share of eligible fish caught during a holiday that carry the holiday mutation name (mirrors the
+    random events' fishShare idea; the 50x itself applies to every fish, mutated or not). */
+export const HOLIDAY_FISH_SHARE = 0.5;
+/** The New Year burst is due in the first this-many minutes of Jan 1 (local time). */
+export const NEW_YEAR_BURST_MINUTES = 10;
+
+export const HOLIDAYS: readonly HolidayDef[] = [
+  {
+    id: "christmas", name: "Christmas", mutation: "jolly", date: { type: "fixed", month: 12, day: 25 },
+    announce: "Merry Christmas! Jolly fish are everywhere, and everything is worth more.",
+    blurb: "Christmas. Jolly fish, and 50x luck, worth and XP for three days.",
+    look: { hue: 145, sat: 65, light: 42, shape: "flake", glyph: "🎄" },
+  },
+  {
+    id: "thanksgiving", name: "Thanksgiving", mutation: "thankful", date: { type: "nth-weekday", month: 11, weekday: 4, n: 4 },
+    announce: "Happy Thanksgiving! Thankful fish are biting, and everything is worth more.",
+    blurb: "Thanksgiving (the fourth Thursday of November). Thankful fish, and 50x luck, worth and XP.",
+    look: { hue: 30, sat: 85, light: 48, shape: "sparkle", glyph: "🦃" },
+  },
+  {
+    id: "easter", name: "Easter", mutation: "joyful", date: { type: "easter" },
+    announce: "Happy Easter! Joyful fish are hopping, and everything is worth more.",
+    blurb: "Easter Sunday. Joyful fish, and 50x luck, worth and XP for three days.",
+    look: { hue: 285, sat: 70, light: 68, shape: "ring", glyph: "🐣" },
+  },
+  {
+    id: "st-patricks", name: "St. Patrick's Day", mutation: "lucky", date: { type: "fixed", month: 3, day: 17 },
+    announce: "Happy St. Patrick's Day! Lucky fish are everywhere, and everything is worth more.",
+    blurb: "St. Patrick's Day. Lucky fish, and 50x luck, worth and XP for three days.",
+    look: { hue: 130, sat: 80, light: 40, shape: "sparkle", glyph: "☘" },
+  },
+  {
+    id: "valentines", name: "Valentine's Day", mutation: "loving", date: { type: "fixed", month: 2, day: 14 },
+    announce: "Happy Valentine's Day! Loving fish are biting, and everything is worth more.",
+    blurb: "Valentine's Day. Loving fish, and 50x luck, worth and XP for three days.",
+    look: { hue: 340, sat: 85, light: 60, shape: "drop", glyph: "❤" },
+  },
+  {
+    id: "veterans", name: "Veterans Day", mutation: "patriotic", date: { type: "fixed", month: 11, day: 11 },
+    announce: "Veterans Day. Patriotic fish are biting, and everything is worth more.",
+    blurb: "Veterans Day. Patriotic fish, and 50x luck, worth and XP for three days.",
+    look: { hue: 222, sat: 75, light: 45, shape: "star", glyph: "★" },
+  },
+  {
+    id: "halloween", name: "Halloween", mutation: "spooky", date: { type: "fixed", month: 10, day: 31 },
+    announce: "Happy Halloween! Spooky fish are creeping, and everything is worth more.",
+    blurb: "Halloween. Spooky fish, and 50x luck, worth and XP for three days.",
+    look: { hue: 24, sat: 95, light: 50, shape: "flame", glyph: "🎃" },
+  },
+  {
+    id: "new-year", name: "New Year", mutation: (incomingYear: number) => String(incomingYear), date: { type: "fixed", month: 1, day: 1 }, burst: true,
+    announce: "Happy New Year! A brand new year of fish, and everything is worth more.",
+    blurb: "New Year. Fish named for the new year, 50x luck, worth and XP, and a burst at midnight.",
+    look: { hue: 48, sat: 95, light: 60, shape: "crown", glyph: "🎆" },
+  },
+] as const;
+
+export const HOLIDAY_IDS = HOLIDAYS.map((h) => h.id);
+
 /* Playing "straight" (all tunable). */
 const MIN = 60_000;
 export const HOUR_MS = 60 * MIN;

@@ -380,5 +380,5 @@ test("achievements unlock after play and show a notice; Relaxed Fishing and Stor
 
 test("the sanity floor: the BIOMES list is what the Story is built on", () => {
   assert.equal(fresh().difficulty, "normal");
-  assert.equal(BIOMES.length, 15);
+  assert.equal(BIOMES.length, 20);
 });

@@ -83,7 +83,7 @@ export const ACHIEVEMENTS: readonly AchDef[] = [
   { id: "streak-30", name: "Unstoppable", text: "Land 30 fish in a row.", cat: "fishing", goal: 30, stat: (s) => s.bestStreak },
   { id: "let-go-10", name: "Gentle Hands", text: "Let 10 fish go.", cat: "fishing", goal: 10, stat: (s) => s.released, modes: ANY },
   { id: "steward-1", name: "Friend of the Fish", text: "Become a Steward of one kind of fish.", cat: "fishing", goal: 1, stat: (s) => s.stewards, modes: ANY },
-  ...ladder("kinds", "collection", ["Curious Angler", "Collector", "Book Worm", "Half the Sea", "Every Fish"], [10, 50, 125, 188, 375], (s) => s.species, (g) => `Find ${g} different kinds of fish.`, ANY),
+  ...ladder("kinds", "collection", ["Curious Angler", "Collector", "Book Worm", "Half the Sea", "Ocean Master", "Every Fish"], [10, 50, 125, 188, 375, 500], (s) => s.species, (g) => `Find ${g} different kinds of fish.`, ANY),
   { id: "epic-1", name: "Epic Find", text: "Catch an epic or better fish.", cat: "collection", goal: 1, stat: (s) => s.epics, modes: ANY },
   { id: "epic-25", name: "Epic Hunter", text: "Find 25 different epic or better fish.", cat: "collection", goal: 25, stat: (s) => s.epics, modes: ANY },
   { id: "pb-10", name: "Personal Bests", text: "Set 10 personal best fish.", cat: "collection", goal: 10, stat: (s) => s.records, modes: ANY },

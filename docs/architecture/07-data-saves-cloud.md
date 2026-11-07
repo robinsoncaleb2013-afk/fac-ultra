@@ -2,10 +2,10 @@
 
 Work package **WP-9** (accounts + cloud saves), plus the save-migration procedure every package uses.
 
-> **As built (WP-9 merged; extended by WP-11, 13, 14, 15, 16).** `SAVE_VERSION` is **12** (`src/game/engine.ts`; the table in section 1 lists every version). Accounts are the game's own (`src/lib/accounts/*`), not the platform's Better Auth; section 7 is the authoritative description and wins over sections 3 to 5. The sync state is **not** a `cloud` field in the `Save`. The cloud holds one row per mode **and slot** (section 2.1). Every build wipes saves while the test phase is on (end of section 7, `../TEST-PHASE.md`). Settings for running it are in the environment table in [`../README.md`](../README.md); the sign-in table below it is kept only to say what each setting means to a player. Real email, Google and Neon are unverified (`../KNOWN-GAPS.md`).
+> **As built (WP-9 merged; extended by WP-11, 13, 14, 15, 16).** `SAVE_VERSION` is **13** (`src/game/engine.ts`; the table in section 1 lists every version). Accounts are the game's own (`src/lib/accounts/*`), not the platform's Better Auth; section 7 is the authoritative description and wins over sections 3 to 5. The sync state is **not** a `cloud` field in the `Save`. The cloud holds one row per mode **and slot** (section 2.1). Every build wipes saves while the test phase is on (end of section 7, `../TEST-PHASE.md`). Settings for running it are in the environment table in [`../README.md`](../README.md); the sign-in table below it is kept only to say what each setting means to a player. Real email, Google and Neon are unverified (`../KNOWN-GAPS.md`).
 
-<!-- docs-check:save-version 12 -->
-<!-- docs-check:fixtures 3 4 5 6 7 8 9 10 11 12 -->
+<!-- docs-check:save-version 13 -->
+<!-- docs-check:fixtures 3 4 5 6 7 8 9 10 11 12 13 -->
 <!-- docs-check:migrations 0001 0007 0008 0009 0010 0011 -->
 
 ## 1. The migration procedure (every package)
@@ -35,6 +35,7 @@ Field inventory planned by this chapter (so names don't collide):
 | `slotName`, `difficulty`, `sideDex`, `story`, `ach`, `hz`, `autoKeep`, `created` | WP-16 | save v12: slot name, difficulty, Kids book, Story chapter, achievements, hazard state; see `12` |
 | `cloud` | WP-9 | **Not built** as a save field: sync state lives in `localStorage["fac-cloud"]` (section 7) |
 | `lineGear` | WP-14 | save v11: lines owned, unopened packs, last pull; see `10` section 1.7 |
+| `promo`, `prestige`, `tutored`, `night` | Update Three | save v13: claimed promo codes, Prestige count, guided-tutorial flag, night-fishing state |
 
 ### Save version history
 
@@ -53,6 +54,7 @@ Each package that changed the shape bumped once. Every version has a fixture in 
 | 10 | WP-15 | `events` (long-play events and mutations) |
 | 11 | WP-14 | `lineGear` |
 | 12 | WP-16 | `slotName`, `created`, `difficulty`, `sideDex`, `story`, `ach`, `hz`, `autoKeep` |
+| 13 | Update Three | `promo`, `prestige`, `tutored`, `night` |
 
 Survival has its own save shape (`sanitizeSurvival`, fixture `survival-v1.json`) and its own version. WP-5, WP-10, WP-11, WP-12 and WP-13 changed no save field. The numbers 10, 11, 12 follow merge order, not package number.
 

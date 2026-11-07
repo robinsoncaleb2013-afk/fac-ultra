@@ -14,9 +14,9 @@ import {
 } from "./spots.ts";
 import { waterLineOf } from "./water.ts";
 
-test("there are 75 spots: five on each of the 15 waters", () => {
-  assert.equal(SPOTS.length, 15);
-  assert.equal(SPOT_COUNT, 75);
+test("there are 100 spots: five on each of the 20 waters", () => {
+  assert.equal(SPOTS.length, BIOMES.length);
+  assert.equal(SPOT_COUNT, 100);
   for (const list of SPOTS) assert.equal(list.length, 5);
 });
 

@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { AMBIENCE_GROUPS, ambienceTarget, clampVolume, DEFAULT_VOLUME, DUCK, groupOf, SILENT, type AmbienceInput } from "./ambience.ts";
+import { BIOMES } from "./content.ts";
 import { CB_COLORS, NORMAL_COLORS, rarityColors, RARITY_SHAPES, shapeOf, SHAPE_PATH } from "./rarity.ts";
 
 const base: AmbienceInput = { sound: true, volume: 35, screen: "game", mode: "expedition", biome: 0, weather: 0, speaking: false };
@@ -12,7 +13,7 @@ test("every water belongs to exactly one of the five loops", () => {
   assert.equal(AMBIENCE_GROUPS.length, 5);
   const seen: number[] = [];
   for (const g of AMBIENCE_GROUPS) seen.push(...g.waters);
-  assert.deepEqual([...seen].sort((a, b) => a - b), Array.from({ length: 15 }, (_, i) => i));
+  assert.deepEqual([...seen].sort((a, b) => a - b), Array.from({ length: BIOMES.length }, (_, i) => i));
   assert.equal(groupOf(0), 0);
   assert.equal(groupOf(10), 3);
   assert.equal(groupOf(14), 4);

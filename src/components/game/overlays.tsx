@@ -5,16 +5,39 @@ import { Button } from "@/components/ui/button";
 
 export function WelcomeBack() {
   const wb = useGame((s) => s.welcomeBack);
+  const nb = useGame((s) => s.nightBack);
   const dismiss = useGame((s) => s.dismissWelcome);
-  if (!wb) return null;
-  const hours = wb.hours >= 1 ? `${wb.hours.toFixed(1)} hours` : `${Math.max(1, Math.round(wb.hours * 60))} minutes`;
+  const dismissNight = useGame((s) => s.dismissNightBack);
+  if (!wb && !nb) return null;
+  const hours = wb && wb.hours >= 1 ? `${wb.hours.toFixed(1)} hours` : wb ? `${Math.max(1, Math.round(wb.hours * 60))} minutes` : "";
+  const nightHours = nb && nb.hours >= 1 ? `${nb.hours.toFixed(1)} hours` : nb ? `${Math.max(1, Math.round(nb.hours * 60))} minutes` : "";
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-bg/70 p-4">
       <div className="w-full max-w-sm rounded-2xl border border-brass bg-surface p-5 text-center">
         <p className="font-serif text-2xl">While you were away</p>
-        <p className="mt-2 text-sm text-muted">Your aquarium exhibits earned for {hours} (up to your tank's cap):</p>
-        <p className="mt-3 font-serif text-4xl text-brass">{money(wb.gain)}</p>
-        <Button className="mt-4 w-full" onClick={dismiss}>
+        {wb ? (
+          <>
+            <p className="mt-2 text-sm text-muted">Your aquarium exhibits earned for {hours} (up to your tank's cap):</p>
+            <p className="mt-3 font-serif text-4xl text-brass">{money(wb.gain)}</p>
+          </>
+        ) : null}
+        {nb ? (
+          <>
+            <p className="mt-3 text-sm text-muted">
+              Night fishing caught {nb.count} fish in {nightHours}: {nb.names.join(", ")}.
+            </p>
+            <p className="mt-1 text-sm">
+              <span className="text-brass">{money(nb.gold)} gold</span> · {nb.xp} XP
+            </p>
+          </>
+        ) : null}
+        <Button
+          className="mt-4 w-full"
+          onClick={() => {
+            dismiss();
+            dismissNight();
+          }}
+        >
           Collect
         </Button>
       </div>
