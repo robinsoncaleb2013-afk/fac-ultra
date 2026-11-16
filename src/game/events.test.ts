@@ -49,7 +49,7 @@ function play(ms: number, opts: { night?: boolean; biome?: number; seed?: number
   return { st, started, now };
 }
 
-test("the table is exactly Caleb's: 11 events, rarities, hours, mutations, multipliers", () => {
+test("the table is exactly Caleb's: 16 events, rarities, hours, mutations, multipliers", () => {
   const rows = EVENTS.map((e) => [e.name, EVENT_RARITIES[e.rarity].name, e.hours, e.mutation, e.kind, EVENT_RARITIES[e.rarity].mult]);
   assert.deepEqual(rows, [
     ["Shooting Stars", "Common", 1, "Starlight", "xp", 2],
@@ -63,8 +63,14 @@ test("the table is exactly Caleb's: 11 events, rarities, hours, mutations, multi
     ["Divine Intervention", "Legendary", 6, "Blessed", "xp", 15],
     ["Armageddon", "Legendary", 6, "Cursed", "worth", 15],
     ["Legend of the Fisherman", "Mythic", 10, "Fisherman's Dream", "both", 60],
+    ["Acid Rain", "Common", 1, "Acidic", "xp", 2],
+    ["Flood", "Common", 1, "Drifting", "worth", 2],
+    ["Blackout", "Rare", 3, "Blind", "xp", 5],
+    ["Crowded", "Rare", 3, "Busy", "worth", 5],
+    ["Double Moons", "Epic", 4, "Lunar", "xp", 10],
   ]);
-  assert.deepEqual(EVENTS.filter((e) => e.night).map((e) => e.id), ["shooting-stars", "northern-lights"]);
+  assert.deepEqual(EVENTS.filter((e) => e.night).map((e) => e.id), ["shooting-stars", "northern-lights", "blackout", "double-moons"]);
+  assert.equal(EVENTS.find((e) => e.id === "crowded")?.catchPace, 2);
   assert.deepEqual(EVENTS.filter((e) => e.astral).map((e) => e.id), ["legend-of-the-fisherman"]);
   assert.ok(EVENT_RARITIES.every((r, i) => i === 0 || r.fishShare <= EVENT_RARITIES[i - 1].fishShare), "rarer events mutate fewer fish");
   assert.ok(EVENT_RARITIES.every((r) => r.fishShare > 0 && r.fishShare < 1), "never all fish");
@@ -91,10 +97,10 @@ test("eligibility by hours: 1h..10h produce exactly the right events; night-only
   const astral = { night: false, biome: ASTRAL_BIOME };
   const ids = (h: number, c: { night: boolean; biome: number }) => eligibleEvents(h, c).map((e) => e.id);
   assert.deepEqual(ids(0, night), []);
-  assert.deepEqual(ids(1, day), ["meteor-collision"]);
-  assert.deepEqual(ids(1, night), ["shooting-stars", "meteor-collision"]);
-  assert.deepEqual(ids(2, day), ["meteor-collision", "blood-moon", "meteorite-strike"]);
-  assert.deepEqual(ids(3, day).slice(-2), ["snowfall", "alien-invasion"]);
+  assert.deepEqual(ids(1, day), ["meteor-collision", "acid-rain", "flood"]);
+  assert.deepEqual(ids(1, night), ["shooting-stars", "meteor-collision", "acid-rain", "flood"]);
+  assert.deepEqual(ids(2, day), ["meteor-collision", "blood-moon", "meteorite-strike", "acid-rain", "flood"]);
+  assert.deepEqual(ids(3, day).slice(-2), ["flood", "crowded"]);
   assert.ok(!ids(3, day).includes("radioactive-rain"));
   assert.ok(ids(4, day).includes("radioactive-rain") && !ids(4, day).includes("northern-lights"));
   assert.ok(ids(4, night).includes("northern-lights"));
@@ -127,8 +133,8 @@ test("over many seeds each event can happen, in the right conditions only", () =
     for (const id of play(12 * HOUR_MS, { night: true, biome: ASTRAL_BIOME, seed }).started) lateNight.add(id);
     for (const id of play(12 * HOUR_MS, { night: false, biome: ASTRAL_BIOME, seed }).started) seen.add(id);
   }
-  assert.equal(lateNight.size, EVENTS.length, "all eleven can happen at night in the Astral Sea");
-  assert.ok(!seen.has("shooting-stars") && !seen.has("northern-lights"), "night events never start by day");
+  assert.equal(lateNight.size, EVENTS.length, "every event can happen at night in the Astral Sea");
+  assert.ok(!seen.has("shooting-stars") && !seen.has("northern-lights") && !seen.has("blackout") && !seen.has("double-moons"), "night events never start by day");
   assert.ok(seen.has("legend-of-the-fisherman"));
 });
 

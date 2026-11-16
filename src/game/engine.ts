@@ -2968,6 +2968,11 @@ function startCast() {
   if (sim.castBait === 0) factor *= 0.85;
   factor *= modeRules().biteSpeed * level(s).biteSpeed;
   if (s.survival && modeRules().survival) factor *= biteMul(s.survival);
+  /* Update 4: Crowded makes bites come twice as fast while it is running. */
+  if (eventModeOn(modeRules())) {
+    const pace = activeEvent(s.events, Date.now())?.def.catchPace;
+    if (pace && pace > 1) factor /= pace;
+  }
   /* WP-2: the better the spot and rig suit the fish around, the sooner they bite. */
   const at = castNow(s, sim.castLure, sim.castBait, lair);
   sim.cast = { spotId: at.spotId, p: at.p, window: at.window, weather: at.weather, ms: at.ms, avg: at.avg };

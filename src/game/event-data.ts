@@ -43,6 +43,8 @@ export type EventDef = {
   night?: true;
   /** Only while fishing in the Astral Sea. */
   astral?: true;
+  /** While this event is running, bites come this many times sooner (Crowded is 2). */
+  catchPace?: number;
   /** What the player sees when it starts (plain English). */
   announce: string;
   /** One line for the Events list. */
@@ -126,6 +128,37 @@ export const EVENTS: readonly EventDef[] = [
     announce: "The Legend of the Fisherman is alive tonight! Some fish are a Fisherman's Dream: huge XP and huge coins.",
     blurb: "A story told by the old anglers. Fisherman's Dream fish give huge XP and sell for huge coins.",
     look: { hue: 262, sat: 85, light: 66, shape: "drop", glyph: "❤" },
+  },
+  {
+    id: "acid-rain", name: "Acid Rain", rarity: 0, hours: 1, mutation: "Acidic", kind: "xp",
+    announce: "Acid rain is falling! Some fish have turned acidic and give extra XP.",
+    blurb: "A sharp green rain. Acidic fish give extra XP.",
+    look: { hue: 78, sat: 70, light: 48, shape: "drop", glyph: "☣" },
+  },
+  {
+    id: "flood", name: "Flood", rarity: 0, hours: 1, mutation: "Drifting", kind: "worth",
+    announce: "The water is flooding! Some fish are drifting, and they are worth more.",
+    blurb: "The banks are underwater. Drifting fish sell for more.",
+    look: { hue: 200, sat: 55, light: 58, shape: "ring", glyph: "〰" },
+  },
+  {
+    id: "blackout", name: "Blackout", rarity: 2, hours: 3, mutation: "Blind", kind: "xp", night: true,
+    announce: "The lights have gone out! Some fish are blind and give extra XP.",
+    blurb: "A night with no lights. Blind fish give extra XP.",
+    kidName: "Lights Out", kidMutation: "Night-Eyed",
+    look: { hue: 250, sat: 15, light: 22, shape: "eye", glyph: "☾" },
+  },
+  {
+    id: "crowded", name: "Crowded", rarity: 2, hours: 3, mutation: "Busy", kind: "worth", catchPace: 2,
+    announce: "The water is crowded! Fish bite twice as fast, and some are Busy and worth more.",
+    blurb: "Too many fish in one spot. Bites come twice as fast. Busy fish sell for more.",
+    look: { hue: 32, sat: 75, light: 55, shape: "sparkle", glyph: "⁂" },
+  },
+  {
+    id: "double-moons", name: "Double Moons", rarity: 3, hours: 4, mutation: "Lunar", kind: "xp", night: true,
+    announce: "Two moons are in the sky! Some fish are lunar and give lots of extra XP.",
+    blurb: "A night with two moons. Lunar fish give lots of extra XP.",
+    look: { hue: 230, sat: 40, light: 78, shape: "ring", glyph: "☾" },
   },
 ] as const;
 
