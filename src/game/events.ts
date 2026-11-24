@@ -10,6 +10,7 @@ import {
   COOLDOWN_MS,
   EVENT_RARITIES,
   EVENTS,
+  EVENTS_BY_RARITY,
   HOLIDAY_FISH_SHARE,
   HOLIDAY_MULT,
   HOUR_MS,
@@ -22,7 +23,7 @@ import { makeRng, seedFrom } from "./rng.ts";
 import type { ModeRules } from "./modes.ts";
 import type { Restack } from "./stack.ts";
 
-export { EVENTS, EVENT_RARITIES, HOUR_MS, IDLE_MS, AWAY_RESET_MS, COOLDOWN_MS };
+export { EVENTS, EVENTS_BY_RARITY, EVENT_RARITIES, HOUR_MS, IDLE_MS, AWAY_RESET_MS, COOLDOWN_MS };
 export type { EventDef, EventRarityDef };
 /* The holiday API, re-exported so the engine and UI keep importing everything event-shaped from here. */
 export { HOLIDAYS, burstDue, holidayDateInYear, holidayMultipliers, holidayMutationName, holidayOn, nextHoliday } from "./holidays.ts";
