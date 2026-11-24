@@ -16,6 +16,7 @@ import { Route as ApiCatchRouteImport } from './routes/api/catch'
 import { Route as ApiEntryRouteImport } from './routes/api/entry'
 import { Route as ApiEpochRouteImport } from './routes/api/epoch'
 import { Route as ApiEventsRouteImport } from './routes/api/events'
+import { Route as ApiFightQueueRouteImport } from './routes/api/fight-queue'
 import { Route as ApiFriendsRouteImport } from './routes/api/friends'
 import { Route as ApiGoogleCallbackRouteImport } from './routes/api/google-callback'
 import { Route as ApiGoogleStartRouteImport } from './routes/api/google-start'
@@ -58,6 +59,11 @@ const ApiEpochRoute = ApiEpochRouteImport.update({
 const ApiEventsRoute = ApiEventsRouteImport.update({
   id: '/api/events',
   path: '/api/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFightQueueRoute = ApiFightQueueRouteImport.update({
+  id: '/api/fight-queue',
+  path: '/api/fight-queue',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiFriendsRoute = ApiFriendsRouteImport.update({
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/api/entry': typeof ApiEntryRoute
   '/api/epoch': typeof ApiEpochRoute
   '/api/events': typeof ApiEventsRoute
+  '/api/fight-queue': typeof ApiFightQueueRoute
   '/api/friends': typeof ApiFriendsRoute
   '/api/google-callback': typeof ApiGoogleCallbackRoute
   '/api/google-start': typeof ApiGoogleStartRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/api/entry': typeof ApiEntryRoute
   '/api/epoch': typeof ApiEpochRoute
   '/api/events': typeof ApiEventsRoute
+  '/api/fight-queue': typeof ApiFightQueueRoute
   '/api/friends': typeof ApiFriendsRoute
   '/api/google-callback': typeof ApiGoogleCallbackRoute
   '/api/google-start': typeof ApiGoogleStartRoute
@@ -144,6 +152,7 @@ export interface FileRoutesById {
   '/api/entry': typeof ApiEntryRoute
   '/api/epoch': typeof ApiEpochRoute
   '/api/events': typeof ApiEventsRoute
+  '/api/fight-queue': typeof ApiFightQueueRoute
   '/api/friends': typeof ApiFriendsRoute
   '/api/google-callback': typeof ApiGoogleCallbackRoute
   '/api/google-start': typeof ApiGoogleStartRoute
@@ -163,6 +172,7 @@ export interface FileRouteTypes {
     | '/api/entry'
     | '/api/epoch'
     | '/api/events'
+    | '/api/fight-queue'
     | '/api/friends'
     | '/api/google-callback'
     | '/api/google-start'
@@ -180,6 +190,7 @@ export interface FileRouteTypes {
     | '/api/entry'
     | '/api/epoch'
     | '/api/events'
+    | '/api/fight-queue'
     | '/api/friends'
     | '/api/google-callback'
     | '/api/google-start'
@@ -197,6 +208,7 @@ export interface FileRouteTypes {
     | '/api/entry'
     | '/api/epoch'
     | '/api/events'
+    | '/api/fight-queue'
     | '/api/friends'
     | '/api/google-callback'
     | '/api/google-start'
@@ -215,6 +227,7 @@ export interface RootRouteChildren {
   ApiEntryRoute: typeof ApiEntryRoute
   ApiEpochRoute: typeof ApiEpochRoute
   ApiEventsRoute: typeof ApiEventsRoute
+  ApiFightQueueRoute: typeof ApiFightQueueRoute
   ApiFriendsRoute: typeof ApiFriendsRoute
   ApiGoogleCallbackRoute: typeof ApiGoogleCallbackRoute
   ApiGoogleStartRoute: typeof ApiGoogleStartRoute
@@ -274,6 +287,13 @@ declare module '@tanstack/react-router' {
       path: '/api/events'
       fullPath: '/api/events'
       preLoaderRoute: typeof ApiEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/fight-queue': {
+      id: '/api/fight-queue'
+      path: '/api/fight-queue'
+      fullPath: '/api/fight-queue'
+      preLoaderRoute: typeof ApiFightQueueRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/friends': {
@@ -343,6 +363,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiEntryRoute: ApiEntryRoute,
   ApiEpochRoute: ApiEpochRoute,
   ApiEventsRoute: ApiEventsRoute,
+  ApiFightQueueRoute: ApiFightQueueRoute,
   ApiFriendsRoute: ApiFriendsRoute,
   ApiGoogleCallbackRoute: ApiGoogleCallbackRoute,
   ApiGoogleStartRoute: ApiGoogleStartRoute,
