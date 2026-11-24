@@ -73,6 +73,8 @@ export const WIPE_TABLES: readonly string[] = [
   "event_final",
   "rooms",
   "signals",
+  "fight_queue",
+  "fight_matches",
   "invites",
   "friend_requests",
   "friend_invites",
