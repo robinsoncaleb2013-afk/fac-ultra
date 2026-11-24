@@ -51,6 +51,7 @@ Docs-only PRs #7 (self-hosting plan), #10 (project page record), #14 and #16 (th
 17. **Every tournament uses the same fixed gear** (rod 6, reel 4, line 4). The plan allowed "own gear" for Quick and Weekly events; the build kept all of them fair and fixed.
 18. **How the fish are picked.** The plan multiplied a species' chance by one plus 0.55 per match point; the build uses a smoother curve with a bonus for near-perfect rigs (numbers in `content.ts`). The no-bite hint appears after 3 seconds (1.9 in Kid Mode) instead of 8 and 5, because the longest wait is about 5 seconds.
 19. **Small decisions** where the documents were silent are written in each PR under "Spec decisions".
+20. **No more update wipes — clearing is the player's own choice (from Chris's feedback).** The test-phase reset (item 8) is switched off in the code, so an update never touches anyone's progress again. In its place, each profile has "Clear my data" (in Profiles and account): the game first keeps one backup of everything the profile has, then clears it on the device and in the cloud. For 24 hours the backup can be restored — even after trying the fresh start for a while — and after that it is gone for good. Clearing again keeps only the newest backup.
 
 ## Things only a person can check (nothing is blocked on them)
 
