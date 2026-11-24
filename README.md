@@ -1,10 +1,10 @@
-> ## TEST PHASE: every new build resets all progress and saves
+> ## Updates keep your progress
 >
-> While FAC Ultra is being tested, **each update (new build) wipes everyone's progress**: fish, records, cloud saves, tournament results and trophies. Testers always start fresh, and old test data can never break a new build. Accounts, family profiles, friends and device settings (picture quality, sound, Kid Mode, colour-blind colours, full screen) are kept.
+> Builds used to wipe everyone's progress while the game was in testing. **That is off now, in the code itself** (`TEST_PHASE_RESET` is `false` in `src/lib/test-phase.ts`; `FAC_TEST_RESET=1` would turn the old wipe back on, for testing only). An update never touches a player's fish, records or cloud saves.
 >
-> **To turn this off:** set `FAC_TEST_RESET=0` where the game's server starts (or set `TEST_PHASE_RESET` to `false` in `src/lib/test-phase.ts`). Do this, and finish the short "before real launch" checklist, before real players arrive.
+> A player who wants a fresh start can **clear their own profile's data** at any time (in Profiles and account): the game first keeps one backup of it all on their account, and for **24 hours** they can restore it if they change their mind. Only the newest backup is kept.
 >
-> Details, what is wiped and kept, and the checklist: **[`docs/TEST-PHASE.md`](docs/TEST-PHASE.md)**.
+> Details: **[`docs/TEST-PHASE.md`](docs/TEST-PHASE.md)**.
 
 # FAC Ultra
 
