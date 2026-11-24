@@ -20,6 +20,7 @@ import {
 import { holidayOn, type ActiveHoliday } from "./holidays.ts";
 import { makeRng, seedFrom } from "./rng.ts";
 import type { ModeRules } from "./modes.ts";
+import type { Restack } from "./stack.ts";
 
 export { EVENTS, EVENT_RARITIES, HOUR_MS, IDLE_MS, AWAY_RESET_MS, COOLDOWN_MS };
 export type { EventDef, EventRarityDef };
@@ -56,6 +57,8 @@ export type EventsSave = {
   fish: Record<string, number>;
   /** Mutation rolls made, so every roll is a new draw. */
   draws: number;
+  /** Update 4: a released mutant that may come back with one more mutation (stack.ts), or null. */
+  restack: Restack | null;
 };
 
 export const noEvents = (): EventsSave => ({
@@ -70,6 +73,7 @@ export const noEvents = (): EventsSave => ({
   seen: {},
   fish: {},
   draws: 0,
+  restack: null,
 });
 
 export const eventById = (id: string): EventDef | undefined => EVENTS.find((e) => e.id === id);
@@ -255,12 +259,12 @@ export function countLanded(st: EventsSave, m: number): EventsSave {
 
 /* ── Holidays on a catch (Update Three, P5) ──────────────────────────────────
    INTERACTION RULE (holiday x random event): the two systems multiply, they never replace each other.
-   - The holiday's 50x is GLOBAL: every fish caught in the window gets its worth x50 here, including
-     bosses and fish carrying a rolled or random-event mutation. XP x50 and luck x50 are the same
+   - The holiday's 30x is GLOBAL (Update 4: 30x, and only from the 3rd water up): every fish caught in the window in the 3rd water or beyond gets its worth x30 here, including
+     bosses and fish carrying a rolled or random-event mutation. XP x30 and luck x30 are the same
      multipliers, applied at their own seams (keep.ts catchXp and content.ts luckTotal take the date).
    - A random event running at the same time keeps working exactly as before: mutateFish runs first,
      so its mutation takes the fish's single `m` slot and its own multiplier applies first; the
-     holiday x50 then applies on top (a Trembling fish in a holiday window is worth 2 x 50 = 100x).
+     holiday x30 then applies on top (a Trembling fish in a holiday window is worth 2 x 30 = 60x).
    - The holiday mutation is a NAME, not a second `m`: holiday mutations are not rows in MUTATIONS
      (the New Year name changes every year), so an eligible fish gets the holiday name as a prefix
      plus a `holidayMutation` field, and NO extra multiplier — the global 50x already counted it.
@@ -272,7 +276,7 @@ export function countLanded(st: EventsSave, m: number): EventsSave {
 /** A fish that may also carry a holiday mutation name alongside its ordinary fields. */
 export type HolidayMutable<F> = F & { holidayMutation?: string };
 
-/** Apply one holiday to one fish: worth x50 for every fish, plus the holiday mutation name on a
+/** Apply one holiday to one fish: worth x30 for every fish, plus the holiday mutation name on a
     share of eligible fish (see the rule above). Pure, apart from advancing the save's draw counter. */
 export function holidayMutateFish<F extends Mutable>(
   st: EventsSave,
@@ -316,7 +320,9 @@ export function applyEventsToFish<F extends Mutable>(
     randomHit = r.hit;
   }
   const holiday = holidayOn(date);
-  if (holiday) {
+  /* Update 4: the holiday boost only lands from the 3rd water up (biome index >= 2) —
+     the same gate holidayMultipliers applies to luck and XP. */
+  if (holiday && fish.b >= 2) {
     const h = holidayMutateFish(state, out, holiday, speciesName);
     state = h.state;
     out = h.fish;
@@ -337,6 +343,26 @@ function readCounts(v: unknown): Record<string, number> {
     if (n > 0) out[e.id] = n;
   }
   return out;
+}
+
+/** An armed restack from a save, checked like everything else here: real water, real species,
+    real mutation ids, no repeats. Anything doubtful becomes null (no restack). */
+function readRestack(v: unknown): Restack | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  /* Range-checked by hand, not with num(): num() clamps, so a water of 99 would quietly
+     become the last water instead of being refused. */
+  const b = typeof o.b === "number" && Number.isInteger(o.b) && o.b >= 0 && o.b < BIOMES.length ? o.b : -1;
+  if (b < 0) return null;
+  const i = typeof o.i === "number" && Number.isInteger(o.i) && o.i >= 0 && o.i < BIOMES[b].fish.length ? o.i : -1;
+  if (i < 0 || !Array.isArray(o.ids)) return null;
+  const ids: number[] = [];
+  for (const raw of o.ids) {
+    const id = typeof raw === "number" && Number.isInteger(raw) && raw > 0 && raw < MUTATIONS.length ? raw : 0;
+    if (id > 0 && !ids.includes(id)) ids.push(id);
+  }
+  if (!ids.length) return null;
+  return { b, i, ids: ids.slice(0, 16), v: num(o.v, 1, 1e12, 1), w: num(o.w, 0, 1e6) };
 }
 
 export function readEvents(v: unknown): EventsSave {
@@ -362,5 +388,6 @@ export function readEvents(v: unknown): EventsSave {
     seen: readCounts(o.seen),
     fish: readCounts(o.fish),
     draws: num(o.draws, 0, 1e12),
+    restack: readRestack(o.restack),
   };
 }

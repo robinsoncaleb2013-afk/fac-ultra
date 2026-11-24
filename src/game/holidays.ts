@@ -5,7 +5,7 @@
    jump can never stretch or shrink the three-day window.
 
    The window is always three local calendar days: the eve before the holiday, the day itself, and
-   the day after. While a holiday is active, holidayMultipliers() is 50 / 50 / 50 (luck, worth, XP);
+   the day after. While a holiday is active, holidayMultipliers() is 30 / 30 / 30 (luck, worth, XP);
    outside any window it is 1 / 1 / 1. How those multipliers reach a catch is in events.ts
    (applyEventsToFish / holidayMutateFish for worth and the mutation name), keep.ts (catchXp's
    optional date for XP) and content.ts (luckTotal's optional date for luck). */
@@ -115,8 +115,10 @@ export function holidayOn(date: Date): ActiveHoliday | null {
   return null;
 }
 
-/** 50 / 50 / 50 inside a holiday window, 1 / 1 / 1 outside. Pure in the date passed in. */
-export function holidayMultipliers(date: Date): HolidayMultipliers {
+/** 30 / 30 / 30 inside a holiday window on the 3rd water or higher (biome index >= 2), else 1 / 1 / 1.
+    Update 4: early waters (pond and the second water) no longer get the holiday boost. */
+export function holidayMultipliers(date: Date, biome = 99): HolidayMultipliers {
+  if (biome < 2) return { luck: 1, worth: 1, xp: 1 };
   return holidayOn(date)
     ? { luck: HOLIDAY_MULT, worth: HOLIDAY_MULT, xp: HOLIDAY_MULT }
     : { luck: 1, worth: 1, xp: 1 };

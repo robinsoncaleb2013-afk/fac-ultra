@@ -29,14 +29,18 @@ export type PromoDef = {
   gold: number;
   /** Glow Worms (bait) added to the save's bait box. */
   glowWorms: number;
-  /** True when claiming also starts a common event right away. */
+  /** True when claiming also starts an event right away. */
   startsEvent: boolean;
+  /** Rarity index of the event to start (0 = common). Default 0. */
+  eventRarity?: number;
 };
 
-/** Every promo code there is. Exactly these two ship in Update Three. */
+/** Promo codes. Update Three codes stay valid; Update Four adds FACISULTRA and UPD4. */
 export const PROMO_CODES: readonly PromoDef[] = [
   { code: "FACFIRSTCODE", gold: 500, glowWorms: 5, startsEvent: true },
   { code: "UPD3", gold: 500, glowWorms: 10, startsEvent: false },
+  { code: "FACISULTRA", gold: 500, glowWorms: 3, startsEvent: false },
+  { code: "UPD4", gold: 100, glowWorms: 0, startsEvent: true, eventRarity: 2 },
 ];
 
 /** What the player typed, tidied the way codes are stored: trimmed and upper-case. */
@@ -50,12 +54,15 @@ export function promoDef(rawCode: string): PromoDef | undefined {
   return PROMO_CODES.find((d) => d.code === code);
 }
 
-/** The common event a code starts: the first common-rarity event (EVENT_RARITIES index 0)
-    with no night or Astral Sea condition, so it can always start, day or night, in any
-    water. Today that is Meteor Collision. Chosen by rule, never by dice, so a code
-    always starts the same event and no random stream is touched. */
-export function promoEvent(): EventDef {
-  return EVENTS.find((e) => e.rarity === 0 && !e.night && !e.astral) ?? EVENTS.find((e) => e.rarity === 0) ?? EVENTS[0];
+/** The event a code starts: first event of the given rarity with no night/Astral lock when possible. */
+export function promoEvent(rarity = 0): EventDef {
+  const dayOk = (e: EventDef) => !e.night && !e.astral;
+  return (
+    EVENTS.find((e) => e.rarity === rarity && dayOk(e)) ??
+    EVENTS.find((e) => e.rarity === rarity) ??
+    EVENTS.find((e) => e.rarity === 0 && dayOk(e)) ??
+    EVENTS[0]
+  );
 }
 
 /** Start `def` the way events.ts itself starts an event in stepEvents: `active` carries the
@@ -83,7 +90,7 @@ export type RedeemResult = { s: Save; ok: boolean; message: string };
  * - Unknown code: refused, nothing changes.
  * - Code already in `s.promo`: refused, no second payout.
  * - Success: gold added to `c`, the Glow Worms added to `baitBox`, the canonical code
- *   recorded in `promo`, and (for a `startsEvent` code) a common event started — unless
+ *   recorded in `promo`, and (for a `startsEvent` code) an event started — unless
  *   one is already running, which is left alone and the message says so.
  */
 export function redeemCode(s: Save, rawCode: string, now: number): RedeemResult {
@@ -103,8 +110,10 @@ export function redeemCode(s: Save, rawCode: string, now: number): RedeemResult 
     if (runningEvent(s.events, now)) {
       eventLine = " An event is already running.";
     } else {
-      events = startEvent(s.events, promoEvent(), now);
-      eventLine = " A common event has started!";
+      const rarity = def.eventRarity ?? 0;
+      events = startEvent(s.events, promoEvent(rarity), now);
+      const label = rarity >= 2 ? "rare" : "common";
+      eventLine = ` A ${label} event has started!`;
     }
   }
 
@@ -115,5 +124,6 @@ export function redeemCode(s: Save, rawCode: string, now: number): RedeemResult 
     promo: [...s.promo, def.code],
     events,
   };
-  return { s: next, ok: true, message: `You got ${def.gold} gold and ${def.glowWorms} Glow Worms.${eventLine}` };
+  const wormPart = def.glowWorms > 0 ? ` and ${def.glowWorms} Glow Worms` : "";
+  return { s: next, ok: true, message: `You got ${def.gold} gold${wormPart}.${eventLine}` };
 }

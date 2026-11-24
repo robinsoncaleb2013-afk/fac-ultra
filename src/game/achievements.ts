@@ -108,6 +108,7 @@ export const ACHIEVEMENTS: readonly AchDef[] = [
   { id: "derby-1", name: "Derby Winner", text: "Win a derby.", cat: "bosses", goal: 1, stat: (s) => s.derbiesWon, modes: CAREER },
   { id: "mutant-1", name: "Odd One Out", text: "Catch a fish with a mutation.", cat: "events", goal: 1, stat: (s) => s.mutated },
   { id: "mutant-25", name: "Mutant Hunter", text: "Catch 25 fish with a mutation.", cat: "events", goal: 25, stat: (s) => s.mutated },
+  { id: "calm-down", name: "Calm Down Man!", text: "Catch one fish with five mutations stacked on it.", cat: "events", goal: 1, counter: "stack:calm" },
   { id: "event-1", name: "Right Place, Right Time", text: "Catch a fish during a special event.", cat: "events", goal: 1, counter: "event:caught" },
   { id: "event-25", name: "Event Chaser", text: "Catch 25 fish during special events.", cat: "events", goal: 25, counter: "event:caught" },
   { id: "event-seen-1", name: "Look Up!", text: "See a special event begin.", cat: "events", goal: 1, counter: "event:started" },

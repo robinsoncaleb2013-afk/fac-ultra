@@ -1,5 +1,5 @@
-/* Promo codes (Update Three): the two codes and their exact rewards, the common event the
-   first code starts, one claim per save, and forgiving typing (case and spaces). */
+/* Promo codes (Update Three, Update Four): the codes and their exact rewards, the events
+   the event codes start, one claim per save, and forgiving typing (case and spaces). */
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BAITS, LURES } from "./content.ts";
@@ -27,12 +27,14 @@ test("the Glow Worm index really points at the bait named Glow Worm", () => {
   assert.equal(LURES.findIndex((l) => l.name === "Glow Worm"), -1);
 });
 
-test("there are exactly two promo codes, with the rewards Update Three promises", () => {
+test("there are exactly four promo codes, with the rewards Updates Three and Four promise", () => {
   assert.deepEqual(
     PROMO_CODES.map((d) => [d.code, d.gold, d.glowWorms, d.startsEvent]),
     [
       ["FACFIRSTCODE", 500, 5, true],
       ["UPD3", 500, 10, false],
+      ["FACISULTRA", 500, 3, false],
+      ["UPD4", 100, 0, true],
     ],
   );
 });
@@ -61,6 +63,38 @@ test("UPD3 pays 500 gold and 10 Glow Worms, and starts no event", () => {
   assert.deepEqual(r.s.promo, ["UPD3"]);
   assert.equal(r.s.events.active, null);
   assert.equal(r.message, "You got 500 gold and 10 Glow Worms.");
+});
+
+test("FACISULTRA pays 500 gold and 3 Glow Worms, and starts no event", () => {
+  const before = played();
+  const r = redeemCode(before, "FACISULTRA", NOW);
+  assert.equal(r.ok, true);
+  assert.equal(r.s.c, before.c + 500);
+  assert.equal(worms(r.s), worms(before) + 3);
+  assert.deepEqual(r.s.promo, ["FACISULTRA"]);
+  assert.equal(r.s.events.active, null);
+  assert.equal(r.message, "You got 500 gold and 3 Glow Worms.");
+  /* Once per save, like every code. */
+  assert.equal(redeemCode(r.s, "FACISULTRA", NOW + 60_000).ok, false);
+});
+
+test("UPD4 pays 100 gold and starts a rare event right away", () => {
+  const before = played();
+  const r = redeemCode(before, "UPD4", NOW);
+  assert.equal(r.ok, true);
+  assert.equal(r.s.c, before.c + 100);
+  assert.equal(worms(r.s), worms(before), "no worms with UPD4");
+  assert.deepEqual(r.s.promo, ["UPD4"]);
+  const active = r.s.events.active;
+  assert.ok(active, "an event is active");
+  const def = eventById(active.id)!;
+  assert.equal(def.rarity, 2, "a rare event (EVENT_RARITIES index 2)");
+  assert.equal(def, promoEvent(2));
+  assert.equal(r.message, "You got 100 gold. A rare event has started!");
+  /* Once per save, like every code. */
+  const again = redeemCode(r.s, "UPD4", NOW + 60_000);
+  assert.equal(again.ok, false);
+  assert.equal(again.s.c, r.s.c);
 });
 
 test("the worms land in the bait box slot, and nowhere else", () => {
@@ -103,7 +137,7 @@ test("claiming the same code twice is refused, with no second reward", () => {
 
 test("an unknown code is refused and changes nothing", () => {
   const before = played();
-  for (const bad of ["FAC", "UPD4", "FACFIRSTCOD", "", "   ", "glow worm"]) {
+  for (const bad of ["FAC", "UPD5", "FACFIRSTCOD", "", "   ", "glow worm"]) {
     const r = redeemCode(before, bad, NOW);
     assert.equal(r.ok, false, JSON.stringify(bad));
     assert.equal(r.message, "That code does not work. Check the letters and try again.");

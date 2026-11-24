@@ -43,6 +43,8 @@ export type EventDef = {
   night?: true;
   /** Only while fishing in the Astral Sea. */
   astral?: true;
+  /** While this event is running, bites come this many times sooner (Crowded is 2). */
+  catchPace?: number;
   /** What the player sees when it starts (plain English). */
   announce: string;
   /** One line for the Events list. */
@@ -127,6 +129,37 @@ export const EVENTS: readonly EventDef[] = [
     blurb: "A story told by the old anglers. Fisherman's Dream fish give huge XP and sell for huge coins.",
     look: { hue: 262, sat: 85, light: 66, shape: "drop", glyph: "❤" },
   },
+  {
+    id: "acid-rain", name: "Acid Rain", rarity: 0, hours: 1, mutation: "Acidic", kind: "xp",
+    announce: "Acid rain is falling! Some fish have turned acidic and give extra XP.",
+    blurb: "A sharp green rain. Acidic fish give extra XP.",
+    look: { hue: 78, sat: 70, light: 48, shape: "drop", glyph: "☣" },
+  },
+  {
+    id: "flood", name: "Flood", rarity: 0, hours: 1, mutation: "Drifting", kind: "worth",
+    announce: "The water is flooding! Some fish are drifting, and they are worth more.",
+    blurb: "The banks are underwater. Drifting fish sell for more.",
+    look: { hue: 200, sat: 55, light: 58, shape: "ring", glyph: "〰" },
+  },
+  {
+    id: "blackout", name: "Blackout", rarity: 2, hours: 3, mutation: "Blind", kind: "xp", night: true,
+    announce: "The lights have gone out! Some fish are blind and give extra XP.",
+    blurb: "A night with no lights. Blind fish give extra XP.",
+    kidName: "Lights Out", kidMutation: "Night-Eyed",
+    look: { hue: 250, sat: 15, light: 22, shape: "eye", glyph: "☾" },
+  },
+  {
+    id: "crowded", name: "Crowded", rarity: 2, hours: 3, mutation: "Busy", kind: "worth", catchPace: 2,
+    announce: "The water is crowded! Fish bite twice as fast, and some are Busy and worth more.",
+    blurb: "Too many fish in one spot. Bites come twice as fast. Busy fish sell for more.",
+    look: { hue: 32, sat: 75, light: 55, shape: "sparkle", glyph: "⁂" },
+  },
+  {
+    id: "double-moons", name: "Double Moons", rarity: 3, hours: 4, mutation: "Lunar", kind: "xp", night: true,
+    announce: "Two moons are in the sky! Some fish are lunar and give lots of extra XP.",
+    blurb: "A night with two moons. Lunar fish give lots of extra XP.",
+    look: { hue: 230, sat: 40, light: 78, shape: "ring", glyph: "☾" },
+  },
 ] as const;
 
 export const EVENT_IDS = EVENTS.map((e) => e.id);
@@ -164,10 +197,10 @@ export type HolidayDef = {
   look: { hue: number; sat: number; light: number; shape: MutationShape; glyph: string };
 };
 
-/** While any holiday runs: luck x this, fish worth x this, XP x this. One number, all three. */
-export const HOLIDAY_MULT = 50;
+/** While any holiday runs: luck x this, fish worth x this, XP x this. One number, all three. Update 4: 30. */
+export const HOLIDAY_MULT = 30;
 /** Share of eligible fish caught during a holiday that carry the holiday mutation name (mirrors the
-    random events' fishShare idea; the 50x itself applies to every fish, mutated or not). */
+    random events' fishShare idea; the 30x itself applies to every fish, mutated or not). */
 export const HOLIDAY_FISH_SHARE = 0.5;
 /** The New Year burst is due in the first this-many minutes of Jan 1 (local time). */
 export const NEW_YEAR_BURST_MINUTES = 10;
@@ -176,49 +209,49 @@ export const HOLIDAYS: readonly HolidayDef[] = [
   {
     id: "christmas", name: "Christmas", mutation: "jolly", date: { type: "fixed", month: 12, day: 25 },
     announce: "Merry Christmas! Jolly fish are everywhere, and everything is worth more.",
-    blurb: "Christmas. Jolly fish, and 50x luck, worth and XP for three days.",
+    blurb: "Christmas. Jolly fish, and 30x luck, worth and XP for three days.",
     look: { hue: 145, sat: 65, light: 42, shape: "flake", glyph: "🎄" },
   },
   {
     id: "thanksgiving", name: "Thanksgiving", mutation: "thankful", date: { type: "nth-weekday", month: 11, weekday: 4, n: 4 },
     announce: "Happy Thanksgiving! Thankful fish are biting, and everything is worth more.",
-    blurb: "Thanksgiving (the fourth Thursday of November). Thankful fish, and 50x luck, worth and XP.",
+    blurb: "Thanksgiving (the fourth Thursday of November). Thankful fish, and 30x luck, worth and XP.",
     look: { hue: 30, sat: 85, light: 48, shape: "sparkle", glyph: "🦃" },
   },
   {
     id: "easter", name: "Easter", mutation: "joyful", date: { type: "easter" },
     announce: "Happy Easter! Joyful fish are hopping, and everything is worth more.",
-    blurb: "Easter Sunday. Joyful fish, and 50x luck, worth and XP for three days.",
+    blurb: "Easter Sunday. Joyful fish, and 30x luck, worth and XP for three days.",
     look: { hue: 285, sat: 70, light: 68, shape: "ring", glyph: "🐣" },
   },
   {
     id: "st-patricks", name: "St. Patrick's Day", mutation: "lucky", date: { type: "fixed", month: 3, day: 17 },
     announce: "Happy St. Patrick's Day! Lucky fish are everywhere, and everything is worth more.",
-    blurb: "St. Patrick's Day. Lucky fish, and 50x luck, worth and XP for three days.",
+    blurb: "St. Patrick's Day. Lucky fish, and 30x luck, worth and XP for three days.",
     look: { hue: 130, sat: 80, light: 40, shape: "sparkle", glyph: "☘" },
   },
   {
     id: "valentines", name: "Valentine's Day", mutation: "loving", date: { type: "fixed", month: 2, day: 14 },
     announce: "Happy Valentine's Day! Loving fish are biting, and everything is worth more.",
-    blurb: "Valentine's Day. Loving fish, and 50x luck, worth and XP for three days.",
+    blurb: "Valentine's Day. Loving fish, and 30x luck, worth and XP for three days.",
     look: { hue: 340, sat: 85, light: 60, shape: "drop", glyph: "❤" },
   },
   {
     id: "veterans", name: "Veterans Day", mutation: "patriotic", date: { type: "fixed", month: 11, day: 11 },
     announce: "Veterans Day. Patriotic fish are biting, and everything is worth more.",
-    blurb: "Veterans Day. Patriotic fish, and 50x luck, worth and XP for three days.",
+    blurb: "Veterans Day. Patriotic fish, and 30x luck, worth and XP for three days.",
     look: { hue: 222, sat: 75, light: 45, shape: "star", glyph: "★" },
   },
   {
     id: "halloween", name: "Halloween", mutation: "spooky", date: { type: "fixed", month: 10, day: 31 },
     announce: "Happy Halloween! Spooky fish are creeping, and everything is worth more.",
-    blurb: "Halloween. Spooky fish, and 50x luck, worth and XP for three days.",
+    blurb: "Halloween. Spooky fish, and 30x luck, worth and XP for three days.",
     look: { hue: 24, sat: 95, light: 50, shape: "flame", glyph: "🎃" },
   },
   {
     id: "new-year", name: "New Year", mutation: (incomingYear: number) => String(incomingYear), date: { type: "fixed", month: 1, day: 1 }, burst: true,
     announce: "Happy New Year! A brand new year of fish, and everything is worth more.",
-    blurb: "New Year. Fish named for the new year, 50x luck, worth and XP, and a burst at midnight.",
+    blurb: "New Year. Fish named for the new year, 30x luck, worth and XP, and a burst at midnight.",
     look: { hue: 48, sat: 95, light: 60, shape: "crown", glyph: "🎆" },
   },
 ] as const;
