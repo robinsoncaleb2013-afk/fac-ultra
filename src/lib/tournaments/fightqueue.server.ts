@@ -4,7 +4,7 @@
    every device kept its own copy of the queue and paired anglers locally. That raced
    whenever two devices heard the joins in a different order, and Kids Mode was refused
    only by the client's own say-so. The queue now lives here, in two small tables
-   (migrations/0012_fight_queue.sql), and this handler is the one queue every device
+   (migrations/0013_fight_queue.sql), and this handler is the one queue every device
    agrees on:
 
      POST {op:"join", playerId, name, fishId, kid}   join the queue (idempotent while matched)
