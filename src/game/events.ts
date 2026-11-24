@@ -350,13 +350,15 @@ function readCounts(v: unknown): Record<string, number> {
 function readRestack(v: unknown): Restack | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
   const o = v as Record<string, unknown>;
-  const b = num(o.b, 0, BIOMES.length - 1, -1);
+  /* Range-checked by hand, not with num(): num() clamps, so a water of 99 would quietly
+     become the last water instead of being refused. */
+  const b = typeof o.b === "number" && Number.isInteger(o.b) && o.b >= 0 && o.b < BIOMES.length ? o.b : -1;
   if (b < 0) return null;
-  const i = num(o.i, 0, BIOMES[b].fish.length - 1, -1);
+  const i = typeof o.i === "number" && Number.isInteger(o.i) && o.i >= 0 && o.i < BIOMES[b].fish.length ? o.i : -1;
   if (i < 0 || !Array.isArray(o.ids)) return null;
   const ids: number[] = [];
   for (const raw of o.ids) {
-    const id = num(raw, 0, MUTATIONS.length - 1);
+    const id = typeof raw === "number" && Number.isInteger(raw) && raw > 0 && raw < MUTATIONS.length ? raw : 0;
     if (id > 0 && !ids.includes(id)) ids.push(id);
   }
   if (!ids.length) return null;
