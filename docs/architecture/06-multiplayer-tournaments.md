@@ -65,6 +65,7 @@ create index on signals (room, "to", id);
 | `catch.ts` | POST `{eventId, playerId, envelope}` | **Verify + score** (§1.4). Returns verdict, the server's result, new score, board rank. |
 | `board.ts` | GET `?eventId&top=25&around=playerId` | Leaderboard page: top N + the 5 rows around the player. Cached 5 s. |
 | `rtc.ts` | existing | Switch storage from the `Map` to `rooms`/`signals` tables via `getSql()`. Same wire contract. Prune on each call. |
+| `fight-queue.ts` | POST `{op:"join"\|"status"\|"leave", playerId, ...}` | The fish-fight matchmaker (`fightqueue.server.ts`, tables in `migrations/0012_fight_queue.sql`): the queue lives on the server, anglers pair in join order (ties by id) and are handed `roomNameFor`'s room and `matchSeedFor`'s shared seed from `src/game/fightroom.ts`; the fight and its chat then ride the peer room as before. `join` carries the device's Kid Mode flag and the server refuses it with `KID_PROBLEM` — a kid-mode device is never queued, so it can never be paired. |
 | `survival-board.ts` | GET/POST | Longest-run board for the daily Survival seed (`05` §5.2): client posts the run summary **and its event log**; server replays the run from the seed + log (same replay machinery). |
 
 Identity before WP-9: `playerId = localStorage "fac-player-id"` (uuid v4) and a chosen display name, sent with every request. The server rate-limits by id **and** IP. Boards show a small "unverified name" dot until accounts land; WP-9 links the anon id to the account so history carries over.
