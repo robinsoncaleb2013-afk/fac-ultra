@@ -27,6 +27,9 @@ export const MAX_SAVE_BYTES = 256 * 1024;
 /** How long the copy you did not keep stays available in Settings (07 §4.2). */
 export const BACKUP_DAYS = 7;
 export const BACKUP_MS = BACKUP_DAYS * 24 * 3600_000;
+/** How long the backup made by "Clear my data" can be restored: 24 hours from the clear, then it is
+    gone for good. One backup per profile; a newer clear replaces it. (07 §7.) */
+export const CLEAR_BACKUP_MS = 24 * 3600_000;
 /** How long the browser waits after a save before sending it (07 §4.2). */
 export const PUSH_DEBOUNCE_MS = 10_000;
 

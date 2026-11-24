@@ -20,6 +20,8 @@ export type Providers = { email: boolean; google: boolean; emailDelivery: string
 
 export type Conflict = { mode: SyncMode; local: Summary; cloud: Summary; localAt: number; cloudAt: number; cloudRev: number; device: string | null };
 export type Backup = { mode: SyncMode; at: number; json: string };
+/** The "Clear my data" backup this profile has on the server, while it can still be restored (24 hours). */
+export type SaveBackup = { createdAt: number; expiresAt: number; count: number };
 
 export type CloudState = {
   loaded: boolean;
@@ -39,6 +41,7 @@ export type CloudState = {
   notice: string;
   error: string;
   backups: Backup[];
+  saveBackup: SaveBackup | null;
 };
 
 type SlotMeta = { rev: number; key: string };
@@ -120,6 +123,7 @@ let state: CloudState = {
   notice: "",
   error: "",
   backups: [],
+  saveBackup: null,
 };
 
 function patch(p: Partial<CloudState>) {
@@ -391,6 +395,7 @@ export async function reconcile() {
       rekey(profileId, reloaded);
     }
     patch({ status: "idle", lastSync: Date.now(), backups: readBackups() });
+    void refreshSaveBackup();
   });
 }
 
@@ -471,6 +476,7 @@ export async function refreshMe(): Promise<void> {
   const r = await api("/api/account");
   if (r.status === 0) return void patch({ loaded: true });
   applyMe(r.body);
+  void refreshSaveBackup();
 }
 
 /** After a fresh sign-in: show the profile picker when there is a choice, otherwise carry on. */
@@ -511,7 +517,7 @@ export async function signOut() {
   const meta = readMeta();
   saveMeta({ ...meta, profileId: null });
   window.clearTimeout(timer);
-  patch({ signedIn: false, profiles: [], profileId: null, email: "", status: "off", conflicts: [], sheet: false, notice: "" });
+  patch({ signedIn: false, profiles: [], profileId: null, email: "", status: "off", conflicts: [], saveBackup: null, sheet: false, notice: "" });
 }
 
 export async function createProfile(name: string, kid: boolean) {
@@ -570,6 +576,116 @@ export async function selectProfile(id: string, quiet = false) {
   await reconcile();
 }
 
+/* ── Clear my data: one backup per profile on the server, restorable for 24 hours ─────────────── */
+
+/** Ask the server about this profile's clear-my-data backup, and remember the answer for the screens. */
+export async function refreshSaveBackup(): Promise<void> {
+  const profileId = state.profileId;
+  if (!state.signedIn || !profileId) return;
+  const r = await api(`/api/save-backup?profile=${encodeURIComponent(profileId)}`);
+  if (!r.ok) return;
+  const b = r.body.backup as { createdAt: number; expiresAt: number; saves?: unknown[] } | null;
+  patch({ saveBackup: b ? { createdAt: b.createdAt, expiresAt: b.expiresAt, count: Array.isArray(b.saves) ? b.saves.length : 0 } : null });
+}
+
+/** Send this device's newest saves up first, so the backup holds the very latest fish — including the
+    ones caught a moment ago. False when any push failed (then nothing may be cleared). */
+async function pushAllModes(profileId: string): Promise<boolean> {
+  flushSave();
+  let okAll = true;
+  for (const mode of SYNC_MODES) {
+    const local = readLocal(mode);
+    if (local.raw === null) continue;
+    const have = readMeta().slots[profileId]?.[mode];
+    if (have && have.key === local.key) continue;
+    let r = await pushMode(mode, profileId, have?.rev ?? 0);
+    if (r.result === "conflict") r = await pushMode(mode, profileId, have?.rev ?? 0, { force: true });
+    if (r.result !== "ok") okAll = false;
+  }
+  return okAll;
+}
+
+/** Clear this profile's data: the server keeps ONE backup of it for 24 hours, then this device and
+    the cloud both start fresh. Nothing is cleared until the newest fish are safely in the backup. */
+export async function clearMyData(): Promise<void> {
+  const profileId = state.profileId;
+  if (!state.signedIn || !profileId) return;
+  patch({ busy: true, error: "", notice: "" });
+  await exclusive(async () => {
+    if (!(await pushAllModes(profileId))) {
+      patch({ busy: false, error: "Couldn't reach the cloud, so nothing was cleared. The backup has to hold your newest fish first — try again when you're back online." });
+      return;
+    }
+    const r = await api("/api/save-backup", { profile: profileId, op: "clear" });
+    if (!r.ok) {
+      patch({ busy: false, error: r.status === 0 ? "Can't reach the game's server. Nothing was cleared." : "Couldn't clear your data. Nothing was changed. Try again in a moment." });
+      return;
+    }
+    /* This device starts fresh too: the profile's slots, their spare copies and the sync notes go. */
+    for (const mode of SYNC_MODES) {
+      write(keyOfSyncId(mode), null);
+      write(`${keyOfSyncId(mode)}-bak`, null);
+    }
+    const meta = readMeta();
+    delete meta.slots[profileId];
+    meta.touch = {};
+    saveMeta(meta);
+    write(BACKUP_KEY, null);
+    const b = r.body.backup as SaveBackup;
+    patch({ busy: false, backups: [], conflicts: [], saveBackup: { createdAt: b.createdAt, expiresAt: b.expiresAt, count: b.count }, notice: "Your data is backed up and cleared. For 24 hours you can restore the backup if you change your mind." });
+    reloadActiveSlot();
+  });
+}
+
+/** Put the clear-my-data backup back. It replaces what the profile has now (those copies are stashed
+    on this device for 7 days, like any copy that loses a choice). The backup itself stays until its
+    24 hours are up. */
+export async function restoreMyBackup(): Promise<void> {
+  const profileId = state.profileId;
+  if (!state.signedIn || !profileId) return;
+  patch({ busy: true, error: "", notice: "" });
+  await exclusive(async () => {
+    const r = await api("/api/save-backup", { profile: profileId, op: "restore" });
+    if (!r.ok) {
+      patch({
+        busy: false,
+        saveBackup: r.status === 410 || r.status === 404 ? null : state.saveBackup,
+        error:
+          r.status === 410
+            ? "That backup's 24 hours are up, so it's gone. The fish you have now are untouched."
+            : r.status === 404
+              ? "There's no backup to restore."
+              : r.status === 0
+                ? "Can't reach the game's server. Nothing was changed."
+                : "Couldn't restore the backup. Nothing was changed. Try again in a moment.",
+      });
+      return;
+    }
+    const restored = new Set<SyncMode>();
+    for (const s of (r.body.saves as { mode: SyncMode; rev: number; data: unknown }[]) ?? []) {
+      if (!isSyncMode(s.mode)) continue;
+      stash(s.mode, readLocal(s.mode).text);
+      adopt(s.mode, profileId, s.data, s.rev);
+      restored.add(s.mode);
+    }
+    /* Modes the backup never held go back to empty, as they were when the backup was made. */
+    for (const mode of SYNC_MODES) {
+      if (restored.has(mode)) continue;
+      stash(mode, readLocal(mode).text);
+      write(keyOfSyncId(mode), null);
+      write(`${keyOfSyncId(mode)}-bak`, null);
+      const meta = readMeta();
+      if (meta.slots[profileId]) delete meta.slots[profileId][mode];
+      delete meta.touch[mode];
+      saveMeta(meta);
+    }
+    const b = r.body.backup as { createdAt: number; expiresAt: number };
+    patch({ busy: false, conflicts: [], backups: readBackups(), saveBackup: { createdAt: b.createdAt, expiresAt: b.expiresAt, count: restored.size }, notice: "Your backup is back. Happy fishing!" });
+    reloadActiveSlot();
+    rekey(profileId, restored);
+  });
+}
+
 export async function exportMyData() {
   const r = await api("/api/account?export=1");
   if (!r.ok) return patch({ error: "Couldn't get your data. Try again." });
@@ -587,7 +703,7 @@ export async function deleteMyAccount(confirm: string) {
   saveMeta({ v: 1, profileId: null, owner: null, slots: {}, touch: {} });
   write(BACKUP_KEY, null);
   window.clearTimeout(timer);
-  patch({ signedIn: false, profiles: [], profileId: null, email: "", status: "off", conflicts: [], backups: [], sheet: true, notice: "Your account and cloud saves are deleted. The fish on this device are still here." });
+  patch({ signedIn: false, profiles: [], profileId: null, email: "", status: "off", conflicts: [], backups: [], saveBackup: null, sheet: true, notice: "Your account and cloud saves are deleted. The fish on this device are still here." });
 }
 
 /* ── Start-up ───────────────────────────────────────────────────────────── */

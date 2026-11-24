@@ -1,5 +1,7 @@
-/* TEST PHASE: while the game is in development, every new build wipes all progress and saves, so testers
-   always start fresh and old test data can never break a new build. See docs/TEST-PHASE.md.
+/* TEST PHASE: while the game was in early testing, every new build wiped all progress and saves, so testers
+   always started fresh and old test data could never break a new build. That wipe is OFF by default now:
+   updates keep player data, and a player who wants a fresh start clears their own profile instead, with
+   a restorable 24-hour backup ("Clear my data", src/lib/accounts/backups.server.ts). See docs/TEST-PHASE.md.
 
    This file holds the ONE master switch and the two "what is kept" lists. Pure: no network, no storage.
    Server code (src/lib/test-reset.server.ts) and browser code (src/game/epoch-gate.ts) both import it. */
@@ -7,12 +9,14 @@
 import { BUILD_EPOCH, BUILD_SWITCH } from "./build-epoch.generated.ts";
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────
-   THE MASTER SWITCH.  true  = every new build resets progress and saves (the testing default).
-                       false = nothing is ever reset (what real players need).
-   Before real launch: set this to false (and/or set FAC_TEST_RESET=0 on the server), then follow the
-   checklist in docs/TEST-PHASE.md.  Setting FAC_TEST_RESET=0 or =1 overrides this constant without a
-   code change. */
-export const TEST_PHASE_RESET = true;
+   THE MASTER SWITCH.  true  = every new build resets progress and saves (the old testing behaviour).
+                       false = nothing is ever reset (the default now: real players keep their fish).
+   It is false on purpose, so a routine update can never wipe a player's data — not even on a server
+   where nobody set the environment variable. A player who wants a fresh start uses "Clear my data"
+   on their own profile instead, which keeps a restorable backup for 24 hours. Setting
+   FAC_TEST_RESET=0 or =1 overrides this constant without a code change; =1 brings the old wipe
+   back, for testing the reset itself only. */
+export const TEST_PHASE_RESET = false;
 /* ───────────────────────────────────────────────────────────────────────────────────────────────── */
 
 /** Read an on/off word. Anything unrecognised (or blank) is "not set". */
@@ -77,8 +81,10 @@ export const WIPE_TABLES: readonly string[] = [
 ];
 
 /** Server tables that are KEPT: identities and the friend graph (listed so a new table must be placed on a list).
-    `players` is kept but its temporary state (ban, last seen, current event) is cleared. */
-export const KEEP_TABLES: readonly string[] = ["accounts", "sessions", "magic_links", "oauth_states", "profiles", "players", "friends", "blocks", "app_state"];
+    `players` is kept but its temporary state (ban, last seen, current event) is cleared. `save_backups` is
+    kept on purpose: it is the player's own safety net (the 24-hour backup made by "Clear my data"), and a
+    reset must never delete the very copy a player would restore from. */
+export const KEEP_TABLES: readonly string[] = ["accounts", "sessions", "magic_links", "oauth_states", "profiles", "players", "friends", "blocks", "app_state", "save_backups"];
 
 /** Browser keys that are KEPT (exact names). Everything else the game stores is progress and is wiped. */
 export const KEEP_KEYS: readonly string[] = [
