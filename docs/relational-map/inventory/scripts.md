@@ -22,6 +22,10 @@ Every tooling script in `scripts/` (test files `*.test.mjs` are not listed). Bui
 
 - **check-auth-invariant** (`scripts/check-auth-invariant.mjs`): Compares the live dev server's VITE_AUTH_ENABLED against the value the next build will resolve, and warns when they differ.
 
+- **check-map-counts** (`scripts/check-map-counts.mjs`): MAP-COUNTS-1: checks every number the relational map states about the code against the code itself. Runs first in npm test.
+
+- **check-map-inventory** (`scripts/check-map-inventory.mjs`): MAP-INVENTORY: checks every game module, component, server file, route, migration and script has its own entry in docs/relational-map/inventory/, and every entry names something that exists. Runs in npm test.
+
 - **check-touch-targets** (`scripts/check-touch-targets.mjs`): Checks the game's tap targets are big enough for thumbs, against a build.
 
 - **copy-pglite-assets** (`scripts/copy-pglite-assets.mjs`): Copies the PGLite runtime assets into the build output so the embedded database can run there.
