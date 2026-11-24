@@ -3,8 +3,7 @@
   "counts": [
     {
       "files": [
-        "README.md",
-        "game-and-data.md"
+        "README.md"
       ],
       "how": {
         "command": "node --experimental-strip-types -e \"import('./src/game/content.ts').then(m=>console.log('species='+m.TOTAL_SPECIES))\"",
@@ -15,8 +14,7 @@
     },
     {
       "files": [
-        "README.md",
-        "game-and-data.md"
+        "README.md"
       ],
       "how": {
         "command": "node --experimental-strip-types -e \"import('./src/game/content.ts').then(m=>console.log('biomes='+m.BIOMES.length))\"",
@@ -27,7 +25,6 @@
     },
     {
       "files": [
-        "README.md",
         "game-and-data.md"
       ],
       "how": {
@@ -39,7 +36,6 @@
     },
     {
       "files": [
-        "README.md",
         "game-and-data.md"
       ],
       "how": {
@@ -51,7 +47,6 @@
     },
     {
       "files": [
-        "README.md",
         "game-and-data.md"
       ],
       "how": {
@@ -63,7 +58,6 @@
     },
     {
       "files": [
-        "README.md",
         "game-and-data.md"
       ],
       "how": {
