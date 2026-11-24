@@ -164,6 +164,15 @@ export const EVENTS: readonly EventDef[] = [
 
 export const EVENT_IDS = EVENTS.map((e) => e.id);
 
+/** The events grouped by rarity for player-facing lists (the Lodge's Events list): Common first,
+    Mythic last, add order kept inside each rarity — so a new event joins its rarity's group instead
+    of landing at the end of the list. EVENTS itself stays in add order on purpose: a mutation's
+    index IS an event's position in EVENTS (events.ts, mutationOfEvent), and saved fish carry
+    that index, so the table itself must never be reordered. */
+export const EVENTS_BY_RARITY: readonly EventDef[] = [...EVENTS].sort(
+  (a, b) => a.rarity - b.rarity || EVENTS.indexOf(a) - EVENTS.indexOf(b),
+);
+
 /* ── Holiday events (Update Three, P5) ─────────────────────────────────────
    Limited calendar events, separate from the random long-play events above: each one runs for three local
    calendar days (the eve, the day itself, and the day after), and while it runs EVERYTHING gets the holiday

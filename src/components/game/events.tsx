@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useGame } from "@/game/engine";
-import { activeEvent, countdown, eventOfMutation, effectLine, eventModeOn, EVENT_RARITIES, EVENTS, eventTitle, holidayOn, mutationOfEvent, mutationTitle, nextChanceHint, requirementLine, type EventDef } from "@/game/events";
+import { activeEvent, countdown, eventOfMutation, effectLine, eventModeOn, EVENT_RARITIES, EVENTS, EVENTS_BY_RARITY, eventTitle, holidayOn, mutationOfEvent, mutationTitle, nextChanceHint, requirementLine, type EventDef } from "@/game/events";
 import { MODES } from "@/game/modes";
 import { useKidOn } from "@/components/game/use-kid";
 import { useMutationText } from "@/components/game/use-mutation";
@@ -129,7 +129,7 @@ export function EventsView() {
         )}
       </div>
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-2" aria-label="All events">
-        {EVENTS.map((e) => {
+        {EVENTS_BY_RARITY.map((e) => {
           const s = seenOf(e);
           const r = EVENT_RARITIES[e.rarity];
           return (

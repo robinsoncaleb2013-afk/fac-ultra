@@ -11,6 +11,7 @@ import { AWAY_RESET_MS, COOLDOWN_MS, HOUR_MS, IDLE_MS } from "./event-data.ts";
 import {
   ASTRAL_BIOME,
   EVENTS,
+  EVENTS_BY_RARITY,
   EVENT_RARITIES,
   activeEvent,
   catchLine,
@@ -74,6 +75,22 @@ test("the table is exactly Caleb's: 16 events, rarities, hours, mutations, multi
   assert.deepEqual(EVENTS.filter((e) => e.astral).map((e) => e.id), ["legend-of-the-fisherman"]);
   assert.ok(EVENT_RARITIES.every((r, i) => i === 0 || r.fishShare <= EVENT_RARITIES[i - 1].fishShare), "rarer events mutate fewer fish");
   assert.ok(EVENT_RARITIES.every((r) => r.fishShare > 0 && r.fishShare < 1), "never all fish");
+});
+
+test("the player-facing list groups the events by rarity: Common first, Mythic last", () => {
+  assert.deepEqual(EVENTS_BY_RARITY.map((e) => e.id), [
+    "shooting-stars", "meteor-collision", "acid-rain", "flood",
+    "blood-moon", "meteorite-strike",
+    "snowfall", "alien-invasion", "blackout", "crowded",
+    "radioactive-rain", "northern-lights", "double-moons",
+    "divine-intervention", "armageddon",
+    "legend-of-the-fisherman",
+  ]);
+  assert.deepEqual(
+    [...EVENTS_BY_RARITY].sort((a, b) => EVENTS.indexOf(a) - EVENTS.indexOf(b)),
+    [...EVENTS],
+    "the grouped list holds exactly the same events, only reordered",
+  );
 });
 
 test("every event has its own mutation in the one mutation table, with the right XP / worth multipliers", () => {
