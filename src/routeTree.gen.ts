@@ -22,6 +22,7 @@ import { Route as ApiGoogleStartRouteImport } from './routes/api/google-start'
 import { Route as ApiProfilesRouteImport } from './routes/api/profiles'
 import { Route as ApiRtcRouteImport } from './routes/api/rtc'
 import { Route as ApiSaveRouteImport } from './routes/api/save'
+import { Route as ApiSaveBackupRouteImport } from './routes/api/save-backup'
 import { Route as ApiSurvivalBoardRouteImport } from './routes/api/survival-board'
 import { Route as ApiTrophiesRouteImport } from './routes/api/trophies'
 
@@ -90,6 +91,11 @@ const ApiSaveRoute = ApiSaveRouteImport.update({
   path: '/api/save',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSaveBackupRoute = ApiSaveBackupRouteImport.update({
+  id: '/api/save-backup',
+  path: '/api/save-backup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSurvivalBoardRoute = ApiSurvivalBoardRouteImport.update({
   id: '/api/survival-board',
   path: '/api/survival-board',
@@ -115,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/api/profiles': typeof ApiProfilesRoute
   '/api/rtc': typeof ApiRtcRoute
   '/api/save': typeof ApiSaveRoute
+  '/api/save-backup': typeof ApiSaveBackupRoute
   '/api/survival-board': typeof ApiSurvivalBoardRoute
   '/api/trophies': typeof ApiTrophiesRoute
 }
@@ -132,6 +139,7 @@ export interface FileRoutesByTo {
   '/api/profiles': typeof ApiProfilesRoute
   '/api/rtc': typeof ApiRtcRoute
   '/api/save': typeof ApiSaveRoute
+  '/api/save-backup': typeof ApiSaveBackupRoute
   '/api/survival-board': typeof ApiSurvivalBoardRoute
   '/api/trophies': typeof ApiTrophiesRoute
 }
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/api/profiles': typeof ApiProfilesRoute
   '/api/rtc': typeof ApiRtcRoute
   '/api/save': typeof ApiSaveRoute
+  '/api/save-backup': typeof ApiSaveBackupRoute
   '/api/survival-board': typeof ApiSurvivalBoardRoute
   '/api/trophies': typeof ApiTrophiesRoute
 }
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/api/profiles'
     | '/api/rtc'
     | '/api/save'
+    | '/api/save-backup'
     | '/api/survival-board'
     | '/api/trophies'
   fileRoutesByTo: FileRoutesByTo
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/api/profiles'
     | '/api/rtc'
     | '/api/save'
+    | '/api/save-backup'
     | '/api/survival-board'
     | '/api/trophies'
   id:
@@ -203,6 +214,7 @@ export interface FileRouteTypes {
     | '/api/profiles'
     | '/api/rtc'
     | '/api/save'
+    | '/api/save-backup'
     | '/api/survival-board'
     | '/api/trophies'
   fileRoutesById: FileRoutesById
@@ -221,6 +233,7 @@ export interface RootRouteChildren {
   ApiProfilesRoute: typeof ApiProfilesRoute
   ApiRtcRoute: typeof ApiRtcRoute
   ApiSaveRoute: typeof ApiSaveRoute
+  ApiSaveBackupRoute: typeof ApiSaveBackupRoute
   ApiSurvivalBoardRoute: typeof ApiSurvivalBoardRoute
   ApiTrophiesRoute: typeof ApiTrophiesRoute
 }
@@ -318,6 +331,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSaveRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/save-backup': {
+      id: '/api/save-backup'
+      path: '/api/save-backup'
+      fullPath: '/api/save-backup'
+      preLoaderRoute: typeof ApiSaveBackupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/survival-board': {
       id: '/api/survival-board'
       path: '/api/survival-board'
@@ -349,6 +369,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiProfilesRoute: ApiProfilesRoute,
   ApiRtcRoute: ApiRtcRoute,
   ApiSaveRoute: ApiSaveRoute,
+  ApiSaveBackupRoute: ApiSaveBackupRoute,
   ApiSurvivalBoardRoute: ApiSurvivalBoardRoute,
   ApiTrophiesRoute: ApiTrophiesRoute,
 }

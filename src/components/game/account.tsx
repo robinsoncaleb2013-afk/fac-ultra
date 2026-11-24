@@ -10,6 +10,7 @@ import {
   activeProfile,
   backupCode,
   cancelSent,
+  clearMyData,
   closeSheet,
   createProfile,
   deleteMyAccount,
@@ -21,6 +22,7 @@ import {
   requestLink,
   resolveConflict,
   restoreBackup,
+  restoreMyBackup,
   selectProfile,
   signOut,
   startCloud,
@@ -49,6 +51,9 @@ function ago(ms: number, now = Date.now()): string {
   if (h < 48) return `${h} hour${h === 1 ? "" : "s"} ago`;
   return `${Math.round(h / 24)} days ago`;
 }
+
+/** "Nov 24, 8:41 PM" — for saying exactly when a backup's 24 hours run out. */
+const until = (ms: number): string => new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /** Starts the cloud layer once and shows the sheet and the chooser. Mounted once, by the shell. */
 export function CloudHost() {
@@ -263,6 +268,7 @@ function SignedIn() {
   const max = useCloud((s) => s.max);
   const email = useCloud((s) => s.email);
   const busy = useCloud((s) => s.busy);
+  const saveBackup = useCloud((s) => s.saveBackup);
   const status = useStatus();
   const kidMode = useGame((s) => s.kid);
   const active = profiles.find((p) => p.id === profileId) ?? null;
@@ -272,7 +278,7 @@ function SignedIn() {
   /* The first person added is usually the grown-up themselves; everyone after is usually a kid. */
   const forKid = kidPick ?? profiles.length > 0;
   const setForKid = setKidPick;
-  const [ask, setAsk] = useState<"" | "delete" | "remove">("");
+  const [ask, setAsk] = useState<"" | "delete" | "remove" | "clear">("");
   const [target, setTarget] = useState("");
   const [typed, setTyped] = useState("");
   const [renaming, setRenaming] = useState<{ id: string; text: string } | null>(null);
@@ -407,6 +413,49 @@ function SignedIn() {
             <Button variant="ghost" onClick={() => void signOut()}>
               Sign out of the cloud
             </Button>
+            {active && saveBackup ? (
+              <div className="rounded-2xl border border-line p-3 text-sm" data-testid="save-backup-panel">
+                <p>
+                  You cleared {active.name}&apos;s data {ago(saveBackup.createdAt)}. Its backup can be restored until {until(saveBackup.expiresAt)} — after
+                  that it is gone for good.
+                </p>
+                <Button variant="ghost" className="mt-2 min-h-11 px-4 py-2 text-sm" disabled={busy} onClick={() => void restoreMyBackup()}>
+                  Restore the backup
+                </Button>
+                <p className="mt-1 text-xs text-muted">Restoring replaces the fish {active.name} has now. The ones from after the clear are kept on this device for 7 days.</p>
+              </div>
+            ) : null}
+            {active ? (
+              ask === "clear" ? (
+                <div className="rounded-2xl border border-line p-3 text-sm">
+                  <p>
+                    This clears {active.name}&apos;s progress everywhere — every kind of fishing and every save slot, on this device and in the cloud.
+                    First we keep ONE backup of it all on the account, and for 24 hours you can restore it here if you change your mind. Clearing again
+                    later replaces the backup with the newer one.
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      variant="ghost"
+                      className="min-h-11 px-4 py-2 text-sm"
+                      disabled={busy}
+                      onClick={() => {
+                        setAsk("");
+                        void clearMyData();
+                      }}
+                    >
+                      Back it up and clear
+                    </Button>
+                    <Button variant="quiet" className="min-h-11 px-4 py-2 text-sm" onClick={() => setAsk("")}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button variant="quiet" onClick={() => setAsk("clear")}>
+                  Clear {active.name}&apos;s data…
+                </Button>
+              )
+            ) : null}
             {ask === "delete" ? (
               <div className="rounded-2xl border border-[#e4572e] p-3 text-sm">
                 <p>This erases the account, every profile and every cloud save, and unlinks your friends. The fish on this device stay.</p>
@@ -502,6 +551,7 @@ export function ConflictChooser() {
 export function CloudSettings() {
   const st = useStatus();
   const backups = useCloud((s) => s.backups);
+  const saveBackup = useCloud((s) => s.saveBackup);
   const notify = useGame((s) => s.notify);
   return (
     <div className="rounded-2xl border border-line bg-surface p-3" data-testid="cloud-settings">
@@ -512,6 +562,22 @@ export function CloudSettings() {
       <Button variant="ghost" className="mt-2" onClick={openSheet}>
         {st.signedIn ? "Profiles and account" : "Save to the cloud"}
       </Button>
+      {saveBackup ? (
+        <div className="mt-3 border-t border-line pt-3" data-testid="save-backup-restore">
+          <p className="text-sm text-muted">
+            {st.profile} cleared their data {ago(saveBackup.createdAt)}. The backup can be restored until {until(saveBackup.expiresAt)}.
+          </p>
+          <Button
+            variant="ghost"
+            className="mt-2 min-h-11 px-3 py-2 text-sm"
+            onClick={() => {
+              if (window.confirm("Restore the backup? It replaces the fish on this device right now.")) void restoreMyBackup();
+            }}
+          >
+            Restore the backup
+          </Button>
+        </div>
+      ) : null}
       {backups.length ? (
         <div className="mt-3 border-t border-line pt-3">
           <p className="text-sm text-muted">The other copy from your last choice is kept for 7 days.</p>

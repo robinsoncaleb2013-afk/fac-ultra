@@ -86,7 +86,7 @@ The one authoritative list. Set them in the environment of the server process (V
 | `RESEND_API_KEY` | `src/lib/accounts/mail.server.ts` | An API key from resend.com. Turns on real sign-in and invite emails. | none: the link is written to the server console |
 | `FAC_EMAIL_FROM` | `src/lib/accounts/mail.server.ts` | The From line, such as `FAC Ultra <login@yourdomain>`. Must be an address Resend has verified. | `FAC Ultra <onboarding@resend.dev>` |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | `src/lib/accounts/google.server.ts` | Both set turns on "Sign in with Google". Register `<FAC_PUBLIC_URL>/api/google-callback` as the redirect address. | none: the Google button is hidden |
-| `FAC_TEST_RESET` | `src/lib/test-phase.ts`, `scripts/build-epoch.mjs` | `0`/`off` turns the test-phase wipe off, `1`/`on` turns it on. Beats the `TEST_PHASE_RESET` constant. Read on the server at run time, and also stamped at build time. | the constant (on) |
+| `FAC_TEST_RESET` | `src/lib/test-phase.ts`, `scripts/build-epoch.mjs` | `0`/`off` turns the test-phase wipe off, `1`/`on` turns it on. Beats the `TEST_PHASE_RESET` constant. Read on the server at run time, and also stamped at build time. | the constant (off) |
 | `FAC_TEST_RESET_EPOCH` | `src/lib/test-phase.ts`, `scripts/build-epoch.mjs` | Forces the build label. At build time it names the stamped build; on a dev server it changes the server only. For testing the reset. | commit + build time (`dev` on dev servers) |
 | `FAC_COMMIT` | `scripts/build-epoch.mjs` | A commit label for the build epoch, used only when `VERCEL_GIT_COMMIT_SHA` and `GITHUB_SHA` are not set (a plain `docker build` has neither). | none: the epoch is just the build time |
 | `VITE_STUN_URLS` | `src/lib/multiplayer/p2p.ts` | Comma-separated STUN servers for the peer-to-peer rooms. Read at build time. | Google's public STUN |
@@ -102,10 +102,10 @@ These markers are compared with the code by `npm test`. If you change the thing,
 
 <!-- docs-check:save-version 13 -->
 <!-- docs-check:rules-version 2 -->
-<!-- docs-check:migrations 0001 0007 0008 0009 0010 0011 -->
+<!-- docs-check:migrations 0001 0007 0008 0009 0010 0011 0012 -->
 <!-- docs-check:fixtures 3 4 5 6 7 8 9 10 11 12 13 -->
 <!-- docs-check:modes expedition recreational survival coop tournament story -->
-<!-- docs-check:routes account board catch entry epoch events friends google-callback google-start profiles rtc save survival-board trophies -->
+<!-- docs-check:routes account board catch entry epoch events friends google-callback google-start profiles rtc save save-backup survival-board trophies -->
 
 - Career save version **12** (`SAVE_VERSION` in `src/game/engine.ts`); detail in [`architecture/07-data-saves-cloud.md`](architecture/07-data-saves-cloud.md).
 - Tournament rules version **2** (`RULES_VERSION` in `src/game/line-wear.ts`); detail in [`architecture/10-gear-progression-and-line.md`](architecture/10-gear-progression-and-line.md).
