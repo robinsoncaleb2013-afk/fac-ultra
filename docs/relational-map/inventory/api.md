@@ -14,6 +14,8 @@ Every route file in `src/routes/api/`. Each is thin: it turns the request into a
 
 - **events** (`src/routes/api/events.ts`): The events route: the open tournament list and the schedule, answered by src/lib/tournaments/events.server.ts.
 
+- **fight-queue** (`src/routes/api/fight-queue.ts`): The fight-queue route: joining the fish-fight queue, polling where you stand and leaving it, answered by src/lib/tournaments/fightqueue.server.ts.
+
 - **friends** (`src/routes/api/friends.ts`): The friends route: friends, presence and invites, answered by src/lib/tournaments/friends.server.ts.
 
 - **google-callback** (`src/routes/api/google-callback.ts`): The Google callback route: finishes Sign in with Google for the game's accounts (src/lib/accounts/google.server.ts).

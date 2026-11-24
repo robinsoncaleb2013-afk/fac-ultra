@@ -66,19 +66,29 @@ from `testing.server.ts`, the real migrations applied.
 
 Two kinds, deliberately different:
 
-- **Ranked play goes through the server** (above). **Co-op and
-  fight rooms are browsers talking to each other**: the full-mesh
-  WebRTC engine in `src/lib/multiplayer/p2p.ts`, glued to the game
+- **Ranked play goes through the server** (above). **Co-op rooms
+  are browsers talking to each other**: the full-mesh WebRTC
+  engine in `src/lib/multiplayer/p2p.ts`, glued to the game
   by `src/game/multiplayer.ts` and `src/game/eventroom.ts`. The
   server only relays the introductions — the signaling lives in
   database tables (`src/lib/tournaments/rtc.server.ts`), behind
   the `rtc` route, so it survives restarts and more than one
   server process.
-- The fish-fight rooms (Update Three) run on the same mesh: the
-  pure queue, match and chat machine is `src/game/fightroom.ts`,
-  its live layer is `src/game/fightroom-live.ts`, and room chat is
-  filtered by the kid-safe rules in `src/game/safe.ts`. Kids Mode
-  is refused in the room code itself.
+- **Fish fights are paired by the server, then fight on the
+  mesh.** The queue lives in the database (the `fight_queue` and
+  `fight_matches` tables), and `fightqueue.server.ts`, behind the
+  `fight-queue` route, is the one queue every device agrees on:
+  anglers join, poll where they stand, and the two
+  longest-waiting are paired, with the seed and room name taken
+  from the pure machine's own rules (`src/game/fightroom.ts`).
+  The fight itself — ready taps, the fight, room chat — still
+  rides the peer room; its live layer is
+  `src/game/fightroom-live.ts`, and room chat is filtered by the
+  kid-safe rules in `src/game/safe.ts`. Kids Mode is refused
+  twice over: in the room code itself, and by the server, which
+  turns a flagged join away before anything is written, so a
+  Kids Mode device never enters the queue and can never be
+  paired.
 
 ## The platform's sign-in and plumbing (not the game's)
 

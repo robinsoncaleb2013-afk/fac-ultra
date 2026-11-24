@@ -26,7 +26,7 @@ routes exist. Every route file has its own entry in
 
 ## API routes
 
-The server answers through 15 API route files under
+The server answers through 16 API route files under
 `src/routes/api/`. Each file is thin: it turns the request into a
 call on the matching server code and returns the answer.
 
@@ -36,7 +36,9 @@ call on the matching server code and returns the answer.
 - Tournaments and their world: `events`, `entry`, `catch`, `board`,
   `survival-board`, `friends` and `trophies` — served by
   `src/lib/tournaments/`.
-- Live rooms: `rtc`, the WebRTC signaling relay.
+- Live rooms: `rtc`, the WebRTC signaling relay, and
+  `fight-queue`, the fish-fight matchmaker — served by
+  `src/lib/tournaments/`.
 - The test phase: `epoch`, which tells the browser which build
   epoch the server is on; the reset it once drove is off by default
   now — see [docs/TEST-PHASE.md](../TEST-PHASE.md).

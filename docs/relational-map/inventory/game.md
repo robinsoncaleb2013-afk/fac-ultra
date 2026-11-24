@@ -34,9 +34,9 @@ Every module in `src/game/` (the rules layer: pure TypeScript, tested beside the
 
 - **fight** (`src/game/fight.ts`): The fight: a tension-and-position game once a fish is hooked (architecture 04 §5).
 
-- **fightroom-live** (`src/game/fightroom-live.ts`): The live layer of the fish-fight rooms: joining the fight queue, readying up, ticking the fight and sending room chat (Update Three).
+- **fightroom-live** (`src/game/fightroom-live.ts`): The live layer of the fish-fight rooms: joining the server's fight queue, readying up, ticking the fight and sending room chat (Update Three).
 
-- **fightroom** (`src/game/fightroom.ts`): Fish-fight rooms (Update Three): the pure queue, match and chat machine — two real anglers, one tank; no store, no network.
+- **fightroom** (`src/game/fightroom.ts`): Fish-fight rooms (Update Three): the pure match and chat machine — two real anglers, one tank; its pairing, seed and room-name rules are the ones the server queue runs. No store, no network.
 
 - **fill** (`src/game/fill.ts`): Regulars on an empty board (architecture 06 §3.2, 05 §6.1): the named anglers who fill a quiet event.
 

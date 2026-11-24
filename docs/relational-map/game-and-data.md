@@ -43,7 +43,7 @@ by `scripts/check-map-counts.mjs` on every `npm test`.
   event.
 - The achievement table (`src/game/achievements.ts`) holds
   52 achievements.
-- The database has 7 migrations: the game's own tables under
+- The database has 8 migrations: the game's own tables under
   `migrations/`, plus the platform sign-in schema under
   `migrations/auth/`. Each migration has its own entry in
   [inventory/migrations.md](inventory/migrations.md).

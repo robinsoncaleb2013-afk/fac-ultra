@@ -75,7 +75,7 @@
         "files": "migrations/**/*.sql"
       },
       "name": "migrations",
-      "value": 7
+      "value": 8
     },
     {
       "files": [
@@ -85,7 +85,7 @@
         "files": "src/routes/api/*.ts"
       },
       "name": "API route files",
-      "value": 15
+      "value": 16
     }
   ]
 }

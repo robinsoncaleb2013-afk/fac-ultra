@@ -110,6 +110,8 @@ Every file under `src/lib/` (the database door, the game's own accounts, the tou
 
 - **events.server** (`src/lib/tournaments/events.server.ts`): Events: the schedule written to the database on demand, the open list, and private events.
 
+- **fightqueue.server** (`src/lib/tournaments/fightqueue.server.ts`): The fish-fight matchmaker: the one server-side queue every device agrees on — joins, standing polls and leaves, pairing the two longest-waiting anglers with fightroom.ts's own seed and room rules, and Kids Mode joins refused before they are written.
+
 - **friends.server** (`src/lib/tournaments/friends.server.ts`): Friends, presence and invites for the tournament world.
 
 - **http.server** (`src/lib/tournaments/http.server.ts`): The thin layer between a route's Request and the framework-free handlers: reads the body with a size cap and writes the answer.

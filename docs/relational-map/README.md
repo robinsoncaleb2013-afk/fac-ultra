@@ -29,7 +29,7 @@ flowchart LR
   Rules["The rules and the data<br/>src/game/ — pure TypeScript:<br/>500 fish species across 20 waters,<br/>the fishing model, modes, events"]
   API["API routes<br/>src/routes/api/ — thin files,<br/>one per route"]
   Accounts["The game's own accounts<br/>src/lib/accounts/ — sign-in,<br/>profiles, cloud saves"]
-  Tourney["Tournaments<br/>src/lib/tournaments/ — events,<br/>entries, boards, friends, trophies"]
+  Tourney["Tournaments<br/>src/lib/tournaments/ — events,<br/>entries, boards, friends, trophies,<br/>the fight queue"]
   DB[("Database<br/>Postgres when DATABASE_URL is set,<br/>else embedded PGLite<br/>tables from migrations/")]
   Mesh["Other players, live<br/>WebRTC mesh (src/lib/multiplayer/)<br/>+ the signaling relay on /api/rtc"]
   Mail["Sign-in email<br/>Resend, from src/lib/accounts/mail.server.ts"]
@@ -71,7 +71,9 @@ flowchart LR
   (`src/game/replay.ts`, `src/game/scoring.ts`), so a edited client
   cannot invent a score. Co-op play is the opposite on purpose:
   browsers talk to each other directly and the server only relays
-  the introductions.
+  the introductions. Fish fights sit between the two: the server
+  pairs the anglers through the fight queue, and the fight itself
+  then rides the mesh like co-op.
 - **One database, two engines.** `src/lib/db.ts` gives every server
   file the same `getSql()`: a real Postgres when `DATABASE_URL` is
   set, the embedded PGLite otherwise. The same migrations run on
