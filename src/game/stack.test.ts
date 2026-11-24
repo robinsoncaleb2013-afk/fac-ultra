@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { noEvents } from "./events.ts";
+import { noEvents, readEvents } from "./events.ts";
 import {
   CALM_STACK,
   offerRestack,
@@ -74,6 +74,23 @@ test("some seeds arm a restack and takeRestack adds a mutation", () => {
 test("Calm Down Man threshold is five mutations", () => {
   assert.equal(CALM_STACK, 5);
   assert.ok(MUTATIONS.length > CALM_STACK);
+});
+
+test("an armed restack survives a save round-trip, and junk becomes none", () => {
+  let state = { ...noEvents(), seed: 7 };
+  const fish = { b: 0, i: 3, m: 2, v: 100, w: 2, name: "Golden Perch", boss: false };
+  for (let d = 0; d < 80 && !state.restack; d++) {
+    const r = offerRestack({ ...state, draws: d }, fish);
+    if (r.armed) state = r.state;
+  }
+  assert.ok(state.restack, "a restack is armed");
+  const back = readEvents(JSON.parse(JSON.stringify(state)));
+  assert.deepEqual(back.restack, state.restack, "the saved restack reads back whole");
+  const taken = takeRestack(back, { ...fish, m: 0, name: "Other", v: 5 });
+  assert.equal(taken.hit, true, "the reloaded restack still lands on the next catch");
+  assert.equal(readEvents({}).restack, null, "an old save with no restack field reads as none");
+  assert.equal(readEvents({ restack: { b: 99, i: 0, ids: [1], v: 5, w: 1 } }).restack, null, "a water that does not exist is dropped");
+  assert.equal(readEvents({ restack: { b: 0, i: 3, ids: [0, 0], v: 5, w: 1 } }).restack, null, "no real mutation, no restack");
 });
 
 test("stackCatchXp uses additive XP factors", () => {

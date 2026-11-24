@@ -42,18 +42,19 @@ so there is nothing to install: open the play address and start fishing.
 - Gear and upgrades: rods, reels, boats, lures and bait, and fishing line that wears out and can be crafted
 - Six ways to play: Expedition (the career, with five difficulty levels and three save slots), Story (twenty guided chapters), Recreational (relaxed, kept apart from your career), Survival, Local Co-op and Tournaments
 - An aquarium that earns while you are away, contracts and rebirth
-- Rare events after long play that turn some fish into named mutations
+- Rare events after long play that turn some fish into named mutations — and a mutant you let go may come back with its mutations stacked even higher
 - A guided tutorial that teaches new players on the water, read aloud
 - Promo codes: type a code in Settings and claim its reward
 - Night fishing once five bosses are beaten and level 45 is reached — fish keep biting while you are away
 - Prestige at level 100, which opens the final water
-- Holiday events, three days each, with their own mutation and 50x luck, fish worth and XP
+- Holiday events, three days each, with their own mutation and 30x luck, fish worth and XP from the third water on
 - Tournaments scored by the server, with live boards, friends, teams and trophies
 - Optional sign-in for cloud saves and family profiles, plus save codes
 - Kid Mode with a Helping Hand, five picture-quality levels, full screen and colour-blind colours
 
 ## Updates
 
+- **November 23, 2026** — Update Four: five new rare events — Acid Rain, Flood, Blackout, Crowded and Double Moons — each with its own mutation. Mutations now stack: let a mutant go and it may come back with one more mutation on it, worth and XP adding up each time. Two new promo codes, and a new achievement, Calm Down Man!, for landing one fish with five mutations stacked on it.
 - **November 7, 2026** — Update Three: five new waters and 125 new kinds of fish, a guided tutorial for new players, promo codes, night fishing, Prestige and the final water, and holiday events with 50x luck, worth and XP.
 - **November 2, 2026** — New ways to play: Story mode with fifteen chapters, five difficulty levels and three save slots for the career, a relaxed Recreational mode kept apart from your career, Survival fishing, and Tournaments with live boards, friends and trophies. Fishing line now wears out and is crafted, and rare events can mutate your catch.
 - **November 2, 2026** — FAC Ultra goes live for friends and family, hosted from

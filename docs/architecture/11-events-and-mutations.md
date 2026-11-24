@@ -2,7 +2,7 @@
 
 Source: the owner's feedback (Caleb), "Events. Not weather events." Events are rare things that only happen once a player has been fishing for a long, unbroken stretch. Each one turns some of the fish caught while it runs into a named **mutation** that gives extra XP, extra sale value, or both.
 
-> **As built (WP-15, merged; the tables below were checked against `event-data.ts` after WP-16).** Eleven events, six rarity rows, 17 entries in `MUTATIONS` (6 rolled at birth, 11 from events). Unplayed live: a mutated fish landing in a real fight, the banner at the moment an event starts, a real one-hour wait; balance of start chances (`../KNOWN-GAPS.md`). The WP-16 achievements listen through `event-hooks.ts` as section 7 says.
+> **As built (WP-15, merged; the tables below were checked against `event-data.ts` after WP-16).** Eleven events, six rarity rows, 17 entries in `MUTATIONS` (6 rolled at birth, 11 from events). **Update 4 (2026-11-23) added five more events (sixteen in all, 22 `MUTATIONS` entries) and mutation stacking — see §10.** Unplayed live: a mutated fish landing in a real fight, the banner at the moment an event starts, a real one-hour wait; balance of start chances (`../KNOWN-GAPS.md`). The WP-16 achievements listen through `event-hooks.ts` as section 7 says.
 
 Code: `src/game/event-data.ts` (the one table), `src/game/events.ts` (pure rules), `src/game/event-hooks.ts` (signals), `src/components/game/events.tsx` (banner, chip, Lodge list). Tests: `events.test.ts`, `events-flow.test.ts`, `save-migration.test.ts`.
 
@@ -34,6 +34,11 @@ Event rows (`EVENTS`). Caleb said the first event of each pair is an XP boost an
 | Legendary | Divine Intervention | 6 hrs | Blessed | XP | none |
 | Legendary | Armageddon | 6 hrs | Cursed | worth | none |
 | Mythic | Legend of the Fisherman | 10 hrs | Fisherman's Dream | XP and worth | Astral Sea only |
+| Common | Acid Rain | 1 hr | Acidic | XP | none (Update 4) |
+| Common | Flood | 1 hr | Drifting | worth | none (Update 4) |
+| Rare | Blackout | 3 hrs | Blind | XP | night only (Update 4) |
+| Rare | Crowded | 3 hrs | Busy | worth | none; bites come twice as fast while it runs (`catchPace`, Update 4) |
+| Epic | Double Moons | 4 hrs | Lunar | XP | night only (Update 4) |
 
 "Night" means the game's time-of-day window is Night (`windowFor`): the picked time in a Recreational trip, otherwise the real clock or Night weather, as everywhere else in the game.
 
@@ -95,4 +100,15 @@ Switch is `eventModeOn(rules)` (a function of the mode table, like `funModeOn`);
 
 ## 9. Not in this package
 
-Events do not change weather, bite rates or any fishing rule; they only change the fish after it has been rolled. Auto-fishing gets mutations too (at its usual 40% payout). Co-op player 2 shares the same event.
+Events do not change weather, bite rates or any fishing rule; they only change the fish after it has been rolled. Auto-fishing gets mutations too (at its usual 40% payout). Co-op player 2 shares the same event. (Update 4's Crowded is the one exception to "no bite rates": while it runs, bites come twice as fast — that is the event's whole point, and it is in the table above.)
+
+## 10. Update 4: mutation stacking, and the holiday change
+
+**Stacking** (`src/game/stack.ts`, pure like the rest of this package). A fish keeps its first mutation in `m` — so old saves and the book work exactly as before — and any further mutations in `extra`. Worth and XP bonuses **add**: an 8x and a 2x together are worth 9x, not 16x (`worthFactor` / `xpFactor`; XP for a stacked catch is `stackCatchXp`).
+
+- **Arming.** Releasing a mutated fish (never a boss, never a plain fish) rolls the events save's own dice (`offerRestack`): the chance starts at 25% for a single mutation and falls as the stack grows, to a 1% floor. A hit stores `events.restack` — species, mutation ids, worth and weight — in the save.
+- **Landing.** The next non-boss catch becomes that species with one new mutation added (`takeRestack`, settled in the engine's `eventMutate` before the event dice, so event mutations never pile on top — `mutateFish` already refuses a fish with `m > 0`). Bosses wait: a boss catch leaves the restack armed.
+- **The prize.** Five mutations on one fish bumps the `stack:calm` counter — the **Calm Down Man!** achievement.
+- **Save.** `events.restack` is read back by `readEvents` with the usual suspicion (real water, real species, real ids, no repeats; anything doubtful becomes null). A kept fish's `extra` rides in the bag and the save the same way.
+
+**Holidays.** The holiday multiplier is now **30x** (was 50x), and it only lands **from the 3rd water up** (biome index ≥ 2): `holidayMultipliers(date, biome)` gates luck and XP at their seams (`content.ts`, `keep.ts`), and `applyEventsToFish` applies the same gate to worth. The first two waters fish holidays at 1x, as if no holiday were on.

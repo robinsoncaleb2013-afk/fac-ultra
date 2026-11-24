@@ -31,8 +31,9 @@ import {
   stepEvents,
   type EventsSave,
 } from "@/game/events";
-import { burstDue, holidayOn } from "@/game/holidays";
+import { burstDue, holidayMultipliers, holidayOn } from "@/game/holidays";
 import { redeemCode } from "@/game/promo";
+import { CALM_STACK, offerRestack, stackCatchXp, stackIds, takeRestack } from "@/game/stack";
 import { nightProgress, settleNight, startNight, type NightReport } from "@/game/night";
 import { canUnlockFinalBiome, doPrestige, finalBiomeIndex } from "@/game/prestige";
 import {
@@ -320,7 +321,7 @@ export type Save = {
   box: Record<string, number>;
   lure: number;
   dex: Record<string, { c: number; w: number; m: number }>;
-  inv: { name: string; t: number; v: number; w: number; i: number; b: number; m: number }[];
+  inv: { name: string; t: number; v: number; w: number; i: number; b: number; m: number; extra?: number[] }[];
   rb: number;
   tot: number;
   caught: number;
@@ -414,6 +415,8 @@ export type LastCatch = {
   species: number;
   biome: number;
   mutation: number;
+  /** Update 4: mutations stacked behind the first one (stack.ts), when this catch came back stacked. */
+  extra?: number[];
   weight: number;
   value: number;
   perfect: boolean;
@@ -917,6 +920,9 @@ export function sanitize(raw: unknown): Save {
       if (!item || typeof item !== "object") continue;
       const it = item as Record<string, unknown>;
       const name = typeof it.name === "string" ? it.name : typeof it.n === "string" ? it.n : "Fish";
+      const extra = Array.isArray(it.extra)
+        ? [...new Set(it.extra.map((n) => int(n, 0, 0, MUTATIONS.length - 1)).filter((n) => n > 0))].slice(0, 16)
+        : [];
       inv.push({
         name: name.slice(0, 80),
         t: int(it.t, 0, 0, 4),
@@ -925,6 +931,7 @@ export function sanitize(raw: unknown): Save {
         i: mapI(int(it.i, 0, 0, SPECIES_PER_BIOME - 1)),
         b: mapB(int(it.b, 0, 0, BIOMES.length - 1)),
         m: int(it.m, 0, 0, MUTATIONS.length - 1),
+        ...(extra.length ? { extra } : {}),
       });
     }
   }
@@ -1459,17 +1466,32 @@ export function stepEventsLive(now = Date.now()) {
 }
 
 /** Give the fish the running event's mutation, if the dice say so — and, on a holiday, the
- *  holiday's name and 50x worth (Update Three: the two systems multiply, never replace).
+ *  holiday's name and 30x worth (Update Three: the two systems multiply, never replace).
+ *  Update 4: an armed restack (a mutant let go earlier) turns this catch into that fish,
+ *  back with one more mutation stacked on. It is settled first, so the event dice treat
+ *  the returned fish like any other mutated catch (mutateFish never stacks on top).
  *  Off in Tournaments (server replay) and Survival. */
 function eventMutate(fish: Rolled): Rolled {
   const s = useGame.getState();
   if (!eventModeOn(modeRules())) return fish;
   const now = new Date();
-  const act = activeEvent(s.events, now.getTime());
-  if (!act && !holidayOn(now)) return fish;
-  const res = applyEventsToFish(s.events, fish, act?.def ?? null, now, BIOMES[fish.b].fish[fish.i]);
-  useGame.setState({ events: res.state });
-  return res.fish;
+  let out = fish;
+  let events = s.events;
+  if (events.restack) {
+    const taken = takeRestack(events, out);
+    if (taken.hit) {
+      out = taken.fish;
+      events = taken.state;
+    }
+  }
+  const act = activeEvent(events, now.getTime());
+  if (act || holidayOn(now)) {
+    const res = applyEventsToFish(events, out, act?.def ?? null, now, BIOMES[out.b].fish[out.i]);
+    out = res.fish;
+    events = res.state;
+  }
+  if (events !== s.events) useGame.setState({ events });
+  return out;
 }
 
 function persistSoon() {
@@ -1709,7 +1731,10 @@ function withCatch(
   const entry = { c: (prev?.c || 0) + 1, w: Math.max(prev?.w || 0, fish.w), m: betterMutation(prev?.m || 0, fish.m) };
   const dex = side ? s.dex : { ...s.dex, [key]: entry };
   const sideDex = side ? { ...s.sideDex, [key]: entry } : s.sideDex;
-  const ach = fish.m > 0 ? bumpCounter(s.ach, "catch:mutated") : s.ach;
+  const stack = stackIds(fish);
+  let ach = fish.m > 0 ? bumpCounter(s.ach, "catch:mutated") : s.ach;
+  /* Update 4: five mutations on one fish earns Calm Down Man! (achievements.ts, counter "stack:calm"). */
+  if (stack.length >= CALM_STACK) ach = bumpCounter(ach, "stack:calm");
   const item = {
     name: fish.boss ? `Tide ${fish.name}` : fish.name,
     t: fish.t,
@@ -1718,6 +1743,7 @@ function withCatch(
     i: fish.i,
     b: fish.b,
     m: fish.m,
+    ...(fish.extra?.length ? { extra: [...fish.extra] } : {}),
   };
   const inv = [...s.inv, item];
   let overflow = 0;
@@ -1743,7 +1769,12 @@ function withCatch(
   const donePages = fun ? newPages(dex, stickers) : [];
   if (donePages.length) stickers = [...stickers, ...donePages.map(pageId)];
   const fotdClaimed = claim ? addClaim(s.fotdClaimed, date) : s.fotdClaimed;
-  let xpGain = catchXp(fish.t, fish.m, fish.b, fish.boss, new Date()) * (claim ? FOTD_XP_MULT : 1);
+  /* Update 4: a stacked fish earns the stack's additive XP (stackCatchXp), holiday gate included;
+     an ordinary catch keeps the catchXp path exactly as before. */
+  let xpGain =
+    (stack.length > 1
+      ? Math.round(stackCatchXp(fish.t, stack, fish.b, fish.boss) * holidayMultipliers(new Date(), fish.b).xp)
+      : catchXp(fish.t, fish.m, fish.b, fish.boss, new Date())) * (claim ? FOTD_XP_MULT : 1);
   if (level.xp !== 1) xpGain = Math.round(xpGain * level.xp);
   let xp = s.xp + xpGain;
   let lv = s.lv;
@@ -1791,6 +1822,7 @@ function withCatch(
     species: fish.i,
     biome: fish.b,
     mutation: fish.m,
+    extra: fish.extra?.length ? [...fish.extra] : undefined,
     weight: fish.w,
     value: v,
     perfect: o.perfect && !o.auto,
@@ -2585,7 +2617,10 @@ function autoCatch() {
       sizeMul: sizeMulOf(s.stewards, s.biome),
     }),
   );
-  const next = withCatch({ ...s, ...spent }, fish, {
+  /* eventMutate has just written the events save (draws spent, a restack consumed);
+     hand withCatch that fresh copy, not the one read before the cast, or the spent
+     draws — and an armed restack — would come back to life in the save it returns. */
+  const next = withCatch({ ...s, ...spent, events: useGame.getState().events }, fish, {
     auto: true,
     perfect: false,
     frenzy: sim.frenzyLeft > 0,
@@ -3597,10 +3632,13 @@ export const useGame = create<Store>((set, get) => ({
     if (!cel) return;
     if (!canRelease(modeRules())) return set({ celebration: null });
     const lc = cel.catch;
+    const lcStack = stackIds({ m: lc.mutation, extra: lc.extra });
     const gone = releaseFish(
       s,
-      { name: lc.name, t: lc.rarity, v: lc.value, w: lc.weight, i: lc.species, b: lc.biome, m: lc.mutation },
-      catchXp(lc.rarity, lc.mutation, lc.biome, lc.boss, new Date()),
+      { name: lc.name, t: lc.rarity, v: lc.value, w: lc.weight, i: lc.species, b: lc.biome, m: lc.mutation, extra: lc.extra },
+      lcStack.length > 1
+        ? Math.round(stackCatchXp(lc.rarity, lcStack, lc.biome, lc.boss) * holidayMultipliers(new Date(), lc.biome).xp)
+        : catchXp(lc.rarity, lc.mutation, lc.biome, lc.boss, new Date()),
     );
     if (!gone.ok) {
       /* Already sold: it cannot be let go. Just close the card. */
@@ -3609,6 +3647,23 @@ export const useGame = create<Store>((set, get) => ({
     }
     const note = releaseNote(gone, lc.name, lc.biome);
     const toasts = [...s.toasts];
+    /* Update 4: letting a mutant go may arm its return — the same fish, one mutation richer,
+       on a later catch (stack.ts). The dice live in the events save, never the fishing stream. */
+    let events = s.events;
+    if (eventModeOn(modeRules())) {
+      const offered = offerRestack(s.events, {
+        b: lc.biome,
+        i: lc.species,
+        m: lc.mutation,
+        v: lc.value,
+        w: lc.weight,
+        name: lc.name,
+        boss: lc.boss,
+        extra: lc.extra,
+      });
+      events = offered.state;
+      if (offered.armed) pushToast(toasts, "It slips away into the deep. Something feels unfinished — it may find you again, changed.");
+    }
     if (gone.levelsGained) pushToast(toasts, `Level ${gone.lv}. ${rankName(gone.lv)}.`);
     for (const t of note.toasts) pushToast(toasts, t);
     audio.release();
@@ -3619,6 +3674,7 @@ export const useGame = create<Store>((set, get) => ({
       lv: gone.lv,
       released: gone.released,
       stewards: gone.stewards,
+      events,
       trip: modeRules().trips && s.trip ? tripRelease(s.trip, lc.weight, Date.now()) : s.trip,
       celebration: null,
       toasts: toasts.slice(-3),

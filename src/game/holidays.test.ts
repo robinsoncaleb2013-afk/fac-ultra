@@ -1,6 +1,7 @@
 /* Holiday events (Update Three, P5): the calendar maths (eve / day / day-after windows, Thanksgiving's
    fourth Thursday, Easter by Computus, the New Year incoming-year mutation and midnight burst), the
-   50 / 50 / 50 multipliers, and the interaction rule with the random long-play events. */
+   multipliers (Update 4: 30 / 30 / 30, and only from the 3rd water up), and the interaction rule
+   with the random long-play events. */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -35,7 +36,7 @@ test("the holiday table: eight holidays, with Caleb's mutation names and a look 
     assert.ok(h.announce.length > 0 && h.blurb.length > 0, `${h.id} has player text`);
   }
   assert.deepEqual(HOLIDAYS.filter((h) => h.burst).map((h) => h.id), ["new-year"], "only New Year bursts");
-  assert.equal(HOLIDAY_MULT, 50);
+  assert.equal(HOLIDAY_MULT, 30);
 });
 
 /* [holiday id, eve, day, day-after, two days before, two days after, mutation] — all in 2026 unless noted. */
@@ -115,10 +116,14 @@ test("the New Year window Dec 31 – Jan 2 carries the INCOMING year's mutation 
   assert.equal(holidayOn(local(2026, 12, 25))?.burst, false, "Christmas does not");
 });
 
-test("multipliers are 50 / 50 / 50 inside every window and 1 / 1 / 1 outside", () => {
-  for (const [, , day] of WINDOWS) assert.deepEqual(holidayMultipliers(day), { luck: 50, worth: 50, xp: 50 });
-  assert.deepEqual(holidayMultipliers(local(2026, 12, 31)), { luck: 50, worth: 50, xp: 50 }, "New Year eve counts");
-  assert.deepEqual(holidayMultipliers(local(2027, 1, 2)), { luck: 50, worth: 50, xp: 50 }, "New Year day-after counts");
+test("multipliers are 30 / 30 / 30 inside every window and 1 / 1 / 1 outside — and nothing in the first two waters", () => {
+  for (const [, , day] of WINDOWS) assert.deepEqual(holidayMultipliers(day), { luck: 30, worth: 30, xp: 30 });
+  assert.deepEqual(holidayMultipliers(local(2026, 12, 31)), { luck: 30, worth: 30, xp: 30 }, "New Year eve counts");
+  assert.deepEqual(holidayMultipliers(local(2027, 1, 2)), { luck: 30, worth: 30, xp: 30 }, "New Year day-after counts");
+  /* Update 4's water gate: the pond and the second water get no boost, the third water gets it all. */
+  assert.deepEqual(holidayMultipliers(local(2026, 12, 25), 0), { luck: 1, worth: 1, xp: 1 }, "the pond is gated out");
+  assert.deepEqual(holidayMultipliers(local(2026, 12, 25), 1), { luck: 1, worth: 1, xp: 1 }, "the second water is gated out");
+  assert.deepEqual(holidayMultipliers(local(2026, 12, 25), 2), { luck: 30, worth: 30, xp: 30 }, "the third water is in");
   for (const plain of [local(2026, 6, 15), local(2026, 12, 20), local(2027, 1, 3), local(2026, 11, 20), local(2026, 2, 20)]) {
     assert.deepEqual(holidayMultipliers(plain), { luck: 1, worth: 1, xp: 1 });
     assert.equal(holidayOn(plain), null);
@@ -154,11 +159,17 @@ const CHRISTMAS = local(2026, 12, 25);
 const PLAIN_DAY = local(2026, 6, 15);
 const st = (draws = 0): EventsSave => ({ ...noEvents(), seed: 11, draws });
 
-test("in a holiday window every fish is worth 50x — bosses and already-mutated fish too; outside, nothing changes", () => {
+test("in a holiday window every fish in the 3rd water up is worth 30x — bosses and already-mutated fish too; the first two waters get nothing", () => {
   for (const f of [fish(), fish(2), fish(0, true)]) {
-    const r = applyEventsToFish(st(), f, null, CHRISTMAS, "Perch");
-    assert.equal(r.fish.v, 5000);
+    const r = applyEventsToFish(st(), { ...f, b: 2 }, null, CHRISTMAS, "Perch");
+    assert.equal(r.fish.v, 3000);
     assert.equal(r.holiday?.def.id, "christmas");
+  }
+  for (const b of [0, 1]) {
+    const r = applyEventsToFish(st(), { ...fish(), b }, null, CHRISTMAS, "Perch");
+    assert.equal(r.fish.v, 100, "early waters: no holiday worth boost (Update 4 gate)");
+    assert.equal(r.holidayHit, false);
+    assert.equal(r.state.draws, 0, "gated out: no draw spent");
   }
   const out = applyEventsToFish(st(), fish(), null, PLAIN_DAY, "Perch");
   assert.equal(out.fish.v, 100);
@@ -184,13 +195,13 @@ test("the holiday mutation mirrors mutateFish: a share of eligible fish, never b
   assert.equal(one.fish.holidayMutation, "jolly");
   assert.equal(one.fish.name, "jolly Perch");
   assert.equal(one.fish.m, 0, "the holiday name never takes the saved mutation slot");
-  assert.equal(one.fish.v, 5000, "a mutated holiday fish is worth 50x once, not 50x twice");
+  assert.equal(one.fish.v, 3000, "a mutated holiday fish is worth 30x once, not 30x twice");
   for (let d = 0; d < 300; d++) {
     assert.equal(holidayMutateFish(st(d), fish(0, true), holiday, "Perch").hit, false, "bosses carry no holiday name");
     const kept = holidayMutateFish(st(d), fish(2), holiday, "Perch");
     assert.equal(kept.hit, false, "a Golden fish stays Golden");
     assert.equal(kept.fish.name, "Perch");
-    assert.equal(kept.fish.v, 5000, "but its worth still gets the holiday 50x");
+    assert.equal(kept.fish.v, 3000, "but its worth still gets the holiday 30x");
   }
   /* Deterministic: same seed and draw counter, same answer. */
   const a = holidayMutateFish(st(7), fish(), holiday, "Perch");
@@ -198,32 +209,34 @@ test("the holiday mutation mirrors mutateFish: a share of eligible fish, never b
   assert.deepEqual(a, b);
 });
 
-test("holiday x random event: they multiply — the random mutation keeps the slot and applies first, the holiday 50x lands on top", () => {
+test("holiday x random event: they multiply — the random mutation keeps the slot and applies first, the holiday 30x lands on top", () => {
   const trembling = EVENTS[1]; // Common, worth kind, 2x
   let hit = null as null | ReturnType<typeof applyEventsToFish>;
-  for (let d = 0; d < 400 && !hit?.randomHit; d++) hit = applyEventsToFish(st(d), fish(), trembling, CHRISTMAS, "Perch");
+  for (let d = 0; d < 400 && !hit?.randomHit; d++) hit = applyEventsToFish(st(d), { ...fish(), b: 2 }, trembling, CHRISTMAS, "Perch");
   assert.ok(hit?.randomHit, "found a draw where the random event mutates the fish");
   assert.equal(hit!.fish.m, mutationOfEvent(trembling), "the random event's mutation keeps the m slot");
   assert.equal(hit!.fish.name, "Trembling Perch", "and its name");
   assert.equal(hit!.fish.holidayMutation, undefined, "no second mutation name on top");
   assert.equal(hit!.holidayHit, false);
-  assert.equal(hit!.fish.v, 100 * 2 * 50, "worth: the event's 2x, then the holiday's 50x");
+  assert.equal(hit!.fish.v, 100 * 2 * 30, "worth: the event's 2x, then the holiday's 30x");
   /* Same fish on a plain day: only the event's 2x. */
   let plain = null as null | ReturnType<typeof applyEventsToFish>;
-  for (let d = 0; d < 400 && !plain?.randomHit; d++) plain = applyEventsToFish(st(d), fish(), trembling, PLAIN_DAY, "Perch");
+  for (let d = 0; d < 400 && !plain?.randomHit; d++) plain = applyEventsToFish(st(d), { ...fish(), b: 2 }, trembling, PLAIN_DAY, "Perch");
   assert.equal(plain!.fish.v, 200);
 });
 
-test("the XP and luck seams: catchXp and luckTotal take the date and apply the same 50x", () => {
+test("the XP and luck seams: catchXp and luckTotal take the date and apply the same 30x, behind the same water gate", () => {
   const starlight = mutationOfEvent(EVENTS[0]); // an XP-kind random event mutation, 2x XP
-  assert.equal(catchXp(0, 0, 0, false, CHRISTMAS), 50 * catchXp(0, 0, 0, false));
-  assert.equal(catchXp(0, 0, 0, false, PLAIN_DAY), catchXp(0, 0, 0, false), "outside a window the date changes nothing");
-  assert.equal(catchXp(0, starlight, 0, false, CHRISTMAS), 300, "XP: base 3 x event 2 x holiday 50 — they multiply");
-  assert.equal(catchXp(0, starlight, 0, false), 6, "no date, no holiday: exactly the old answer");
-  /* Rod 1 alone gives exactly 2.5 luck, so the 50x is exact arithmetic, no float fuzz. */
+  assert.equal(catchXp(0, 0, 2, false, CHRISTMAS), 30 * catchXp(0, 0, 2, false));
+  assert.equal(catchXp(0, 0, 0, false, CHRISTMAS), catchXp(0, 0, 0, false), "the pond gets no holiday XP (Update 4 gate)");
+  assert.equal(catchXp(0, 0, 2, false, PLAIN_DAY), catchXp(0, 0, 2, false), "outside a window the date changes nothing");
+  assert.equal(catchXp(0, starlight, 2, false, CHRISTMAS), 420, "XP: (base 3 + water 4) x event 2 x holiday 30 — they multiply");
+  assert.equal(catchXp(0, starlight, 2, false), 14, "no date, no holiday: exactly the old answer");
+  /* Rod 1 alone gives exactly 2.5 luck, so the 30x is exact arithmetic, no float fuzz. */
   assert.equal(luckTotal({ rod: 1, boat: 0, weather: 0, lv: 0, rb: 0, dex: {} }, -1), 2.5);
   assert.equal(luckTotal({ rod: 1, boat: 0, weather: 0, lv: 0, rb: 0, dex: {} }, -1, PLAIN_DAY), 2.5);
-  assert.equal(luckTotal({ rod: 1, boat: 0, weather: 0, lv: 0, rb: 0, dex: {} }, -1, CHRISTMAS), 125, "luck: the total x50 in a window");
+  assert.equal(luckTotal({ rod: 1, boat: 0, weather: 0, lv: 0, rb: 0, dex: {}, biome: 2 }, -1, CHRISTMAS), 75, "luck: the total x30 in a window on the 3rd water");
+  assert.equal(luckTotal({ rod: 1, boat: 0, weather: 0, lv: 0, rb: 0, dex: {}, biome: 0 }, -1, CHRISTMAS), 2.5, "no luck boost in the pond");
 });
 
 test("holidays.ts and event-data.ts use no Math.random and no shared fishing stream", () => {

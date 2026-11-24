@@ -36,6 +36,8 @@ export type Rolled = {
   w: number;
   v: number;
   boss: boolean;
+  /** Update 4: mutations stacked behind the first one (stack.ts). Absent on ordinary fish. */
+  extra?: number[];
 };
 
 export const RARITIES = [
@@ -510,7 +512,7 @@ export function luckTotal(s: LuckInput, lure: number, date?: Date) {
     dexCount(s.dex) * 0.1 +
     sigLuck +
     masteredLuck;
-  return date ? total * holidayMultipliers(date).luck : total;
+  return date ? total * holidayMultipliers(date, typeof s.biome === "number" ? s.biome : 99).luck : total;
 }
 
 export function rankName(lv: number) {
