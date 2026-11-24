@@ -26,6 +26,8 @@ Every route file in `src/routes/api/`. Each is thin: it turns the request into a
 
 - **save** (`src/routes/api/save.ts`): The save route: cloud save slots up and down, answered by src/lib/accounts/saves.server.ts.
 
+- **save-backup** (`src/routes/api/save-backup.ts`): The save-backup route: "Clear my data" — clearing one profile's saves (its one backup is kept first) and restoring that backup inside its window, answered by src/lib/accounts/backups.server.ts.
+
 - **survival-board** (`src/routes/api/survival-board.ts`): The survival board route: the daily Survival leaderboard, answered by src/lib/tournaments/board.server.ts.
 
 - **trophies** (`src/routes/api/trophies.ts`): The trophies route: tournament trophies and final standings, answered by src/lib/tournaments/awards.server.ts.

@@ -16,6 +16,8 @@ Every file under `src/lib/` (the database door, the game's own accounts, the tou
 
 - **profiles.server** (`src/lib/accounts/profiles.server.ts`): Family profiles (WP-9): up to four named profiles under one account, each with its own saves.
 
+- **backups.server** (`src/lib/accounts/backups.server.ts`): "Clear my data": clearing one profile's cloud saves keeps them first as that profile's one backup — a newer clear replaces it — restorable for a day; restoring does not use it up, and only the profile's owner can clear, read or restore it.
+
 - **saves.server** (`src/lib/accounts/saves.server.ts`): Cloud saves (WP-9): the browser never decides what the server stores — every upload is checked against the shared rules in src/game/cloud.ts.
 
 - **session.server** (`src/lib/accounts/session.server.ts`): Sessions (WP-9): the browser holds a random secret in an httpOnly cookie; the database holds only its hash.
@@ -94,7 +96,7 @@ Every file under `src/lib/` (the database door, the game's own accounts, the tou
 
 - **preview-path-prefix** (`src/lib/preview-path-prefix.ts`): The preview path-prefix rewriting the router uses inside the sandbox preview.
 
-- **test-phase** (`src/lib/test-phase.ts`): TEST PHASE: while the game is in development, every new build wipes all progress and saves; this file carries the switch and the shared words (docs/TEST-PHASE.md).
+- **test-phase** (`src/lib/test-phase.ts`): TEST PHASE: the one master switch for the old build wipe — OFF by default now, so updates keep player data and clearing is the player's own choice (backups.server.ts). Also holds the two 'what is kept' lists (docs/TEST-PHASE.md).
 
 - **test-reset.server** (`src/lib/test-reset.server.ts`): TEST PHASE (server): when a new build starts, wipe progress once, server-side (docs/TEST-PHASE.md).
 

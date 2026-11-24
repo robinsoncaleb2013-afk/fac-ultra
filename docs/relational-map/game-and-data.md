@@ -43,7 +43,7 @@ by `scripts/check-map-counts.mjs` on every `npm test`.
   event.
 - The achievement table (`src/game/achievements.ts`) holds
   52 achievements.
-- The database has 6 migrations: the game's own tables under
+- The database has 7 migrations: the game's own tables under
   `migrations/`, plus the platform sign-in schema under
   `migrations/auth/`. Each migration has its own entry in
   [inventory/migrations.md](inventory/migrations.md).
@@ -69,7 +69,9 @@ honest about the list.
   for its version; the fixtures under `src/game/__fixtures__/`
   are real saves from older versions that must always load, and
   `scripts/docs-check.mjs` pins the save version the docs state.
-- The test-phase reset (`src/game/epoch-gate.ts` on the device,
-  `src/lib/test-reset.server.ts` on the server) can wipe progress
-  once per build while the switch is on — see
+- The old test-phase reset (`src/game/epoch-gate.ts` on the
+  device, `src/lib/test-reset.server.ts` on the server) is off by
+  default: updates keep player data, and clearing is the player's
+  own per-profile choice — see
+  [server-and-accounts.md](server-and-accounts.md) and
   [docs/TEST-PHASE.md](../TEST-PHASE.md).

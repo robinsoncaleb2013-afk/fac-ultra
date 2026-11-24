@@ -12,7 +12,7 @@ Every module in `src/game/` (the rules layer: pure TypeScript, tested beside the
 
 - **audio** (`src/game/audio.ts`): All sound: the WebAudio synth (every effect is synthesized; there are no sound files) plus the lazy player for the ambient loops.
 
-- **cloud** (`src/game/cloud.ts`): The rules of cloud saves that the server and the browser must agree on (architecture 07 §4): what a save may contain and how clashes settle.
+- **cloud** (`src/game/cloud.ts`): The rules of cloud saves that the server and the browser must agree on (architecture 07 §4): what a save may contain, how clashes settle, and the backup window behind Clear my data.
 
 - **content** (`src/game/content.ts`): THE DATA: the waters, the species, the rarity bands, the gear ladders, lures, baits, weather, mutations, and the formulas that roll a fish.
 

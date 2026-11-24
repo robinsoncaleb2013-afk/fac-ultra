@@ -40,6 +40,15 @@ they are not the platform's sign-in below.
   settled by those rules, not by whichever copy arrived last.
 - The browser's half is `src/lib/accounts/client.ts`; the shared
   request plumbing is `common.server.ts` and `http.server.ts`.
+- **Clear my data** (`backups.server.ts`, through the
+  `save-backup` route): a signed-in player can clear one profile's
+  saves at any time. The cloud copies are kept first in the
+  `save_backups` table as that profile's one backup — a newer clear
+  replaces it, never adds a second — and for a day the player can
+  restore it, even after playing the fresh start a while; restoring
+  does not use the backup up, and after the day it is gone for
+  good. Only the profile's owner can clear, read or restore it, and
+  the backup is kept even if a test-phase reset is run by hand.
 
 ## Tournaments (`src/lib/tournaments/`)
 

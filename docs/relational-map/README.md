@@ -81,12 +81,13 @@ flowchart LR
   wiring in `src/lib/auth/` belongs to the Grok sandbox platform the
   game was built in — it is not the game's accounts, and the game's
   work leaves it alone.
-- **The test phase can still wipe progress.** While the game is in
-  testing, a new build may reset progress once (the switch is the
-  `FAC_TEST_RESET` setting; the story is in
-  [docs/TEST-PHASE.md](../TEST-PHASE.md)). Player-facing clearing is
-  becoming a per-account choice instead — when that lands, this map
-  changes in the same pull request, by the rule in `docs/RULES.md`.
+- **Updates never wipe progress any more.** The old test-phase
+  reset is off by default, so a routine update keeps every player's
+  data; its machinery stays for testing the reset itself (the story
+  is in [docs/TEST-PHASE.md](../TEST-PHASE.md)). A player who wants
+  a fresh start clears one of their own profiles instead: the cloud
+  saves are kept first as that profile's one backup, restorable for
+  a day — see [server-and-accounts.md](server-and-accounts.md).
 
 ## Areas
 

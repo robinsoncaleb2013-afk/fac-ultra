@@ -26,20 +26,20 @@ routes exist. Every route file has its own entry in
 
 ## API routes
 
-The server answers through 14 API route files under
+The server answers through 15 API route files under
 `src/routes/api/`. Each file is thin: it turns the request into a
 call on the matching server code and returns the answer.
 
 - The game's own accounts: `account`, `profiles`, `save`,
-  `google-start` and `google-callback` — served by
+  `save-backup`, `google-start` and `google-callback` — served by
   `src/lib/accounts/`.
 - Tournaments and their world: `events`, `entry`, `catch`, `board`,
   `survival-board`, `friends` and `trophies` — served by
   `src/lib/tournaments/`.
 - Live rooms: `rtc`, the WebRTC signaling relay.
 - The test phase: `epoch`, which tells the browser which build
-  epoch the server is on so the device can apply the reset rule in
-  [docs/TEST-PHASE.md](../TEST-PHASE.md).
+  epoch the server is on; the reset it once drove is off by default
+  now — see [docs/TEST-PHASE.md](../TEST-PHASE.md).
 
 ## PWA chrome and the install page
 

@@ -1,1 +1,97 @@
-{"about":"MAP-COUNTS-1: every number the relational map states about the code, checked by scripts/check-map-counts.mjs (run in npm test). The lists of modules, components, server files, routes, migrations and scripts are no longer counted by hand: scripts/check-map-inventory.mjs checks each has its own entry in docs/relational-map/inventory/.","counts":[{"files":["README.md"],"how":{"command":"node --experimental-strip-types -e \"import('./src/game/content.ts').then(m=>console.log('species='+m.TOTAL_SPECIES))\"","match":"species=(\\d+)"},"name":"fish species in the content table","value":500},{"files":["README.md"],"how":{"command":"node --experimental-strip-types -e \"import('./src/game/content.ts').then(m=>console.log('biomes='+m.BIOMES.length))\"","match":"biomes=(\\d+)"},"name":"waters (biomes) in the content table","value":20},{"files":["game-and-data.md"],"how":{"command":"node --experimental-strip-types -e \"import('./src/game/event-data.ts').then(m=>console.log('events='+m.EVENTS.length))\"","match":"events=(\\d+)"},"name":"long-play events in the event table","value":16},{"files":["game-and-data.md"],"how":{"command":"node --experimental-strip-types -e \"import('./src/game/event-data.ts').then(m=>console.log('holidays='+m.HOLIDAYS.length))\"","match":"holidays=(\\d+)"},"name":"holiday events in the event table","value":8},{"files":["game-and-data.md"],"how":{"command":"node --experimental-strip-types -e \"import('./src/game/content.ts').then(m=>console.log('mutations='+m.MUTATIONS.length))\"","match":"mutations=(\\d+)"},"name":"mutations in the mutation table","value":22},{"files":["game-and-data.md"],"how":{"command":"node --experimental-strip-types -e \"import('./src/game/achievements.ts').then(m=>console.log('achievements='+m.ACHIEVEMENTS.length))\"","match":"achievements=(\\d+)"},"name":"achievements in the achievement table","value":52},{"files":["game-and-data.md"],"how":{"files":"migrations/**/*.sql"},"name":"migrations","value":6},{"files":["runtime-and-routes.md"],"how":{"files":"src/routes/api/*.ts"},"name":"API route files","value":14}]}
+{
+  "about": "MAP-COUNTS-1: every number the relational map states about the code, checked by scripts/check-map-counts.mjs (run in npm test). The lists of modules, components, server files, routes, migrations and scripts are no longer counted by hand: scripts/check-map-inventory.mjs checks each has its own entry in docs/relational-map/inventory/.",
+  "counts": [
+    {
+      "files": [
+        "README.md",
+        "game-and-data.md"
+      ],
+      "how": {
+        "command": "node --experimental-strip-types -e \"import('./src/game/content.ts').then(m=>console.log('species='+m.TOTAL_SPECIES))\"",
+        "match": "species=(\\d+)"
+      },
+      "name": "fish species in the content table",
+      "value": 500
+    },
+    {
+      "files": [
+        "README.md",
+        "game-and-data.md"
+      ],
+      "how": {
+        "command": "node --experimental-strip-types -e \"import('./src/game/content.ts').then(m=>console.log('biomes='+m.BIOMES.length))\"",
+        "match": "biomes=(\\d+)"
+      },
+      "name": "waters (biomes) in the content table",
+      "value": 20
+    },
+    {
+      "files": [
+        "README.md",
+        "game-and-data.md"
+      ],
+      "how": {
+        "command": "node --experimental-strip-types -e \"import('./src/game/event-data.ts').then(m=>console.log('events='+m.EVENTS.length))\"",
+        "match": "events=(\\d+)"
+      },
+      "name": "long-play events in the event table",
+      "value": 16
+    },
+    {
+      "files": [
+        "README.md",
+        "game-and-data.md"
+      ],
+      "how": {
+        "command": "node --experimental-strip-types -e \"import('./src/game/event-data.ts').then(m=>console.log('holidays='+m.HOLIDAYS.length))\"",
+        "match": "holidays=(\\d+)"
+      },
+      "name": "holiday events in the event table",
+      "value": 8
+    },
+    {
+      "files": [
+        "README.md",
+        "game-and-data.md"
+      ],
+      "how": {
+        "command": "node --experimental-strip-types -e \"import('./src/game/content.ts').then(m=>console.log('mutations='+m.MUTATIONS.length))\"",
+        "match": "mutations=(\\d+)"
+      },
+      "name": "mutations in the mutation table",
+      "value": 22
+    },
+    {
+      "files": [
+        "README.md",
+        "game-and-data.md"
+      ],
+      "how": {
+        "command": "node --experimental-strip-types -e \"import('./src/game/achievements.ts').then(m=>console.log('achievements='+m.ACHIEVEMENTS.length))\"",
+        "match": "achievements=(\\d+)"
+      },
+      "name": "achievements in the achievement table",
+      "value": 52
+    },
+    {
+      "files": [
+        "game-and-data.md"
+      ],
+      "how": {
+        "files": "migrations/**/*.sql"
+      },
+      "name": "migrations",
+      "value": 7
+    },
+    {
+      "files": [
+        "runtime-and-routes.md"
+      ],
+      "how": {
+        "files": "src/routes/api/*.ts"
+      },
+      "name": "API route files",
+      "value": 15
+    }
+  ]
+}

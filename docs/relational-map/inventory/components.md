@@ -6,7 +6,7 @@ Every file under `src/components/` (the screens, the Hub menus, the canvas stage
 
 - **TutorialOverlay** (`src/components/game/TutorialOverlay.tsx`): The tutorial overlay: the voice-guided steps drawn over the water while a new player learns.
 
-- **account** (`src/components/game/account.tsx`): The account sheet: cloud saves, the sign-in link, conflict choices and account settings for the game's own accounts.
+- **account** (`src/components/game/account.tsx`): The account sheet: cloud saves, the sign-in link, conflict choices, account settings, and Clear my data with its backup restore, for the game's own accounts.
 
 - **achievements-ui** (`src/components/game/achievements-ui.tsx`): The achievements room: the table of goals and the player's progress through them.
 
