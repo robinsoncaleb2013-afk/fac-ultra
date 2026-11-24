@@ -6,7 +6,7 @@ Work package **WP-9** (accounts + cloud saves), plus the save-migration procedur
 
 <!-- docs-check:save-version 13 -->
 <!-- docs-check:fixtures 3 4 5 6 7 8 9 10 11 12 13 -->
-<!-- docs-check:migrations 0001 0007 0008 0009 0010 0011 0012 -->
+<!-- docs-check:migrations 0001 0007 0008 0009 0010 0011 0012 0013 -->
 
 ## 1. The migration procedure (every package)
 

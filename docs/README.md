@@ -102,10 +102,10 @@ These markers are compared with the code by `npm test`. If you change the thing,
 
 <!-- docs-check:save-version 13 -->
 <!-- docs-check:rules-version 2 -->
-<!-- docs-check:migrations 0001 0007 0008 0009 0010 0011 0012 -->
+<!-- docs-check:migrations 0001 0007 0008 0009 0010 0011 0012 0013 -->
 <!-- docs-check:fixtures 3 4 5 6 7 8 9 10 11 12 13 -->
 <!-- docs-check:modes expedition recreational survival coop tournament story -->
-<!-- docs-check:routes account board catch entry epoch events friends google-callback google-start profiles rtc save save-backup survival-board trophies -->
+<!-- docs-check:routes account board catch entry epoch events fight-queue friends google-callback google-start profiles rtc save save-backup survival-board trophies -->
 
 - Career save version **12** (`SAVE_VERSION` in `src/game/engine.ts`); detail in [`architecture/07-data-saves-cloud.md`](architecture/07-data-saves-cloud.md).
 - Tournament rules version **2** (`RULES_VERSION` in `src/game/line-wear.ts`); detail in [`architecture/10-gear-progression-and-line.md`](architecture/10-gear-progression-and-line.md).
